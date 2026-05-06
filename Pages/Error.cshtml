@@ -1,0 +1,15 @@
+@page
+@model ApprovalPO.Pages.ErrorModel
+@{
+    ViewData["Title"] = "Error";
+}
+
+<div class="error-page">
+    <h1>Error</h1>
+    <p>Something went wrong.</p>
+    @if (Model.ShowRequestId)
+    {
+        <p class="muted"><small>Request ID: @Model.RequestId</small></p>
+    }
+    <p><a href="/">Back</a></p>
+</div>

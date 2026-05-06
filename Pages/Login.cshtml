@@ -1,0 +1,145 @@
+@page
+@model ApprovalPO.Pages.LoginModel
+@{
+    ViewData["Title"] = "Login";
+}
+
+<link rel="stylesheet" href="~/css/login.css" asp-append-version="true" />
+
+<div class="login-container">
+    <div class="top-row">
+        <span class="muted">Purchase Order Approval</span>
+    </div>
+
+    <h2>Sign in with OTP</h2>
+    <p class="sub">No password. We’ll send a one-time code (mock in this build).</p>
+
+    <div id="idGroup">
+        <label class="field-label" for="loginId">Email or username</label>
+        <input type="text" id="loginId" name="loginId" autocomplete="username" placeholder="you@company.com or username" />
+
+        <button id="sendBtn" type="button">Send OTP</button>
+    </div>
+
+    <div id="otpGroup" class="otp-wrap" style="display:none;">
+        <input type="hidden" id="loginIdHidden" />
+
+        <label class="field-label">6-digit OTP</label>
+        <div class="otp-boxes">
+            <input type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp" />
+            <input type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp" />
+            <input type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp" />
+            <input type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp" />
+            <input type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp" />
+            <input type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp" />
+        </div>
+
+        <button id="verifyBtn" type="button">Verify OTP</button>
+    </div>
+
+    <div id="message" class="msg" role="status"></div>
+</div>
+
+<script>
+(() => {
+    const msg = (t, isError) => {
+        const el = document.getElementById('message');
+        el.textContent = t || '';
+        el.classList.toggle('msg--error', !!isError);
+    };
+
+    const sendBtn = document.getElementById('sendBtn');
+    const verifyBtn = document.getElementById('verifyBtn');
+    const loginIdEl = document.getElementById('loginId');
+    const loginHidden = document.getElementById('loginIdHidden');
+    const otpInputs = Array.from(document.querySelectorAll('.otp'));
+    const idGroup = document.getElementById('idGroup');
+    const otpGroup = document.getElementById('otpGroup');
+
+    sendBtn.addEventListener('click', async () => {
+        const loginId = (loginIdEl.value || '').trim();
+        if (!loginId) {
+            msg('Please enter your email or username.', true);
+            return;
+        }
+        msg('');
+        sendBtn.disabled = true;
+        sendBtn.textContent = 'Sending...';
+        try {
+            const fd = new FormData();
+            fd.append('LoginId', loginId);
+            const res = await fetch('@Url.Page("/Login", null, new { handler = "SendOtp" })', {
+                method: 'POST',
+                body: fd
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) {
+                msg(data.message || 'Could not send OTP.', true);
+                return;
+            }
+            msg(data.message || '');
+            loginHidden.value = loginId;
+            idGroup.style.display = 'none';
+            otpGroup.style.display = 'block';
+            otpInputs.forEach((input) => { input.value = ''; });
+            otpInputs[0]?.focus();
+        } catch {
+            msg('Network error.', true);
+        } finally {
+            sendBtn.disabled = false;
+            sendBtn.textContent = 'Send OTP';
+        }
+    });
+
+    otpInputs.forEach((input, idx, arr) => {
+        input.addEventListener('input', () => {
+            input.value = input.value.replace(/\D/g, '').slice(0, 1);
+            if (input.value && idx < arr.length - 1) {
+                arr[idx + 1].focus();
+            }
+        });
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Backspace' && !input.value && idx > 0) {
+                arr[idx - 1].focus();
+            }
+        });
+    });
+
+    verifyBtn.addEventListener('click', async () => {
+        const loginId = (loginHidden.value || '').trim();
+        const otp = otpInputs.map((input) => input.value).join('');
+        if (!loginId) {
+            msg('Email or username missing. Refresh and try again.', true);
+            return;
+        }
+        if (otp.length !== 6 || !/^\d{6}$/.test(otp)) {
+            msg('OTP must be exactly 6 digits.', true);
+            return;
+        }
+        msg('');
+        verifyBtn.disabled = true;
+        verifyBtn.textContent = 'Verifying...';
+        try {
+            const fd = new FormData();
+            fd.append('LoginId', loginId);
+            fd.append('Otp', otp);
+            const res = await fetch('@Url.Page("/Login", null, new { handler = "VerifyOtp" })', {
+                method: 'POST',
+                body: fd
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) {
+                msg(data.message || 'Verification failed.', true);
+                return;
+            }
+            window.location.href = data.redirectUrl || '@Url.Page("/PurchaseOrders")';
+        } catch {
+            msg('Network error.', true);
+        } finally {
+            verifyBtn.disabled = false;
+            verifyBtn.textContent = 'Verify OTP';
+        }
+    });
+})();
+</script>

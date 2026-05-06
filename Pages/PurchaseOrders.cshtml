@@ -1,0 +1,101 @@
+@page
+@model ApprovalPO.Pages.PurchaseOrdersModel
+@{
+    ViewData["Title"] = "Purchase Orders";
+}
+
+<link rel="stylesheet" href="~/css/po.css" asp-append-version="true" />
+
+<header class="po-header">
+    <div class="po-header__inner">
+        <h1>Purchase orders</h1>
+        <div class="po-header__menu">
+            <button id="menuBtn" class="menu-btn" type="button" aria-expanded="false" aria-controls="menuPanel" aria-label="Open menu">
+                <span></span><span></span><span></span>
+            </button>
+            <div id="menuPanel" class="menu-panel" hidden>
+                <div class="menu-user">@User.Identity?.Name</div>
+                <a class="menu-link" asp-page="/Logout">Sign out</a>
+            </div>
+        </div>
+    </div>
+</header>
+
+<main class="po-main">
+
+
+    <div class="po-table-wrap">
+        <div class="po-table-wrap__head">
+            <div class="tabs-wrap">
+                <div class="tabs" role="tablist" aria-label="PO status tabs">
+                    <button id="tabPending" class="tab-btn is-active" type="button" role="tab" aria-selected="true">Pending</button>
+                    <button id="tabApproved" class="tab-btn" type="button" role="tab" aria-selected="false">Approved</button>
+                </div>
+            </div>
+            <div class="search-wrap">
+                <input id="poSearchInput" class="po-search-input" type="search" placeholder="Search PO #" aria-label="Search PO number" />
+            </div>
+        </div>
+        <p id="poEmptyState" class="po-empty" hidden role="status"></p>
+        <div id="poTableScroll" class="po-table-scroll">
+        <table class="po-table">
+            <thead>
+                <tr>
+                    <th>PO #</th>
+                    <th>Vendor</th>
+                    <th class="num">Amount</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var row in Model.Orders)
+            {
+                <tr class="po-row" data-po="@row.PoNumber"
+                    data-vendor="@row.Vendor"
+                    data-amount="@row.Amount.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)"
+                    data-transferable="@(row.Transferable == true ? "true" : "")"
+                    data-status="@row.Status"
+                    data-description="@row.Description">
+                    <td class="po-num" data-label="PO #">
+                        <span class="po-num-text">@row.PoNumber</span>
+                    </td>
+                    <td data-label="Vendor">@row.Vendor</td>
+                    <td class="num" data-label="Amount">@row.Amount.ToString("N2")</td>
+                    <td class="actions" data-label="Actions">
+                        <div class="actions-row-block">
+                            <div class="actions-inner">
+                                <button type="button"
+                                        class="btn btn-secondary btn-review"
+                                        data-action="review">
+                                    Review
+                                </button>
+                                <button type="button"
+                                        class="btn btn-primary btn-approve"
+                                        data-action="approve">
+                                    Approve
+                                </button>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+        </div>
+    </div>
+</main>
+
+<div id="reviewModal" class="modal" aria-hidden="true">
+    <div class="modal__backdrop" data-close></div>
+    <div class="modal__card" role="dialog" aria-modal="true" aria-label="Purchase order">
+        <div id="reviewBody" class="modal__body"></div>
+        <div class="modal__footer">
+            <button type="button" class="btn btn-secondary" data-close>Close</button>
+            <button type="button" class="btn btn-primary" id="modalApproveBtn">Approve</button>
+        </div>
+    </div>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script src="~/js/po-list.js" asp-append-version="true"></script>
