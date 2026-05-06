@@ -16,7 +16,10 @@
   const undoBtn = document.getElementById('undoBtn');
   const tabPending = document.getElementById('tabPending');
   const tabApproved = document.getElementById('tabApproved');
-  const poSearchInput = document.getElementById('poSearchInput');
+  const tabRejected = document.getElementById('tabRejected');
+  const countPending = document.getElementById('countPending');
+  const countApproved = document.getElementById('countApproved');
+  const countRejected = document.getElementById('countRejected');
   const poEmptyState = document.getElementById('poEmptyState');
   const poTableScroll = document.getElementById('poTableScroll');
   const poSkeleton = document.getElementById('poSkeleton');
@@ -27,17 +30,13 @@
   const bulkSelectAll = document.getElementById('bulkSelectAll');
   const filterVendor = document.getElementById('filterVendor');
   const filterDateFrom = document.getElementById('filterDateFrom');
-  const filterDateTo = document.getElementById('filterDateTo');
-  const filterAmountMin = document.getElementById('filterAmountMin');
-  const filterAmountMax = document.getElementById('filterAmountMax');
-  const filterApplyBtn = document.getElementById('filterApplyBtn');
   const filterClearBtn = document.getElementById('filterClearBtn');
   const menuBtn = document.getElementById('menuBtn');
   const menuPanel = document.getElementById('menuPanel');
 
   let rows = Array.from(document.querySelectorAll('.po-row'));
   let currentRow = null;
-  /** @type {'Pending' | 'Approved'} */
+  /** @type {'Pending' | 'Approved' | 'Rejected'} */
   let activeListTab = 'Pending';
   let undoTimer = null;
   let pullStartY = null;
@@ -48,9 +47,6 @@
   const filters = {
     vendor: '',
     dateFrom: '',
-    dateTo: '',
-    amountMin: '',
-    amountMax: ''
   };
 
   const showToast = (text) => {
@@ -94,6 +90,7 @@
       <td class="actions" data-label="Actions">
         <div class="actions-row-block"><div class="actions-inner">
           <button type="button" class="btn btn-secondary btn-review" data-action="review">Review</button>
+          <button type="button" class="btn btn-danger btn-reject" data-action="reject">Reject</button>
           <button type="button" class="btn btn-primary btn-approve" data-action="approve">Approve</button>
         </div></div></td></tr>`;
   };
@@ -286,7 +283,9 @@
     tr.dataset.status = 'Approved';
     tr.dataset.transferable = 'true';
     const approveBtn = tr.querySelector('.btn-approve');
+    const rejectBtn = tr.querySelector('.btn-reject');
     if (approveBtn) approveBtn.style.display = 'none';
+    if (rejectBtn) rejectBtn.style.display = 'none';
     const cb = tr.querySelector('.row-select');
     if (cb) {
       cb.checked = false;
@@ -300,9 +299,14 @@
     tr.dataset.status = prev.status;
     tr.dataset.transferable = prev.transferable;
     const ab = tr.querySelector('.btn-approve');
+    const rb = tr.querySelector('.btn-reject');
     if (ab) {
       ab.style.display = '';
       ab.disabled = prev.status !== 'Pending';
+    }
+    if (rb) {
+      rb.style.display = '';
+      rb.disabled = prev.status !== 'Pending';
     }
     const c = tr.querySelector('.row-select');
     if (c) {
@@ -343,40 +347,88 @@
     runApprove(tr);
   };
 
+  const rejectRow = (tr) => {
+    if (tr.dataset.status !== 'Pending') {
+      showToast('Only pending PO can be rejected.');
+      return;
+    }
+    const prev = {
+      status: tr.dataset.status,
+      transferable: tr.dataset.transferable || ''
+    };
+    tr.dataset.status = 'Rejected';
+    tr.dataset.transferable = '';
+    const ab = tr.querySelector('.btn-approve');
+    const rb = tr.querySelector('.btn-reject');
+    if (ab) {
+      ab.style.display = 'none';
+      ab.disabled = true;
+    }
+    if (rb) {
+      rb.style.display = 'none';
+      rb.disabled = true;
+    }
+    const c = tr.querySelector('.row-select');
+    if (c) {
+      c.checked = false;
+      c.disabled = true;
+    }
+    showUndo('Rejected.', () => {
+      tr.dataset.status = prev.status;
+      tr.dataset.transferable = prev.transferable;
+      if (ab) {
+        ab.style.display = '';
+        ab.disabled = false;
+      }
+      if (rb) {
+        rb.style.display = '';
+        rb.disabled = false;
+      }
+      if (c) c.disabled = false;
+      refreshView();
+    });
+    refreshView();
+  };
+
   const updateRowButtons = (tr) => {
     const status = tr.dataset.status || 'Pending';
     const approveBtn = tr.querySelector('.btn-approve');
+    const rejectBtn = tr.querySelector('.btn-reject');
     if (approveBtn) {
       approveBtn.style.display = status === 'Pending' ? '' : 'none';
       approveBtn.disabled = status !== 'Pending';
+    }
+    if (rejectBtn) {
+      rejectBtn.style.display = status === 'Pending' ? '' : 'none';
+      rejectBtn.disabled = status !== 'Pending';
     }
   };
 
   const rowMatchesFilters = (tr) => {
     const vendor = (tr.dataset.vendor || '').toLowerCase();
     const od = tr.dataset.orderDate || '';
-    const amt = parseAmount(tr);
     if (filters.vendor && vendor !== filters.vendor.toLowerCase()) return false;
     if (filters.dateFrom && od < filters.dateFrom) return false;
-    if (filters.dateTo && od > filters.dateTo) return false;
-    if (filters.amountMin !== '' && !Number.isNaN(Number(filters.amountMin)) && amt < Number(filters.amountMin))
-      return false;
-    if (filters.amountMax !== '' && !Number.isNaN(Number(filters.amountMax)) && amt > Number(filters.amountMax))
-      return false;
     return true;
   };
 
   const updateTabUi = () => {
-    if (!tabPending || !tabApproved) return;
+    if (!tabPending || !tabApproved || !tabRejected) return;
     const pendingOn = activeListTab === 'Pending';
+    const approvedOn = activeListTab === 'Approved';
+    const rejectedOn = activeListTab === 'Rejected';
     tabPending.classList.toggle('is-active', pendingOn);
-    tabApproved.classList.toggle('is-active', !pendingOn);
+    tabApproved.classList.toggle('is-active', approvedOn);
+    tabRejected.classList.toggle('is-active', rejectedOn);
     tabPending.setAttribute('aria-selected', pendingOn ? 'true' : 'false');
-    tabApproved.setAttribute('aria-selected', pendingOn ? 'false' : 'true');
+    tabApproved.setAttribute('aria-selected', approvedOn ? 'true' : 'false');
+    tabRejected.setAttribute('aria-selected', rejectedOn ? 'true' : 'false');
   };
 
   const setListTab = (tab) => {
-    activeListTab = tab === 'Approved' ? 'Approved' : 'Pending';
+    if (tab === 'Approved') activeListTab = 'Approved';
+    else if (tab === 'Rejected') activeListTab = 'Rejected';
+    else activeListTab = 'Pending';
     setLoading(true);
     window.setTimeout(() => {
       updateTabUi();
@@ -409,18 +461,27 @@
   };
 
   const refreshView = () => {
-    const searchTerm = (poSearchInput?.value || '').trim().toLowerCase();
+    const pendingCount = rows.filter((r) => (r.dataset.status || 'Pending') === 'Pending').length;
+    const approvedCount = rows.filter((r) => r.dataset.status === 'Approved').length;
+    const rejectedCount = rows.filter((r) => r.dataset.status === 'Rejected').length;
+    if (countPending) countPending.textContent = String(pendingCount);
+    if (countApproved) countApproved.textContent = String(approvedCount);
+    if (countRejected) countRejected.textContent = String(rejectedCount);
+
     let visibleCount = 0;
     let countInTab = 0;
     rows.forEach((tr) => {
       updateRowButtons(tr);
-      const isApproved = tr.dataset.status === 'Approved';
-      const matchesStatus = activeListTab === 'Pending' ? !isApproved : isApproved;
+      const status = tr.dataset.status || 'Pending';
+      const matchesStatus =
+        activeListTab === 'Pending'
+          ? status === 'Pending'
+          : activeListTab === 'Approved'
+            ? status === 'Approved'
+            : status === 'Rejected';
       if (matchesStatus) countInTab++;
-      const po = (tr.dataset.po || '').toLowerCase();
-      const matchesSearch = !searchTerm || po.includes(searchTerm);
       const matchesFilters = rowMatchesFilters(tr);
-      const shouldShow = matchesStatus && matchesSearch && matchesFilters;
+      const shouldShow = matchesStatus && matchesFilters;
       tr.classList.toggle('is-hidden', !shouldShow);
       if (shouldShow) visibleCount++;
     });
@@ -442,9 +503,11 @@
           poEmptyState.textContent =
             activeListTab === 'Pending'
               ? 'No pending purchase orders.'
-              : 'No approved purchase orders.';
+              : activeListTab === 'Approved'
+                ? 'No approved purchase orders.'
+                : 'No rejected purchase orders.';
         } else {
-          poEmptyState.textContent = 'No purchase orders match your filters or search.';
+          poEmptyState.textContent = 'No purchase orders match your filters.';
         }
         poTableScroll.hidden = true;
       } else {
@@ -468,6 +531,12 @@
     if (approveBtn) {
       const tr = approveBtn.closest('tr');
       if (tr) approveRow(tr);
+      return;
+    }
+    const rejectBtn = e.target.closest('.btn-reject');
+    if (rejectBtn) {
+      const tr = rejectBtn.closest('tr');
+      if (tr) rejectRow(tr);
     }
   });
 
@@ -479,38 +548,21 @@
 
   tabPending?.addEventListener('click', () => setListTab('Pending'));
   tabApproved?.addEventListener('click', () => setListTab('Approved'));
-  poSearchInput?.addEventListener('input', () => {
-    setLoading(true);
-    window.setTimeout(() => {
-      refreshView();
-      setLoading(false);
-    }, 180);
+  tabRejected?.addEventListener('click', () => setListTab('Rejected'));
+  filterVendor?.addEventListener('change', () => {
+    filters.vendor = (filterVendor.value || '').trim();
+    refreshView();
   });
-
-  filterApplyBtn?.addEventListener('click', () => {
-    filters.vendor = (filterVendor?.value || '').trim();
-    filters.dateFrom = filterDateFrom?.value || '';
-    filters.dateTo = filterDateTo?.value || '';
-    filters.amountMin = filterAmountMin?.value ?? '';
-    filters.amountMax = filterAmountMax?.value ?? '';
-    setLoading(true);
-    window.setTimeout(() => {
-      refreshView();
-      setLoading(false);
-    }, 200);
+  filterDateFrom?.addEventListener('change', () => {
+    filters.dateFrom = filterDateFrom.value || '';
+    refreshView();
   });
 
   filterClearBtn?.addEventListener('click', () => {
     if (filterVendor) filterVendor.value = '';
     if (filterDateFrom) filterDateFrom.value = '';
-    if (filterDateTo) filterDateTo.value = '';
-    if (filterAmountMin) filterAmountMin.value = '';
-    if (filterAmountMax) filterAmountMax.value = '';
     filters.vendor = '';
     filters.dateFrom = '';
-    filters.dateTo = '';
-    filters.amountMin = '';
-    filters.amountMax = '';
     refreshView();
   });
 

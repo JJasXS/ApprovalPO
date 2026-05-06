@@ -27,24 +27,15 @@
 </header>
 
 <main class="po-main">
-    <div class="po-table-wrap" id="poTableWrap">
+    <div class="po-pane">
         <div class="po-table-wrap__head">
+            <div class="po-summary-row">
+                <div class="po-summary-title">Purchase Order Approvals</div>
+                <button type="button" id="bulkApproveBtn" class="btn btn-primary btn-sm" disabled>Bulk Approve</button>
+            </div>
+            <p class="po-summary-sub">Review and approve pending POs</p>
             <div class="po-head-row">
-                <div class="tabs-wrap">
-                    <div class="tabs" role="tablist" aria-label="PO status tabs">
-                        <button id="tabPending" class="tab-btn is-active" type="button" role="tab" aria-selected="true">Pending</button>
-                        <button id="tabApproved" class="tab-btn" type="button" role="tab" aria-selected="false">Approved</button>
-                    </div>
-                </div>
-                <div class="po-head-actions">
-                    <button type="button" id="refreshBtn" class="btn btn-secondary btn-sm">Refresh</button>
-                    <button type="button" id="bulkApproveBtn" class="btn btn-primary btn-sm" disabled>Bulk approve</button>
-                </div>
-            </div>
-            <div class="search-wrap">
-                <input id="poSearchInput" class="po-search-input" type="search" placeholder="Search PO #" aria-label="Search PO number" />
-            </div>
-            <div class="po-filters" id="poFilters">
+                <div class="po-filters" id="poFilters">
                 <select id="filterVendor" class="po-filter-input" aria-label="Vendor">
                     <option value="">All vendors</option>
                     @foreach (var v in Model.DistinctVendors)
@@ -52,14 +43,19 @@
                         <option value="@v">@v</option>
                     }
                 </select>
-                <input id="filterDateFrom" class="po-filter-input" type="date" aria-label="From date" />
-                <input id="filterDateTo" class="po-filter-input" type="date" aria-label="To date" />
-                <input id="filterAmountMin" class="po-filter-input" type="number" step="0.01" min="0" placeholder="Min amount" aria-label="Minimum amount" />
-                <input id="filterAmountMax" class="po-filter-input" type="number" step="0.01" min="0" placeholder="Max amount" aria-label="Maximum amount" />
-                <button type="button" id="filterApplyBtn" class="btn btn-secondary btn-sm">Apply filters</button>
+                <input id="filterDateFrom" class="po-filter-input" type="date" aria-label="Date" />
                 <button type="button" id="filterClearBtn" class="btn btn-secondary btn-sm">Clear</button>
             </div>
+            </div>
+            <div class="tabs-wrap tabs-wrap--bottom">
+                <div class="tabs" role="tablist" aria-label="PO status tabs">
+                    <button id="tabPending" class="tab-btn is-active" type="button" role="tab" aria-selected="true">Pending (<span id="countPending">0</span>)</button>
+                    <button id="tabApproved" class="tab-btn" type="button" role="tab" aria-selected="false">Approved (<span id="countApproved">0</span>)</button>
+                    <button id="tabRejected" class="tab-btn" type="button" role="tab" aria-selected="false">Rejected (<span id="countRejected">0</span>)</button>
+                </div>
+            </div>
         </div>
+        <div class="po-table-wrap" id="poTableWrap">
         <p id="poEmptyState" class="po-empty" hidden role="status" aria-live="polite"></p>
         <div id="poTableScroll" class="po-table-scroll">
             <div id="poSkeleton" class="po-skeleton" hidden aria-hidden="true">
@@ -103,6 +99,7 @@
                             <div class="actions-row-block">
                                 <div class="actions-inner">
                                     <button type="button" class="btn btn-secondary btn-review" data-action="review">Review</button>
+                                    <button type="button" class="btn btn-danger btn-reject" data-action="reject">Reject</button>
                                     <button type="button" class="btn btn-primary btn-approve" data-action="approve">Approve</button>
                                 </div>
                             </div>
@@ -112,6 +109,7 @@
                 </tbody>
             </table>
         </div>
+    </div>
     </div>
 </main>
 

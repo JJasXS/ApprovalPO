@@ -47,7 +47,8 @@ html, body {
   margin-bottom: 6px;
 }
 
-.login-container input[type="text"] {
+.login-container input[type="text"],
+.login-container input[type="email"] {
   width: 100%;
   padding: 12px 14px;
   margin-bottom: 16px;
@@ -59,7 +60,8 @@ html, body {
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-.login-container input[type="text"]:focus {
+.login-container input[type="text"]:focus,
+.login-container input[type="email"]:focus {
   border-color: #2563eb;
   box-shadow: 0 0 4px rgba(37, 99, 235, 0.3);
   outline: none;
