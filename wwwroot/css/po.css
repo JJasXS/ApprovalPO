@@ -1,8 +1,15 @@
 .po-header {
+  --po-sticky-header-height: 68px;
+}
+
+.po-header {
   background: #111827;
   color: #f9fafb;
   padding: 14px 16px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  position: sticky;
+  top: 0;
+  z-index: 40;
 }
 
 .po-header__inner {
@@ -164,7 +171,7 @@
   gap: 10px;
   border-bottom: 1px solid #e5e7eb;
   position: sticky;
-  top: 0;
+  top: var(--po-sticky-header-height, 68px);
   z-index: 10;
   background: #fff;
   border-radius: 12px 12px 0 0;
@@ -651,6 +658,7 @@ select.po-filter-input {
   bottom: 24px;
   left: 50%;
   transform: translateX(-50%) translateY(120%);
+  display: none;
   background: #111827;
   color: #f9fafb;
   padding: 12px 18px;
@@ -665,6 +673,7 @@ select.po-filter-input {
 }
 
 .toast.show {
+  display: block;
   transform: translateX(-50%) translateY(0);
 }
 
