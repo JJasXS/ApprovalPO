@@ -2,9 +2,14 @@
 @model ApprovalPO.Pages.PurchaseOrdersModel
 @{
     ViewData["Title"] = "Purchase Orders";
+    var ordersJsonUrl = Url.Page("/PurchaseOrders", null, new { handler = "OrdersJson" })!;
 }
 
 <link rel="stylesheet" href="~/css/po.css" asp-append-version="true" />
+
+<div id="poPageConfig" hidden
+     data-orders-json-url="@ordersJsonUrl"
+     data-high-value-threshold="@Model.HighValueThreshold.ToString(System.Globalization.CultureInfo.InvariantCulture)"></div>
 
 <header class="po-header">
     <div class="po-header__inner">
@@ -22,65 +27,90 @@
 </header>
 
 <main class="po-main">
-
-
-    <div class="po-table-wrap">
+    <div class="po-table-wrap" id="poTableWrap">
         <div class="po-table-wrap__head">
-            <div class="tabs-wrap">
-                <div class="tabs" role="tablist" aria-label="PO status tabs">
-                    <button id="tabPending" class="tab-btn is-active" type="button" role="tab" aria-selected="true">Pending</button>
-                    <button id="tabApproved" class="tab-btn" type="button" role="tab" aria-selected="false">Approved</button>
+            <div class="po-head-row">
+                <div class="tabs-wrap">
+                    <div class="tabs" role="tablist" aria-label="PO status tabs">
+                        <button id="tabPending" class="tab-btn is-active" type="button" role="tab" aria-selected="true">Pending</button>
+                        <button id="tabApproved" class="tab-btn" type="button" role="tab" aria-selected="false">Approved</button>
+                    </div>
+                </div>
+                <div class="po-head-actions">
+                    <button type="button" id="refreshBtn" class="btn btn-secondary btn-sm">Refresh</button>
+                    <button type="button" id="bulkApproveBtn" class="btn btn-primary btn-sm" disabled>Bulk approve</button>
                 </div>
             </div>
             <div class="search-wrap">
                 <input id="poSearchInput" class="po-search-input" type="search" placeholder="Search PO #" aria-label="Search PO number" />
             </div>
+            <div class="po-filters" id="poFilters">
+                <select id="filterVendor" class="po-filter-input" aria-label="Vendor">
+                    <option value="">All vendors</option>
+                    @foreach (var v in Model.DistinctVendors)
+                    {
+                        <option value="@v">@v</option>
+                    }
+                </select>
+                <input id="filterDateFrom" class="po-filter-input" type="date" aria-label="From date" />
+                <input id="filterDateTo" class="po-filter-input" type="date" aria-label="To date" />
+                <input id="filterAmountMin" class="po-filter-input" type="number" step="0.01" min="0" placeholder="Min amount" aria-label="Minimum amount" />
+                <input id="filterAmountMax" class="po-filter-input" type="number" step="0.01" min="0" placeholder="Max amount" aria-label="Maximum amount" />
+                <button type="button" id="filterApplyBtn" class="btn btn-secondary btn-sm">Apply filters</button>
+                <button type="button" id="filterClearBtn" class="btn btn-secondary btn-sm">Clear</button>
+            </div>
         </div>
-        <p id="poEmptyState" class="po-empty" hidden role="status"></p>
+        <p id="poEmptyState" class="po-empty" hidden role="status" aria-live="polite"></p>
         <div id="poTableScroll" class="po-table-scroll">
-        <table class="po-table">
-            <thead>
-                <tr>
-                    <th>PO #</th>
-                    <th>Vendor</th>
-                    <th class="num">Amount</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-            @foreach (var row in Model.Orders)
-            {
-                <tr class="po-row" data-po="@row.PoNumber"
-                    data-vendor="@row.Vendor"
-                    data-amount="@row.Amount.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)"
-                    data-transferable="@(row.Transferable == true ? "true" : "")"
-                    data-status="@row.Status"
-                    data-description="@row.Description">
-                    <td class="po-num" data-label="PO #">
-                        <span class="po-num-text">@row.PoNumber</span>
-                    </td>
-                    <td data-label="Vendor">@row.Vendor</td>
-                    <td class="num" data-label="Amount">@row.Amount.ToString("N2")</td>
-                    <td class="actions" data-label="Actions">
-                        <div class="actions-row-block">
-                            <div class="actions-inner">
-                                <button type="button"
-                                        class="btn btn-secondary btn-review"
-                                        data-action="review">
-                                    Review
-                                </button>
-                                <button type="button"
-                                        class="btn btn-primary btn-approve"
-                                        data-action="approve">
-                                    Approve
-                                </button>
+            <div id="poSkeleton" class="po-skeleton" hidden aria-hidden="true">
+                <div class="po-skeleton__row"></div>
+                <div class="po-skeleton__row"></div>
+                <div class="po-skeleton__row"></div>
+                <div class="po-skeleton__row"></div>
+            </div>
+            <table class="po-table">
+                <thead>
+                    <tr>
+                        <th class="th-check"><input type="checkbox" id="bulkSelectAll" aria-label="Select all visible pending" /></th>
+                        <th>PO #</th>
+                        <th>Vendor</th>
+                        <th class="num">Amount</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="poTableBody">
+                @foreach (var row in Model.Orders)
+                {
+                    <tr class="po-row" data-po="@row.PoNumber"
+                        data-vendor="@row.Vendor"
+                        data-amount="@row.Amount.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)"
+                        data-transferable="@(row.Transferable == true ? "true" : "")"
+                        data-status="@row.Status"
+                        data-description="@row.Description"
+                        data-order-date="@row.OrderDate.ToString("yyyy-MM-dd")">
+                        <td class="td-check" data-label="">
+                            @if (row.Status == "Pending")
+                            {
+                                <input type="checkbox" class="row-select" aria-label="Select @row.PoNumber" />
+                            }
+                        </td>
+                        <td class="po-num" data-label="PO #">
+                            <span class="po-num-text">@row.PoNumber</span>
+                        </td>
+                        <td data-label="Vendor">@row.Vendor</td>
+                        <td class="num" data-label="Amount">@row.Amount.ToString("N2")</td>
+                        <td class="actions" data-label="Actions">
+                            <div class="actions-row-block">
+                                <div class="actions-inner">
+                                    <button type="button" class="btn btn-secondary btn-review" data-action="review">Review</button>
+                                    <button type="button" class="btn btn-primary btn-approve" data-action="approve">Approve</button>
+                                </div>
                             </div>
-                        </div>
-                    </td>
-                </tr>
-            }
-            </tbody>
-        </table>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
         </div>
     </div>
 </main>
@@ -96,6 +126,22 @@
     </div>
 </div>
 
+<div id="confirmModal" class="modal" aria-hidden="true">
+    <div class="modal__backdrop" data-confirm-close></div>
+    <div class="modal__card" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+        <h2 id="confirmTitle" class="modal__title">Confirm</h2>
+        <div id="confirmBody" class="modal__body"></div>
+        <div class="modal__footer">
+            <button type="button" class="btn btn-secondary" data-confirm-close>Cancel</button>
+            <button type="button" class="btn btn-primary" id="confirmOkBtn">Confirm</button>
+        </div>
+    </div>
+</div>
+
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
+<div id="undoToast" class="undo-toast" hidden role="status" aria-live="polite">
+    <span id="undoToastMsg"></span>
+    <button type="button" id="undoBtn" class="btn btn-secondary btn-sm">Undo</button>
+</div>
 
 <script src="~/js/po-list.js" asp-append-version="true"></script>

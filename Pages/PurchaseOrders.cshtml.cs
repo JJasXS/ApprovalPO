@@ -1,72 +1,43 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using ApprovalPO.Data;
 using ApprovalPO.Models;
+using ApprovalPO.Options;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Options;
 
 namespace ApprovalPO.Pages;
 
 [Authorize]
 public class PurchaseOrdersModel : PageModel
 {
+    private static readonly JsonSerializerOptions JsonCamel = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+
+    private readonly IOptions<ApprovalOptions> _approval;
+
+    public PurchaseOrdersModel(IOptions<ApprovalOptions> approval) => _approval = approval;
+
     public IReadOnlyList<PurchaseOrderRow> Orders { get; private set; } = Array.Empty<PurchaseOrderRow>();
+
+    public IReadOnlyList<string> DistinctVendors { get; private set; } = Array.Empty<string>();
+
+    public decimal HighValueThreshold => _approval.Value.HighValueAmountThreshold;
 
     public void OnGet()
     {
-        Orders = MockPurchaseOrders();
+        Orders = MockOrderCatalog.GetOrders();
+        DistinctVendors = Orders.Select(o => o.Vendor).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(v => v).ToList();
     }
 
-    private static IReadOnlyList<PurchaseOrderRow> MockPurchaseOrders()
+    public IActionResult OnGetOrdersJson()
     {
-        // Newest PO numbers first.
-        return new List<PurchaseOrderRow>
-        {
-            new()
-            {
-                PoNumber = "PO-24006",
-                Vendor = "Tailspin Toys",
-                Amount = 1890.00m,
-                Status = "Pending",
-                Description = "Rush order — mobile kiosk supplies."
-            },
-            new()
-            {
-                PoNumber = "PO-24005",
-                Vendor = "Wide World Importers",
-                Amount = 675.40m,
-                Status = "Pending",
-                Description = "New vendor onboarding kit."
-            },
-            new()
-            {
-                PoNumber = "PO-24004",
-                Vendor = "Fabrikam",
-                Amount = 310.25m,
-                Status = "Pending",
-                Description = "Direct bill."
-            },
-            new()
-            {
-                PoNumber = "PO-24003",
-                Vendor = "Contoso Ltd",
-                Amount = 4420.00m,
-                Status = "Pending",
-                Description = "Locked vendor agreement."
-            },
-            new()
-            {
-                PoNumber = "PO-24002",
-                Vendor = "Northwind Traders",
-                Amount = 980.50m,
-                Status = "Pending",
-                Description = "Quarterly consumables."
-            },
-            new()
-            {
-                PoNumber = "PO-24001",
-                Vendor = "Acme Supplies",
-                Amount = 1250.00m,
-                Status = "Pending",
-                Description = "Office hardware replenishment."
-            },
-        };
+        var list = MockOrderCatalog.GetOrders();
+        return new JsonResult(list, JsonCamel);
     }
 }

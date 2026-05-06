@@ -12,11 +12,11 @@
     </div>
 
     <h2>Sign in with OTP</h2>
-    <p class="sub">No password. We’ll send a one-time code (mock in this build).</p>
+    <p class="sub">No password. Enter your work email; we send a short-lived one-time code. Wrong codes and repeat sends are rate-limited.</p>
 
     <div id="idGroup">
-        <label class="field-label" for="loginId">Email or username</label>
-        <input type="text" id="loginId" name="loginId" autocomplete="username" placeholder="you@company.com or username" />
+        <label class="field-label" for="loginId">Work email</label>
+        <input type="email" id="loginId" name="loginId" autocomplete="username" placeholder="you@company.com" />
 
         <button id="sendBtn" type="button">Send OTP</button>
     </div>
@@ -59,7 +59,7 @@
     sendBtn.addEventListener('click', async () => {
         const loginId = (loginIdEl.value || '').trim();
         if (!loginId) {
-            msg('Please enter your email or username.', true);
+            msg('Please enter your work email.', true);
             return;
         }
         msg('');
@@ -110,7 +110,7 @@
         const loginId = (loginHidden.value || '').trim();
         const otp = otpInputs.map((input) => input.value).join('');
         if (!loginId) {
-            msg('Email or username missing. Refresh and try again.', true);
+            msg('Email missing. Refresh and try again.', true);
             return;
         }
         if (otp.length !== 6 || !/^\d{6}$/.test(otp)) {

@@ -1,9 +1,13 @@
 using System.Security.Claims;
+using System.Text.Json;
 using System.Text.RegularExpressions;
+using ApprovalPO.Options;
+using ApprovalPO.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Options;
 
 namespace ApprovalPO.Pages;
 
@@ -11,6 +15,26 @@ namespace ApprovalPO.Pages;
 public class LoginModel : PageModel
 {
     private static readonly Regex SixDigitOtp = new(@"^\d{6}$", RegexOptions.Compiled);
+
+    private readonly OtpSessionStore _otpStore;
+    private readonly IOtpEmailSender _emailSender;
+    private readonly ApprovalOptions _approval;
+    private readonly IWebHostEnvironment _env;
+    private readonly ILogger<LoginModel> _logger;
+
+    public LoginModel(
+        OtpSessionStore otpStore,
+        IOtpEmailSender emailSender,
+        IOptions<ApprovalOptions> approval,
+        IWebHostEnvironment env,
+        ILogger<LoginModel> logger)
+    {
+        _otpStore = otpStore;
+        _emailSender = emailSender;
+        _approval = approval.Value;
+        _env = env;
+        _logger = logger;
+    }
 
     [BindProperty]
     public string LoginId { get; set; } = "";
@@ -22,14 +46,42 @@ public class LoginModel : PageModel
     {
     }
 
-    /// <summary>Mock: no email is sent; always succeeds when login id is non-empty.</summary>
-    public IActionResult OnPostSendOtp()
+    public async Task<IActionResult> OnPostSendOtpAsync(CancellationToken cancellationToken)
     {
         LoginId = (LoginId ?? "").Trim();
         if (string.IsNullOrWhiteSpace(LoginId))
             return new JsonResult(new { success = false, message = "Please enter your email or username." });
 
-        return new JsonResult(new { success = true, message = "OTP sent (mock). Enter any 6-digit code." });
+        if (!LoginId.Contains('@', StringComparison.Ordinal))
+            return new JsonResult(new { success = false, message = "Enter an email address so we can send your OTP." });
+
+        var (ok, message, otpPlain) = _otpStore.TryBeginSend(LoginId);
+        if (!ok || string.IsNullOrEmpty(otpPlain))
+            return new JsonResult(new { success = false, message });
+
+        var (sent, err) = await _emailSender.SendOtpAsync(LoginId, otpPlain, cancellationToken).ConfigureAwait(false);
+        if (!sent)
+        {
+            _logger.LogWarning("OTP email not sent for {LoginId}: {Error}", LoginId, err);
+            if (!_env.IsDevelopment())
+                return new JsonResult(new { success = false, message = err ?? "Could not send email. Try again later." });
+        }
+
+        var payload = new Dictionary<string, object?>
+        {
+            ["success"] = true,
+            ["message"] = sent
+                ? "OTP sent to your email."
+                : "OTP generated (email not configured — check with administrator)."
+        };
+
+        if (_env.IsDevelopment())
+        {
+            payload["devOtp"] = otpPlain;
+            payload["message"] = (sent ? "OTP sent. " : "") + $"Development: OTP is {otpPlain}";
+        }
+
+        return new JsonResult(payload, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
     }
 
     public async Task<IActionResult> OnPostVerifyOtpAsync()
@@ -38,15 +90,20 @@ public class LoginModel : PageModel
         Otp = (Otp ?? "").Trim();
 
         if (string.IsNullOrWhiteSpace(LoginId))
-            return new JsonResult(new { success = false, message = "Email or username is missing. Go back and try again." });
+            return new JsonResult(new { success = false, message = "Email is missing." });
 
         if (!SixDigitOtp.IsMatch(Otp))
             return new JsonResult(new { success = false, message = "OTP must be exactly 6 digits." });
 
-        var displayName = LoginId.Contains('@', StringComparison.Ordinal) ? LoginId : LoginId;
+        var (ok, message) = _otpStore.TryVerify(LoginId, Otp);
+        if (!ok)
+            return new JsonResult(new { success = false, message });
+
+        var displayName = LoginId;
         var claims = new List<Claim>
         {
             new Claim(ClaimTypes.NameIdentifier, LoginId),
+            new Claim(ClaimTypes.Email, LoginId),
             new Claim(ClaimTypes.Name, displayName),
         };
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
@@ -55,13 +112,13 @@ public class LoginModel : PageModel
         await HttpContext.SignInAsync(
             CookieAuthenticationDefaults.AuthenticationScheme,
             principal,
-            new AuthenticationProperties { IsPersistent = true });
+            new AuthenticationProperties { IsPersistent = false }).ConfigureAwait(false);
 
         return new JsonResult(new
         {
             success = true,
             message = "Signed in.",
             redirectUrl = Url.Page("/PurchaseOrders") ?? "/PurchaseOrders"
-        });
+        }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
     }
 }

@@ -29,3 +29,13 @@ C:\Users\sqlsupport\ApprovalPO\obj\Debug\net8.0\ApprovalPO.pdb
 C:\Users\sqlsupport\ApprovalPO\obj\Debug\net8.0\ApprovalPO.genruntimeconfig.cache
 C:\Users\sqlsupport\ApprovalPO\obj\Debug\net8.0\ref\ApprovalPO.dll
 C:\Users\sqlsupport\ApprovalPO\bin\Debug\net8.0\ApprovalPO.exe
+C:\Users\sqlsupport\ApprovalPO\obj\Debug\net8.0\ApprovalPO.sourcelink.json
+C:\Users\sqlsupport\ApprovalPO\_build_check\appsettings.Development.json
+C:\Users\sqlsupport\ApprovalPO\_build_check\appsettings.json
+C:\Users\sqlsupport\ApprovalPO\_build_check\ApprovalPO.staticwebassets.runtime.json
+C:\Users\sqlsupport\ApprovalPO\_build_check\ApprovalPO.staticwebassets.endpoints.json
+C:\Users\sqlsupport\ApprovalPO\_build_check\ApprovalPO.exe
+C:\Users\sqlsupport\ApprovalPO\_build_check\ApprovalPO.deps.json
+C:\Users\sqlsupport\ApprovalPO\_build_check\ApprovalPO.runtimeconfig.json
+C:\Users\sqlsupport\ApprovalPO\_build_check\ApprovalPO.dll
+C:\Users\sqlsupport\ApprovalPO\_build_check\ApprovalPO.pdb

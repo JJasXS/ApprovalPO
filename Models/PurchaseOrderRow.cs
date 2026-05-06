@@ -9,4 +9,7 @@ public class PurchaseOrderRow
     public bool? Transferable { get; set; }
     public string Status { get; set; } = "Pending";
     public string Description { get; set; } = "";
+
+    /// <summary>Used for filters and display (mock).</summary>
+    public DateTime OrderDate { get; set; } = DateTime.UtcNow.Date;
 }
