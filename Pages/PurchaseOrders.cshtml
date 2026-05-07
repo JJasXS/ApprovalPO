@@ -62,7 +62,7 @@
                 <div class="tabs" role="tablist" aria-label="PO status tabs">
                     <button id="tabPending" class="tab-btn is-active" type="button" role="tab" aria-selected="true">Pending (<span id="countPending">0</span>)</button>
                     <button id="tabApproved" class="tab-btn" type="button" role="tab" aria-selected="false">Approved (<span id="countApproved">0</span>)</button>
-                    <button id="tabRejected" class="tab-btn" type="button" role="tab" aria-selected="false">Rejected (<span id="countRejected">0</span>)</button>
+                    <button id="tabRejected" class="tab-btn" type="button" role="tab" aria-selected="false">Cancelled (<span id="countRejected">0</span>)</button>
                 </div>
             </div>
         </div>
@@ -86,18 +86,6 @@
                 <div class="po-skeleton__card"></div>
             </div>
             <table class="po-table">
-                <thead>
-                    <tr>
-                        <th class="th-check"><input type="checkbox" id="bulkSelectAll" aria-label="Select all visible pending" /></th>
-                        <th class="th-status">Status</th>
-                        <th>PO #</th>
-                        <th>Vendor</th>
-                        <th class="po-th-agent">Created by</th>
-                        <th class="num po-th-date">Date</th>
-                        <th class="num">Amount</th>
-                        <th></th>
-                    </tr>
-                </thead>
                 <tbody id="poTableBody">
                 @foreach (var row in Model.Orders)
                 {
@@ -118,7 +106,7 @@
                         <td class="po-status-td" data-label="">
                             <div class="po-status-stack @statusClass">
                                 <span class="po-status-icon" aria-hidden="true"></span>
-                                <span class="po-status-text">@row.Status</span>
+                                <span class="po-status-text">@(row.Status == "Rejected" ? "Cancelled" : row.Status)</span>
                             </div>
                         </td>
                         <td class="po-num" data-label="PO #">

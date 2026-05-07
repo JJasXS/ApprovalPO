@@ -92,6 +92,7 @@
 
   const statusStackClass = (status) =>
     status === 'Approved' ? 'po-status-stack--approved' : status === 'Rejected' ? 'po-status-stack--rejected' : 'po-status-stack--pending';
+  const statusDisplay = (status) => (status === 'Rejected' ? 'Cancelled' : status);
 
   const rowFromOrder = (o) => {
     const po = o.poNumber || '';
@@ -110,7 +111,7 @@
     const stack = statusStackClass(status);
     return `<tr class="po-row" data-po="${escapeHtml(po)}" data-vendor="${escapeHtml(vendor)}" data-amount="${escapeHtml(amount)}" data-transferable="${transfer}" data-status="${escapeHtml(status)}" data-description="${escapeHtml(desc)}" data-order-date="${escapeHtml(dateStr)}">
       <td class="td-check" data-label="">${chk}</td>
-      <td class="po-status-td" data-label=""><div class="po-status-stack ${stack}"><span class="po-status-icon" aria-hidden="true"></span><span class="po-status-text">${escapeHtml(status)}</span></div></td>
+      <td class="po-status-td" data-label=""><div class="po-status-stack ${stack}"><span class="po-status-icon" aria-hidden="true"></span><span class="po-status-text">${escapeHtml(statusDisplay(status))}</span></div></td>
       <td class="po-num" data-label="PO #"><span class="po-num-text">${escapeHtml(po)}</span></td>
       <td class="po-vendor" data-label="Vendor">${escapeHtml(vendor)}</td>
       <td class="po-agent" data-label="Created by">—</td>
@@ -302,7 +303,7 @@
     reviewBody.innerHTML = `
       <div class="review-hero">
         <div class="review-hero__po">${escapeHtml(po)}</div>
-        <span class="review-badge ${statusClass}">${escapeHtml(status)}</span>
+        <span class="review-badge ${statusClass}">${escapeHtml(statusDisplay(status))}</span>
       </div>
 
       <div class="review-card">
@@ -464,7 +465,7 @@
 
   const rejectRow = (tr) => {
     if (tr.dataset.status !== 'Pending') {
-      showToast('Only pending PO can be rejected.');
+      showToast('Only pending PO can be cancelled.');
       return;
     }
     const prev = {
@@ -621,7 +622,7 @@
               ? 'No pending purchase orders.'
               : activeListTab === 'Approved'
                 ? 'No approved purchase orders.'
-                : 'No rejected purchase orders.'
+                : 'No cancelled purchase orders.'
             : 'No purchase orders match your filters.';
         if (emptyTextEl) emptyTextEl.textContent = msg;
         else poEmptyState.textContent = msg;

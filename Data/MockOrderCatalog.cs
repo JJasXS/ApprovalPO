@@ -39,8 +39,9 @@ public static class MockOrderCatalog
                 PoNumber = "PO-24004",
                 Vendor = "Fabrikam",
                 Amount = 310.25m,
-                Status = "Pending",
-                Description = "Direct bill.",
+                Status = "Approved",
+                Transferable = true,
+                Description = "Direct bill. Approved by procurement lead.",
                 OrderDate = new DateTime(2026, 5, 2)
             },
             new()
@@ -48,8 +49,9 @@ public static class MockOrderCatalog
                 PoNumber = "PO-24003",
                 Vendor = "Contoso Ltd",
                 Amount = 4420.00m,
-                Status = "Pending",
-                Description = "Locked vendor agreement.",
+                Status = "Rejected",
+                Transferable = false,
+                Description = "Locked vendor agreement. Cancelled due to budget cap.",
                 OrderDate = new DateTime(2026, 4, 28)
             },
             new()
@@ -57,8 +59,9 @@ public static class MockOrderCatalog
                 PoNumber = "PO-24002",
                 Vendor = "Northwind Traders",
                 Amount = 980.50m,
-                Status = "Pending",
-                Description = "Quarterly consumables.",
+                Status = "Approved",
+                Transferable = true,
+                Description = "Quarterly consumables. Approved for dispatch.",
                 OrderDate = new DateTime(2026, 4, 20)
             },
             new()
@@ -66,8 +69,9 @@ public static class MockOrderCatalog
                 PoNumber = "PO-24001",
                 Vendor = "Acme Supplies",
                 Amount = 1250.00m,
-                Status = "Pending",
-                Description = "Office hardware replenishment.",
+                Status = "Rejected",
+                Transferable = false,
+                Description = "Office hardware replenishment. Cancelled by requester.",
                 OrderDate = new DateTime(2026, 4, 15)
             },
         };

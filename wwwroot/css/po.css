@@ -58,7 +58,7 @@ body {
 .po-header {
   position: sticky;
   top: 0;
-  z-index: 40;
+  z-index: 120;
   padding: max(var(--po-space-2), var(--po-safe-top)) max(var(--po-space-3), var(--po-safe-right))
     var(--po-space-4) max(var(--po-space-3), var(--po-safe-left));
   background: linear-gradient(135deg, var(--po-navy-start) 0%, var(--po-navy-end) 55%, #1d4ed8 140%);
@@ -164,7 +164,7 @@ body {
   box-shadow: var(--po-shadow-lg);
   border: 1px solid var(--po-border);
   overflow: hidden;
-  z-index: 20;
+  z-index: 160;
 }
 
 .menu-user {
@@ -364,7 +364,7 @@ select.po-filter-input {
 .tabs {
   display: flex;
   width: 100%;
-  padding: 4px;
+  padding: 3px;
   border-radius: var(--po-radius-pill);
   background: #e8edf5;
   border: 1px solid var(--po-border);
@@ -375,8 +375,8 @@ select.po-filter-input {
   flex: 1;
   border: none;
   background: transparent;
-  padding: 10px 12px;
-  min-height: var(--po-touch-min);
+  padding: 7px 10px;
+  min-height: 34px;
   font-weight: 600;
   font-size: 0.8125rem;
   color: var(--po-text-muted);
@@ -402,7 +402,7 @@ select.po-filter-input {
 /* ——— Table region ——— */
 
 .po-table-wrap__head {
-  padding: 0;
+  padding: 8px 0 0;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -1346,6 +1346,12 @@ select.po-filter-input {
     margin-bottom: var(--po-space-3);
     border-radius: var(--po-radius-md);
     overflow: hidden;
+  }
+
+  /* Keep filtered-out rows hidden on mobile.
+     Without this, the mobile grid rule above can override .po-row.is-hidden. */
+  .po-table tbody tr.po-row.is-hidden {
+    display: none !important;
   }
 
   .po-row .td-check {
