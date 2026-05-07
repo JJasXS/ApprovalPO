@@ -5,37 +5,48 @@
     var ordersJsonUrl = Url.Page("/PurchaseOrders", null, new { handler = "OrdersJson" })!;
 }
 
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="~/css/po.css" asp-append-version="true" />
 
 <div id="poPageConfig" hidden
      data-orders-json-url="@ordersJsonUrl"
      data-high-value-threshold="@Model.HighValueThreshold.ToString(System.Globalization.CultureInfo.InvariantCulture)"></div>
 
-<header class="po-header">
-    <div class="po-header__inner">
-        <h1>Purchase orders</h1>
-        <div class="po-header__menu">
-            <button id="menuBtn" class="menu-btn" type="button" aria-expanded="false" aria-controls="menuPanel" aria-label="Open menu">
-                <span></span><span></span><span></span>
-            </button>
-            <div id="menuPanel" class="menu-panel" hidden>
-                <div class="menu-user">@User.Identity?.Name</div>
-                <a class="menu-link" asp-page="/Logout">Sign out</a>
+<main class="po-main">
+    <header class="po-header po-header--hero">
+        <div class="po-header__inner">
+            <div class="po-header__titles">
+                <h1 class="po-header__title">Purchase Order Approvals</h1>
+                <p class="po-header__subtitle">Review and approve pending purchase orders</p>
+            </div>
+            <div class="po-header__actions">
+                @{
+                    var userName = User.Identity?.Name ?? "";
+                    var initial = !string.IsNullOrEmpty(userName) ? userName.Trim().Substring(0, 1).ToUpperInvariant() : "?";
+                }
+                <div class="po-header__avatar" aria-hidden="true" title="@userName">@initial</div>
+                <div class="po-header__menu">
+                    <button id="menuBtn" class="menu-btn" type="button" aria-expanded="false" aria-controls="menuPanel" aria-label="Open menu">
+                        <span></span><span></span><span></span>
+                    </button>
+                    <div id="menuPanel" class="menu-panel" hidden>
+                        <div class="menu-user">@User.Identity?.Name</div>
+                        <a class="menu-link" asp-page="/Logout">Sign out</a>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-</header>
+    </header>
 
-<main class="po-main">
-    <div class="po-pane">
+    <div class="po-main__inner">
         <div class="po-table-wrap__head">
-            <div class="po-summary-row">
-                <div class="po-summary-title">Purchase Order Approvals</div>
-                <button type="button" id="bulkApproveBtn" class="btn btn-primary btn-sm" disabled>Bulk Approve</button>
+            <div class="po-toolbar">
+                <button type="button" id="bulkApproveBtn" class="po-btn po-btn--bulk" disabled>Bulk approve</button>
             </div>
-            <p class="po-summary-sub">Review and approve pending POs</p>
-            <div class="po-head-row">
-                <div class="po-filters" id="poFilters">
+
+            <div class="po-filters" id="poFilters">
                 <select id="filterVendor" class="po-filter-input" aria-label="Vendor">
                     <option value="">All vendors</option>
                     @foreach (var v in Model.DistinctVendors)
@@ -43,11 +54,11 @@
                         <option value="@v">@v</option>
                     }
                 </select>
-                <input id="filterDateFrom" class="po-filter-input" type="date" aria-label="Date" />
-                <button type="button" id="filterClearBtn" class="btn btn-secondary btn-sm">Clear</button>
+                <input id="filterDateFrom" class="po-filter-input" type="date" aria-label="From date" />
+                <button type="button" id="filterClearBtn" class="po-btn po-btn--filter-clear">Clear</button>
             </div>
-            </div>
-            <div class="tabs-wrap tabs-wrap--bottom">
+
+            <div class="tabs-wrap">
                 <div class="tabs" role="tablist" aria-label="PO status tabs">
                     <button id="tabPending" class="tab-btn is-active" type="button" role="tab" aria-selected="true">Pending (<span id="countPending">0</span>)</button>
                     <button id="tabApproved" class="tab-btn" type="button" role="tab" aria-selected="false">Approved (<span id="countApproved">0</span>)</button>
@@ -56,20 +67,33 @@
             </div>
         </div>
         <div class="po-table-wrap" id="poTableWrap">
-        <p id="poEmptyState" class="po-empty" hidden role="status" aria-live="polite"></p>
+        <div id="poEmptyState" class="po-empty" hidden role="status" aria-live="polite">
+            <div class="po-empty__art" aria-hidden="true">
+                <svg width="120" height="100" viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="18" y="22" width="84" height="56" rx="12" fill="#F1F5F9" stroke="#E2E8F0" stroke-width="2"/>
+                    <path d="M38 42h44M38 52h32" stroke="#CBD5E1" stroke-width="3" stroke-linecap="round"/>
+                    <circle cx="78" cy="38" r="8" fill="#DBEAFE"/>
+                    <path d="M74 38l2.5 2.5L82 34" stroke="#2563EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <p class="po-empty__text"></p>
+        </div>
         <div id="poTableScroll" class="po-table-scroll">
             <div id="poSkeleton" class="po-skeleton" hidden aria-hidden="true">
-                <div class="po-skeleton__row"></div>
-                <div class="po-skeleton__row"></div>
-                <div class="po-skeleton__row"></div>
-                <div class="po-skeleton__row"></div>
+                <div class="po-skeleton__card"></div>
+                <div class="po-skeleton__card"></div>
+                <div class="po-skeleton__card"></div>
+                <div class="po-skeleton__card"></div>
             </div>
             <table class="po-table">
                 <thead>
                     <tr>
                         <th class="th-check"><input type="checkbox" id="bulkSelectAll" aria-label="Select all visible pending" /></th>
+                        <th class="th-status">Status</th>
                         <th>PO #</th>
                         <th>Vendor</th>
+                        <th class="po-th-agent">Created by</th>
+                        <th class="num po-th-date">Date</th>
                         <th class="num">Amount</th>
                         <th></th>
                     </tr>
@@ -77,6 +101,7 @@
                 <tbody id="poTableBody">
                 @foreach (var row in Model.Orders)
                 {
+                    var statusClass = row.Status == "Approved" ? "po-status-stack--approved" : row.Status == "Rejected" ? "po-status-stack--rejected" : "po-status-stack--pending";
                     <tr class="po-row" data-po="@row.PoNumber"
                         data-vendor="@row.Vendor"
                         data-amount="@row.Amount.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)"
@@ -90,17 +115,25 @@
                                 <input type="checkbox" class="row-select" aria-label="Select @row.PoNumber" />
                             }
                         </td>
+                        <td class="po-status-td" data-label="">
+                            <div class="po-status-stack @statusClass">
+                                <span class="po-status-icon" aria-hidden="true"></span>
+                                <span class="po-status-text">@row.Status</span>
+                            </div>
+                        </td>
                         <td class="po-num" data-label="PO #">
                             <span class="po-num-text">@row.PoNumber</span>
                         </td>
-                        <td data-label="Vendor">@row.Vendor</td>
-                        <td class="num" data-label="Amount">@row.Amount.ToString("N2")</td>
-                        <td class="actions" data-label="Actions">
+                        <td class="po-vendor" data-label="Vendor">@row.Vendor</td>
+                        <td class="po-agent" data-label="Created by">—</td>
+                        <td class="num po-date" data-label="Date">@row.OrderDate.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</td>
+                        <td class="num po-amount" data-label="Amount">@row.Amount.ToString("N2")</td>
+                        <td class="actions" data-label="">
                             <div class="actions-row-block">
                                 <div class="actions-inner">
-                                    <button type="button" class="btn btn-secondary btn-review" data-action="review">Review</button>
-                                    <button type="button" class="btn btn-danger btn-reject" data-action="reject">Reject</button>
-                                    <button type="button" class="btn btn-primary btn-approve" data-action="approve">Approve</button>
+                                    <button type="button" class="po-btn po-btn--review btn-review" data-action="review">Review</button>
+                                    <button type="button" class="po-btn po-btn--reject btn-reject" data-action="reject">Reject</button>
+                                    <button type="button" class="po-btn po-btn--approve btn-approve" data-action="approve">Approve</button>
                                 </div>
                             </div>
                         </td>
@@ -110,28 +143,47 @@
             </table>
         </div>
     </div>
+        <p class="po-footer-note">Managed by ProAcc System Consulting.</p>
     </div>
 </main>
 
-<div id="reviewModal" class="modal" aria-hidden="true">
+<div id="reviewModal" class="modal modal--sheet" aria-hidden="true">
     <div class="modal__backdrop" data-close></div>
-    <div class="modal__card" role="dialog" aria-modal="true" aria-label="Purchase order">
-        <div id="reviewBody" class="modal__body"></div>
-        <div class="modal__footer">
-            <button type="button" class="btn btn-secondary" data-close>Close</button>
-            <button type="button" class="btn btn-primary" id="modalApproveBtn">Approve</button>
+    <div class="modal__sheet" role="dialog" aria-modal="true" aria-label="Purchase order details">
+        <div class="modal__sheet-handle" aria-hidden="true"></div>
+        <div class="modal__sheet-top">
+            <button type="button" class="modal__icon-btn" data-close aria-label="Close">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <div class="modal__sheet-top-fill"></div>
+            <button type="button" class="modal__icon-btn modal__nav-btn" id="modalPrevBtn" aria-label="Previous purchase order">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <button type="button" class="modal__icon-btn modal__nav-btn" id="modalNextBtn" aria-label="Next purchase order">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+        </div>
+        <div class="modal__sheet-scroll">
+            <div id="reviewBody" class="modal__body"></div>
+        </div>
+        <div class="modal__sheet-actions">
+            <button type="button" class="po-btn po-btn--reject-outline" id="modalRejectBtn">Reject</button>
+            <button type="button" class="po-btn po-btn--approve-solid" id="modalApproveBtn">Approve</button>
         </div>
     </div>
 </div>
 
-<div id="confirmModal" class="modal" aria-hidden="true">
+<div id="confirmModal" class="modal modal--sheet modal--confirm" aria-hidden="true">
     <div class="modal__backdrop" data-confirm-close></div>
-    <div class="modal__card" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
-        <h2 id="confirmTitle" class="modal__title">Confirm</h2>
-        <div id="confirmBody" class="modal__body"></div>
-        <div class="modal__footer">
-            <button type="button" class="btn btn-secondary" data-confirm-close>Cancel</button>
-            <button type="button" class="btn btn-primary" id="confirmOkBtn">Confirm</button>
+    <div class="modal__sheet modal__sheet--narrow" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+        <div class="modal__sheet-handle" aria-hidden="true"></div>
+        <div class="modal__sheet-scroll modal__sheet-scroll--padded">
+            <h2 id="confirmTitle" class="modal__confirm-title">Confirm</h2>
+            <div id="confirmBody" class="modal__body modal__body--confirm"></div>
+        </div>
+        <div class="modal__sheet-actions modal__sheet-actions--confirm">
+            <button type="button" class="po-btn po-btn--neutral-outline" data-confirm-close>Cancel</button>
+            <button type="button" class="po-btn po-btn--approve-solid" id="confirmOkBtn">Confirm</button>
         </div>
     </div>
 </div>
@@ -139,7 +191,7 @@
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <div id="undoToast" class="undo-toast" hidden role="status" aria-live="polite">
     <span id="undoToastMsg"></span>
-    <button type="button" id="undoBtn" class="btn btn-secondary btn-sm">Undo</button>
+    <button type="button" id="undoBtn" class="po-btn po-btn--undo">Undo</button>
 </div>
 
 <script src="~/js/po-list.js" asp-append-version="true"></script>

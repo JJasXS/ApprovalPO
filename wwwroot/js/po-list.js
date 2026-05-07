@@ -33,6 +33,10 @@
   const filterClearBtn = document.getElementById('filterClearBtn');
   const menuBtn = document.getElementById('menuBtn');
   const menuPanel = document.getElementById('menuPanel');
+  const modalPrevBtn = document.getElementById('modalPrevBtn');
+  const modalNextBtn = document.getElementById('modalNextBtn');
+  const tableHeadEl = document.querySelector('.po-table-wrap__head');
+  const headerEl = document.querySelector('.po-header');
 
   let rows = Array.from(document.querySelectorAll('.po-row'));
   let currentRow = null;
@@ -62,11 +66,32 @@
     if (poTableWrap) poTableWrap.classList.toggle('is-loading', !!on);
   };
 
+  const syncStickyHeights = () => {
+    if (headerEl) {
+      const hh = headerEl.getBoundingClientRect().height || 0;
+      document.documentElement.style.setProperty('--po-header-height', `${Math.ceil(hh)}px`);
+    }
+    if (tableHeadEl) {
+      const h = tableHeadEl.getBoundingClientRect().height || 0;
+      document.documentElement.style.setProperty('--po-table-wrap-head-height', `${Math.ceil(h)}px`);
+    }
+  };
+
   const escapeHtml = (s) => {
     const d = document.createElement('div');
     d.textContent = s == null ? '' : String(s);
     return d.innerHTML;
   };
+
+  const formatDisplayDate = (isoYmd) => {
+    if (!isoYmd || String(isoYmd).length < 10) return '—';
+    const d = new Date(`${String(isoYmd).slice(0, 10)}T12:00:00`);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  };
+
+  const statusStackClass = (status) =>
+    status === 'Approved' ? 'po-status-stack--approved' : status === 'Rejected' ? 'po-status-stack--rejected' : 'po-status-stack--pending';
 
   const rowFromOrder = (o) => {
     const po = o.poNumber || '';
@@ -82,16 +107,20 @@
         ? `<input type="checkbox" class="row-select" aria-label="Select ${escapeHtml(po)}" />`
         : '';
     const amtNum = Number.parseFloat(amount) || 0;
+    const stack = statusStackClass(status);
     return `<tr class="po-row" data-po="${escapeHtml(po)}" data-vendor="${escapeHtml(vendor)}" data-amount="${escapeHtml(amount)}" data-transferable="${transfer}" data-status="${escapeHtml(status)}" data-description="${escapeHtml(desc)}" data-order-date="${escapeHtml(dateStr)}">
       <td class="td-check" data-label="">${chk}</td>
+      <td class="po-status-td" data-label=""><div class="po-status-stack ${stack}"><span class="po-status-icon" aria-hidden="true"></span><span class="po-status-text">${escapeHtml(status)}</span></div></td>
       <td class="po-num" data-label="PO #"><span class="po-num-text">${escapeHtml(po)}</span></td>
-      <td data-label="Vendor">${escapeHtml(vendor)}</td>
-      <td class="num" data-label="Amount">${amtNum.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-      <td class="actions" data-label="Actions">
+      <td class="po-vendor" data-label="Vendor">${escapeHtml(vendor)}</td>
+      <td class="po-agent" data-label="Created by">—</td>
+      <td class="num po-date" data-label="Date">${escapeHtml(formatDisplayDate(dateStr))}</td>
+      <td class="num po-amount" data-label="Amount">${amtNum.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+      <td class="actions" data-label="">
         <div class="actions-row-block"><div class="actions-inner">
-          <button type="button" class="btn btn-secondary btn-review" data-action="review">Review</button>
-          <button type="button" class="btn btn-danger btn-reject" data-action="reject">Reject</button>
-          <button type="button" class="btn btn-primary btn-approve" data-action="approve">Approve</button>
+          <button type="button" class="po-btn po-btn--review btn-review" data-action="review">Review</button>
+          <button type="button" class="po-btn po-btn--reject btn-reject" data-action="reject">Reject</button>
+          <button type="button" class="po-btn po-btn--approve btn-approve" data-action="approve">Approve</button>
         </div></div></td></tr>`;
   };
 
@@ -176,7 +205,7 @@
 
   const getMockItems = (po, vendor) => {
     const seed = Number((po || '').replace(/\D/g, '').slice(-2)) || 1;
-    const v = escapeHtml(vendor);
+    const v = vendor || '';
     return [
       {
         code: `ITM-${(100 + seed).toString()}`,
@@ -199,13 +228,49 @@
     ];
   };
 
+  const getVisibleRowsInList = () => rows.filter((r) => !r.classList.contains('is-hidden'));
+
+  const updateModalNav = () => {
+    if (!modalPrevBtn || !modalNextBtn || !currentRow) return;
+    const visible = getVisibleRowsInList();
+    const idx = visible.indexOf(currentRow);
+    const hasPrev = idx > 0;
+    const hasNext = idx >= 0 && idx < visible.length - 1;
+    modalPrevBtn.disabled = !hasPrev;
+    modalNextBtn.disabled = !hasNext;
+    modalPrevBtn.setAttribute('aria-disabled', hasPrev ? 'false' : 'true');
+    modalNextBtn.setAttribute('aria-disabled', hasNext ? 'false' : 'true');
+  };
+
+  const navigateModal = (delta) => {
+    if (!currentRow) return;
+    const visible = getVisibleRowsInList();
+    const idx = visible.indexOf(currentRow);
+    if (idx < 0) return;
+    const nextIdx = idx + delta;
+    if (nextIdx < 0 || nextIdx >= visible.length) return;
+    const target = visible[nextIdx];
+    currentRow = target;
+    renderReview(target);
+    updateModalNav();
+    target.scrollIntoView({ block: 'nearest' });
+  };
+
   const renderReview = (tr) => {
     if (!reviewBody || !modalApproveBtn) return;
+    const modalRejectBtnEl = document.getElementById('modalRejectBtn');
     const po = tr.dataset.po || '';
     const vendor = tr.dataset.vendor || '';
     const status = tr.dataset.status || '';
-    const statusClass =
-      status === 'Approved' ? 'review-head__status--approved' : 'review-head__status--pending';
+    const desc = tr.dataset.description || '';
+    const orderIso = tr.dataset.orderDate || '';
+    const displayDate = formatDisplayDate(orderIso);
+    const amt = parseAmount(tr);
+    const amtStr = amt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    let statusClass = 'review-badge--pending';
+    if (status === 'Approved') statusClass = 'review-badge--approved';
+    else if (status === 'Rejected') statusClass = 'review-badge--rejected';
+
     const items = getMockItems(po, vendor);
     const totalQty = items.reduce((sum, item) => sum + item.qty, 0);
     const lineTotal = (item) => item.qty * item.unitPrice;
@@ -214,8 +279,14 @@
       .map(
         (item) => `
       <tr>
-        <td>${escapeHtml(item.code)}</td>
-        <td>${item.name}</td>
+        <td class="items-check">
+          <label class="po-check" aria-label="Select item ${escapeHtml(item.code)}">
+            <input type="checkbox" checked />
+            <span class="po-check__box" aria-hidden="true"></span>
+          </label>
+        </td>
+        <td class="items-code">${escapeHtml(item.code)}</td>
+        <td class="items-desc">${escapeHtml(item.name)}</td>
         <td class="num">${item.qty}</td>
         <td class="num">${lineTotal(item).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
       </tr>
@@ -223,36 +294,80 @@
       )
       .join('');
 
+    const note =
+      amt >= highValueThreshold && status === 'Pending'
+        ? '<div class="modal__note">High-value PO — confirm approval aligns with your policy.</div>'
+        : '';
+
     reviewBody.innerHTML = `
-      <div class="review-head">
-        <div class="review-head__po">${escapeHtml(po)}</div>
-        <div class="review-head__status ${statusClass}">${escapeHtml(status)}</div>
+      <div class="review-hero">
+        <div class="review-hero__po">${escapeHtml(po)}</div>
+        <span class="review-badge ${statusClass}">${escapeHtml(status)}</span>
       </div>
-      <div class="items-title">Items</div>
-      <div class="items-wrap">
-        <table class="items-table">
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th>Description</th>
-              <th class="num">Qty</th>
-              <th class="num">Total</th>
-            </tr>
-          </thead>
-          <tbody>${itemsHtml}</tbody>
-          <tfoot>
-            <tr>
-              <td colspan="2">Total</td>
-              <td class="num">${totalQty}</td>
-              <td class="num">${itemsTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-            </tr>
-          </tfoot>
-        </table>
+
+      <div class="review-card">
+        <div class="review-grid">
+          <div class="review-field">
+            <div class="review-label">Company</div>
+            <div class="review-value">${escapeHtml(vendor)}</div>
+          </div>
+          <div class="review-field">
+            <div class="review-label">Date</div>
+            <div class="review-value">${escapeHtml(displayDate)}</div>
+          </div>
+          <div class="review-field">
+            <div class="review-label">Agent</div>
+            <div class="review-value">—</div>
+          </div>
+          <div class="review-field">
+            <div class="review-label">Amount</div>
+            <div class="review-value review-value--amount">${escapeHtml(amtStr)}</div>
+          </div>
+          <div class="review-field review-field--full">
+            <div class="review-label">Description</div>
+            <div class="review-value">${escapeHtml(desc) || '—'}</div>
+          </div>
+        </div>
+      </div>
+
+      ${note}
+
+      <div class="items-title">Line items</div>
+      <div class="review-card review-card--items">
+        <div class="items-wrap">
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th class="items-th-check" aria-label="Select"></th>
+                <th>Item code</th>
+                <th>Description</th>
+                <th class="num">Qty</th>
+                <th class="num">Amount</th>
+              </tr>
+            </thead>
+            <tbody>${itemsHtml}</tbody>
+            <tfoot>
+              <tr>
+                <td colspan="3" class="items-total-label">Total</td>
+                <td class="num items-total-qty">${totalQty}</td>
+                <td class="num items-total-amt">${itemsTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       </div>
     `;
 
-    modalApproveBtn.disabled = status === 'Approved';
-    modalApproveBtn.title = status === 'Approved' ? 'Already approved' : '';
+    const pending = status === 'Pending';
+    modalApproveBtn.disabled = !pending;
+    modalApproveBtn.title =
+      status === 'Approved' ? 'Already approved' : status === 'Rejected' ? 'Cannot approve rejected PO' : '';
+    if (modalRejectBtnEl) {
+      modalRejectBtnEl.disabled = !pending;
+      modalRejectBtnEl.style.display = pending ? '' : 'none';
+    }
+
+    updateModalNav();
   };
 
   const parseAmount = (tr) => Number.parseFloat(String(tr.dataset.amount || '0')) || 0;
@@ -497,18 +612,19 @@
     if (bulkApproveBtn) bulkApproveBtn.disabled = selectedPending.length === 0;
 
     if (poEmptyState && poTableScroll) {
+      const emptyTextEl = poEmptyState.querySelector('.po-empty__text');
       if (visibleCount === 0) {
         poEmptyState.hidden = false;
-        if (countInTab === 0) {
-          poEmptyState.textContent =
-            activeListTab === 'Pending'
+        const msg =
+          countInTab === 0
+            ? activeListTab === 'Pending'
               ? 'No pending purchase orders.'
               : activeListTab === 'Approved'
                 ? 'No approved purchase orders.'
-                : 'No rejected purchase orders.';
-        } else {
-          poEmptyState.textContent = 'No purchase orders match your filters.';
-        }
+                : 'No rejected purchase orders.'
+            : 'No purchase orders match your filters.';
+        if (emptyTextEl) emptyTextEl.textContent = msg;
+        else poEmptyState.textContent = msg;
         poTableScroll.hidden = true;
       } else {
         poEmptyState.hidden = true;
@@ -525,6 +641,7 @@
       currentRow = tr;
       renderReview(tr);
       openModal(modal);
+      updateModalNav();
       return;
     }
     const approveBtn = e.target.closest('.btn-approve');
@@ -545,6 +662,17 @@
     closeModal(modal);
     currentRow = null;
   });
+
+  const modalRejectBtn = document.getElementById('modalRejectBtn');
+  modalRejectBtn?.addEventListener('click', () => {
+    if (!currentRow || currentRow.dataset.status !== 'Pending') return;
+    rejectRow(currentRow);
+    closeModal(modal);
+    currentRow = null;
+  });
+
+  modalPrevBtn?.addEventListener('click', () => navigateModal(-1));
+  modalNextBtn?.addEventListener('click', () => navigateModal(1));
 
   tabPending?.addEventListener('click', () => setListTab('Pending'));
   tabApproved?.addEventListener('click', () => setListTab('Approved'));
@@ -651,4 +779,7 @@
 
   updateTabUi();
   refreshView();
+  syncStickyHeights();
+
+  window.addEventListener('resize', () => syncStickyHeights(), { passive: true });
 })();
