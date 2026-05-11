@@ -1,8 +1,13 @@
 @page
 @model ApprovalPO.Pages.PurchaseOrdersModel
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
 @{
     ViewData["Title"] = "Purchase Orders";
     var ordersJsonUrl = Url.Page("/PurchaseOrders", null, new { handler = "OrdersJson" })!;
+    var linesJsonUrlBase = Url.Page("/PurchaseOrders", null, new { handler = "LinesJson" })!;
+    var setTransferableUrl = Url.Page("/PurchaseOrders", null, new { handler = "SetTransferable" })!;
+    var setLineTransferableUrl = Url.Page("/PurchaseOrders", null, new { handler = "SetLineTransferable" })!;
+    var csrf = Antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 }
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -12,28 +17,28 @@
 
 <div id="poPageConfig" hidden
      data-orders-json-url="@ordersJsonUrl"
+     data-lines-json-url-base="@linesJsonUrlBase"
+     data-set-transferable-url="@setTransferableUrl"
+     data-set-line-transferable-url="@setLineTransferableUrl"
+     data-csrf-token="@csrf"
      data-high-value-threshold="@Model.HighValueThreshold.ToString(System.Globalization.CultureInfo.InvariantCulture)"></div>
 
 <main class="po-main">
     <header class="po-header po-header--hero">
         <div class="po-header__inner">
             <div class="po-header__titles">
-                <h1 class="po-header__title">Purchase Order Approvals</h1>
-                <p class="po-header__subtitle">Review and approve pending purchase orders</p>
+                <h1 class="po-header__title">Purchase request approvals</h1>
             </div>
             <div class="po-header__actions">
-                @{
-                    var userName = User.Identity?.Name ?? "";
-                    var initial = !string.IsNullOrEmpty(userName) ? userName.Trim().Substring(0, 1).ToUpperInvariant() : "?";
-                }
-                <div class="po-header__avatar" aria-hidden="true" title="@userName">@initial</div>
                 <div class="po-header__menu">
                     <button id="menuBtn" class="menu-btn" type="button" aria-expanded="false" aria-controls="menuPanel" aria-label="Open menu">
                         <span></span><span></span><span></span>
                     </button>
                     <div id="menuPanel" class="menu-panel" hidden>
                         <div class="menu-user">@User.Identity?.Name</div>
-                        <a class="menu-link" asp-page="/Logout">Sign out</a>
+                        <form method="post" asp-page="/Logout" class="menu-logout-form">
+                            <button type="submit" class="menu-link menu-link--button">Sign out</button>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -43,7 +48,10 @@
     <div class="po-main__inner">
         <div class="po-table-wrap__head">
             <div class="po-toolbar">
-                <button type="button" id="bulkApproveBtn" class="po-btn po-btn--bulk" disabled>Bulk approve</button>
+                <div class="po-toolbar__cluster">
+                    <button type="button" id="bulkApproveBtn" class="po-btn po-btn--bulk" disabled>Bulk approve</button>
+                    <button type="button" id="filterClearBtn" class="po-btn po-btn--filter-clear">Clear</button>
+                </div>
             </div>
 
             <div class="po-filters" id="poFilters">
@@ -55,7 +63,6 @@
                     }
                 </select>
                 <input id="filterDateFrom" class="po-filter-input" type="date" aria-label="From date" />
-                <button type="button" id="filterClearBtn" class="po-btn po-btn--filter-clear">Clear</button>
             </div>
 
             <div class="tabs-wrap">
@@ -91,9 +98,10 @@
                 {
                     var statusClass = row.Status == "Approved" ? "po-status-stack--approved" : row.Status == "Rejected" ? "po-status-stack--rejected" : "po-status-stack--pending";
                     <tr class="po-row" data-po="@row.PoNumber"
+                        data-doc-key="@row.DocKey"
                         data-vendor="@row.Vendor"
                         data-amount="@row.Amount.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)"
-                        data-transferable="@(row.Transferable == true ? "true" : "")"
+                        data-transferable="@(row.Transferable == true ? "true" : row.Transferable == false ? "false" : "")"
                         data-status="@row.Status"
                         data-description="@row.Description"
                         data-order-date="@row.OrderDate.ToString("yyyy-MM-dd")">

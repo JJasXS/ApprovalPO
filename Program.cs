@@ -1,8 +1,44 @@
+using ApprovalPO.Configuration;
 using ApprovalPO.Options;
 using ApprovalPO.Services;
+using ApprovalPO.Helpers;
 using Microsoft.AspNetCore.Authentication.Cookies;
 
+// Optional .env: typically only TENANT_CODE (see appsettings / .env.example). All other config lives in appsettings.json.
+foreach (var envPath in new[]
+         {
+             Path.Combine(Directory.GetCurrentDirectory(), ".env"),
+             Path.Combine(AppContext.BaseDirectory, ".env"),
+         })
+{
+    if (File.Exists(envPath))
+    {
+        DotNetEnv.Env.Load(envPath);
+        break;
+    }
+}
+
 var builder = WebApplication.CreateBuilder(args);
+
+// Tenant id: use TENANT_CODE from environment (.env) only — always wins over appsettings when set.
+var tenantFromEnv = (Environment.GetEnvironmentVariable("TENANT_CODE") ?? builder.Configuration["TENANT_CODE"])?.Trim();
+if (!string.IsNullOrEmpty(tenantFromEnv))
+{
+    builder.Configuration.AddInMemoryCollection(
+        new Dictionary<string, string?> { ["TenantBootstrap:TenantCode"] = tenantFromEnv });
+}
+
+// Empty process env vars (TenantBootstrap__*) override appsettings with blanks — restore from appsettings*.json.
+TenantBootstrapJsonReinstate.Apply(builder.Configuration, builder.Environment.ContentRootPath);
+
+builder.Services.AddSingleton<TenantDbConnectionResolver>();
+builder.Services.AddScoped<ISyUserLoginValidator, SyUserLoginValidator>();
+builder.Services.AddScoped<IPurchaseOrderCatalog, PurchaseOrderCatalogService>();
+
+builder.Services.Configure<Microsoft.AspNetCore.Antiforgery.AntiforgeryOptions>(options =>
+{
+    options.HeaderName = "X-CSRF-TOKEN";
+});
 
 builder.Services.Configure<ApprovalOptions>(builder.Configuration.GetSection(ApprovalOptions.SectionName));
 builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection(SmtpOptions.SectionName));
@@ -11,7 +47,12 @@ builder.Services.AddSingleton<IOtpEmailSender, SmtpOtpEmailSender>();
 
 builder.Services.AddRazorPages(options =>
 {
-    options.Conventions.AuthorizePage("/PurchaseOrders");
+    // All pages under /Pages require authentication unless explicitly allowed below.
+    options.Conventions.AuthorizeFolder("/");
+    options.Conventions.AllowAnonymousToPage("/Index");
+    options.Conventions.AllowAnonymousToPage("/Login");
+    options.Conventions.AllowAnonymousToPage("/Logout");
+    options.Conventions.AllowAnonymousToPage("/Error");
 });
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -20,6 +61,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         var sessionHours = builder.Configuration.GetValue<int?>("Approval:SessionHours") ?? 2;
         options.LoginPath = "/Login";
         options.LogoutPath = "/Logout";
+        options.AccessDeniedPath = "/Login";
         options.ExpireTimeSpan = TimeSpan.FromHours(Math.Clamp(sessionHours, 1, 24));
         options.SlidingExpiration = true;
         options.Cookie.HttpOnly = true;

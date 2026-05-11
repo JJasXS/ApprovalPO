@@ -7,16 +7,17 @@
 <link rel="stylesheet" href="~/css/login.css" asp-append-version="true" />
 
 <div class="login-container">
+    <input type="hidden" id="returnUrlField" name="ReturnUrl" value="@(Model.ReturnUrl ?? "")" />
     <div class="top-row">
         <span class="muted">Purchase Order Approval</span>
     </div>
 
     <h2>Sign in with OTP</h2>
-    <p class="sub">No password. Enter your work email; we send a short-lived one-time code. Wrong codes and repeat sends are rate-limited.</p>
+    <p class="sub">Enter the <strong>email on your SY_USER</strong> profile in SQL Accounting. We send a one-time code; wrong codes and repeat sends are rate-limited.</p>
 
     <div id="idGroup">
-        <label class="field-label" for="loginId">Work email</label>
-        <input type="email" id="loginId" name="loginId" autocomplete="username" placeholder="you@company.com" />
+        <label class="field-label" for="loginId">Work email (SY_USER.EMAIL)</label>
+        <input type="email" id="loginId" name="loginId" autocomplete="username" inputmode="email" placeholder="you@company.com" />
 
         <button id="sendBtn" type="button">Send OTP</button>
     </div>
@@ -24,14 +25,14 @@
     <div id="otpGroup" class="otp-wrap" style="display:none;">
         <input type="hidden" id="loginIdHidden" />
 
-        <label class="field-label">6-digit OTP</label>
-        <div class="otp-boxes">
-            <input type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp" />
-            <input type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp" />
-            <input type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp" />
-            <input type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp" />
-            <input type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp" />
-            <input type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp" />
+        <label class="field-label" for="otp0">6-digit OTP</label>
+        <div class="otp-boxes" id="otpBoxes" role="group" aria-label="One time passcode digits">
+            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp" id="otp0" autocomplete="one-time-code" data-lpignore="true" aria-label="Digit 1" />
+            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp" id="otp1" autocomplete="one-time-code" data-lpignore="true" aria-label="Digit 2" />
+            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp" id="otp2" autocomplete="one-time-code" data-lpignore="true" aria-label="Digit 3" />
+            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp" id="otp3" autocomplete="one-time-code" data-lpignore="true" aria-label="Digit 4" />
+            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp" id="otp4" autocomplete="one-time-code" data-lpignore="true" aria-label="Digit 5" />
+            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp" id="otp5" autocomplete="one-time-code" data-lpignore="true" aria-label="Digit 6" />
         </div>
 
         <button id="verifyBtn" type="button">Verify OTP</button>
@@ -55,6 +56,63 @@
     const otpInputs = Array.from(document.querySelectorAll('.otp'));
     const idGroup = document.getElementById('idGroup');
     const otpGroup = document.getElementById('otpGroup');
+    const otpBoxes = document.getElementById('otpBoxes');
+
+    const otpString = () => otpInputs.map((input) => (input.value || '').replace(/\D/g, '').slice(0, 1)).join('');
+
+    let verifyInFlight = false;
+
+    const tryAutoVerify = () => {
+        const otp = otpString();
+        if (otp.length === 6 && /^\d{6}$/.test(otp)) {
+            void runVerify();
+        }
+    };
+
+    const runVerify = async () => {
+        if (verifyInFlight) return;
+        verifyInFlight = true;
+        verifyBtn.disabled = true;
+        verifyBtn.textContent = 'Verifying...';
+        try {
+            const loginId = (loginHidden.value || '').trim();
+            const otp = otpString();
+            if (!loginId) {
+                msg('Email missing. Refresh and try again.', true);
+                return;
+            }
+            if (otp.length !== 6 || !/^\d{6}$/.test(otp)) {
+                msg('OTP must be exactly 6 digits.', true);
+                return;
+            }
+            msg('');
+            const fd = new FormData();
+            fd.append('LoginId', loginId);
+            fd.append('Otp', otp);
+            const ru = document.getElementById('returnUrlField');
+            if (ru && ru.value) fd.append('ReturnUrl', ru.value);
+            const res = await fetch('@Url.Page("/Login", null, new { handler = "VerifyOtp" })', {
+                method: 'POST',
+                body: fd
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) {
+                let t = data.message || 'Verification failed.';
+                if (data.diagnostic) t += '\n\n' + data.diagnostic;
+                msg(t, true);
+                otpInputs.forEach((input) => { input.value = ''; });
+                otpInputs[0]?.focus();
+                return;
+            }
+            window.location.href = data.redirectUrl || '@Url.Page("/PurchaseOrders")';
+        } catch {
+            msg('Network error.', true);
+        } finally {
+            verifyInFlight = false;
+            verifyBtn.disabled = false;
+            verifyBtn.textContent = 'Verify OTP';
+        }
+    };
 
     sendBtn.addEventListener('click', async () => {
         const loginId = (loginIdEl.value || '').trim();
@@ -74,7 +132,9 @@
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok || !data.success) {
-                msg(data.message || 'Could not send OTP.', true);
+                let t = data.message || 'Could not send OTP.';
+                if (data.diagnostic) t += '\n\n' + data.diagnostic;
+                msg(t, true);
                 return;
             }
             msg(data.message || '');
@@ -91,55 +151,58 @@
         }
     });
 
+    /** Digits from main keyboard and numeric keypad (both use e.key '0'–'9'). */
+    otpBoxes.addEventListener('keydown', (e) => {
+        const el = e.target;
+        if (!el.classList?.contains('otp')) return;
+        const idx = otpInputs.indexOf(el);
+        if (idx < 0) return;
+
+        if (e.key === 'Backspace') {
+            if (!el.value && idx > 0) {
+                e.preventDefault();
+                otpInputs[idx - 1].focus();
+                otpInputs[idx - 1].value = '';
+            }
+            return;
+        }
+
+        if (e.key.length === 1 && e.key >= '0' && e.key <= '9' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            e.preventDefault();
+            el.value = e.key;
+            if (idx < otpInputs.length - 1) {
+                otpInputs[idx + 1].focus();
+            } else {
+                el.blur();
+            }
+            tryAutoVerify();
+        }
+    });
+
     otpInputs.forEach((input, idx, arr) => {
         input.addEventListener('input', () => {
-            input.value = input.value.replace(/\D/g, '').slice(0, 1);
+            const digits = (input.value || '').replace(/\D/g, '');
+            input.value = digits.slice(-1);
             if (input.value && idx < arr.length - 1) {
                 arr[idx + 1].focus();
             }
+            tryAutoVerify();
         });
 
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Backspace' && !input.value && idx > 0) {
-                arr[idx - 1].focus();
-            }
-        });
-    });
-
-    verifyBtn.addEventListener('click', async () => {
-        const loginId = (loginHidden.value || '').trim();
-        const otp = otpInputs.map((input) => input.value).join('');
-        if (!loginId) {
-            msg('Email missing. Refresh and try again.', true);
-            return;
-        }
-        if (otp.length !== 6 || !/^\d{6}$/.test(otp)) {
-            msg('OTP must be exactly 6 digits.', true);
-            return;
-        }
-        msg('');
-        verifyBtn.disabled = true;
-        verifyBtn.textContent = 'Verifying...';
-        try {
-            const fd = new FormData();
-            fd.append('LoginId', loginId);
-            fd.append('Otp', otp);
-            const res = await fetch('@Url.Page("/Login", null, new { handler = "VerifyOtp" })', {
-                method: 'POST',
-                body: fd
+        input.addEventListener('paste', (e) => {
+            e.preventDefault();
+            const text = (e.clipboardData || window.clipboardData).getData('text') || '';
+            const digits = text.replace(/\D/g, '').slice(0, 6);
+            if (!digits) return;
+            digits.split('').forEach((ch, i) => {
+                if (arr[i]) arr[i].value = ch;
             });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok || !data.success) {
-                msg(data.message || 'Verification failed.', true);
-                return;
-            }
-            window.location.href = data.redirectUrl || '@Url.Page("/PurchaseOrders")';
-        } catch {
-            msg('Network error.', true);
-        } finally {
-            verifyBtn.disabled = false;
-            verifyBtn.textContent = 'Verify OTP';
-        }
+            const next = Math.min(digits.length, arr.length - 1);
+            arr[next].focus();
+            tryAutoVerify();
+        });
     });
+
+    verifyBtn.addEventListener('click', () => void runVerify());
 })();
 </script>

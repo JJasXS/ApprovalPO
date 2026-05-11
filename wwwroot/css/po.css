@@ -104,20 +104,6 @@ body {
   flex-shrink: 0;
 }
 
-.po-header__avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 0.9375rem;
-  color: #fff;
-}
-
 .po-header__menu {
   position: relative;
 }
@@ -184,6 +170,27 @@ body {
 }
 
 .menu-link:hover {
+  background: #f8fafc;
+}
+
+.menu-logout-form {
+  display: block;
+  margin: 0;
+  padding: 0;
+}
+
+.menu-link--button {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.menu-link--button:hover {
   background: #f8fafc;
 }
 
@@ -289,6 +296,18 @@ body {
   margin-bottom: var(--po-space-2);
 }
 
+.po-toolbar__cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.po-toolbar__cluster .po-btn {
+  white-space: nowrap;
+}
+
 /* ——— Filters ——— */
 
 .po-filters {
@@ -297,12 +316,6 @@ body {
   gap: 8px 10px;
   align-items: stretch;
   margin-bottom: var(--po-space-3);
-}
-
-.po-filters #filterClearBtn {
-  grid-column: 1 / -1;
-  width: 100%;
-  justify-self: stretch;
 }
 
 .po-filter-input {
@@ -359,6 +372,8 @@ select.po-filter-input {
   justify-content: stretch;
   width: 100%;
   margin-bottom: var(--po-space-2);
+  position: relative;
+  z-index: 1;
 }
 
 .tabs {
@@ -1134,11 +1149,13 @@ select.po-filter-input {
 }
 
 .items-th-check {
-  width: 40px;
+  width: 72px;
+  min-width: 72px;
 }
 
 .items-check {
-  width: 40px;
+  width: 72px;
+  min-width: 72px;
 }
 
 .po-check {
@@ -1191,6 +1208,68 @@ select.po-filter-input {
   border-color: rgba(37, 99, 235, 0.95);
 }
 
+.po-check--line-xfer:not(.po-check--line-xfer-readonly) {
+  cursor: pointer;
+}
+
+.po-check--line-xfer-readonly {
+  cursor: default;
+}
+
+.items-table tbody tr:not(.items-row--xfer-ok):not(.items-row--xfer-bad) .po-check--line-xfer-readonly input:disabled + .po-check__box {
+  opacity: 0.92;
+  cursor: default;
+}
+
+/* Review line PH_PQDTL.TRANSFERABLE: whole-row tint (approved / cancelled) */
+.items-table tbody tr.items-row--xfer-ok > td {
+  background: rgba(240, 253, 244, 0.98) !important;
+}
+
+.items-table tbody tr.items-row--xfer-bad > td {
+  background: rgba(254, 242, 242, 0.98) !important;
+}
+
+tr.items-row--xfer-ok .items-check .po-check {
+  background: rgba(34, 197, 94, 0.12);
+}
+
+tr.items-row--xfer-ok .items-check .po-check__box {
+  border-color: rgba(22, 163, 74, 0.88);
+  background: #fff;
+}
+
+tr.items-row--xfer-ok .items-check .po-check input:checked + .po-check__box {
+  background: linear-gradient(135deg, #15803d 0%, #22c55e 100%);
+  border-color: rgba(21, 128, 61, 0.95);
+  box-shadow: 0 6px 14px rgba(34, 197, 94, 0.3);
+}
+
+tr.items-row--xfer-ok .items-check .po-check input:focus-visible + .po-check__box {
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.22);
+  border-color: rgba(22, 163, 74, 0.95);
+}
+
+tr.items-row--xfer-bad .items-check .po-check {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+tr.items-row--xfer-bad .items-check .po-check__box {
+  border-color: rgba(220, 38, 38, 0.92);
+  background: #fff5f5;
+}
+
+tr.items-row--xfer-bad .items-check .po-check input:checked + .po-check__box {
+  background: linear-gradient(135deg, #b91c1c 0%, #ef4444 100%);
+  border-color: rgba(153, 27, 27, 0.95);
+  box-shadow: 0 6px 14px rgba(239, 68, 68, 0.28);
+}
+
+tr.items-row--xfer-bad .items-check .po-check input:focus-visible + .po-check__box {
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.2);
+  border-color: rgba(220, 38, 38, 0.95);
+}
+
 .items-table th,
 .items-table td {
   padding: 10px 12px;
@@ -1224,6 +1303,13 @@ select.po-filter-input {
 
 .items-desc {
   color: var(--po-text-muted);
+}
+
+.items-table .items-empty {
+  text-align: center;
+  color: var(--po-text-muted);
+  padding: 18px 12px;
+  font-style: italic;
 }
 
 .items-total-label {
@@ -1535,19 +1621,20 @@ select.po-filter-input {
     min-height: 40px;
   }
 
-  .po-toolbar .po-btn--bulk {
+  .po-toolbar__cluster {
     width: 100%;
+    justify-content: stretch;
+  }
+
+  .po-toolbar__cluster .po-btn--bulk,
+  .po-toolbar__cluster .po-btn--filter-clear {
+    flex: 1 1 0;
+    min-width: 0;
   }
 
   .menu-btn {
     width: var(--po-touch-min);
     height: var(--po-touch-min);
-  }
-
-  .po-header__avatar {
-    width: var(--po-touch-min);
-    height: var(--po-touch-min);
-    font-size: 0.875rem;
   }
 
   /* Tighter card copy on small phones; buttons stay one row (see 900px rules) */

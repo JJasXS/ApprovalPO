@@ -1,6 +1,10 @@
 (() => {
   const cfgEl = document.getElementById('poPageConfig');
   const ordersJsonUrl = cfgEl?.dataset.ordersJsonUrl || '';
+  const linesJsonUrlBase = cfgEl?.dataset.linesJsonUrlBase || '';
+  const setTransferableUrl = cfgEl?.dataset.setTransferableUrl || '';
+  const setLineTransferableUrl = cfgEl?.dataset.setLineTransferableUrl || '';
+  const csrfToken = cfgEl?.dataset.csrfToken || '';
   const highValueThreshold = parseFloat(String(cfgEl?.dataset.highValueThreshold || '5000'), 10) || 5000;
 
   const modal = document.getElementById('reviewModal');
@@ -61,6 +65,85 @@
     showToast._t = setTimeout(() => toast.classList.remove('show'), 3200);
   };
 
+  const persistListStatus = async (tr, listStatus) => {
+    if (!setTransferableUrl || !csrfToken) {
+      showToast('Cannot save: page is missing save configuration.');
+      return false;
+    }
+    const docKey = parseInt(String(tr?.dataset?.docKey ?? ''), 10);
+    if (!docKey) {
+      showToast('Cannot save: missing document key for this row.');
+      return false;
+    }
+    try {
+      const res = await fetch(setTransferableUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': csrfToken
+        },
+        body: JSON.stringify({ docKey, listStatus })
+      });
+      let data = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+      if (!res.ok || !data || data.ok !== true) {
+        const msg = (data && data.error) || `Save failed (${res.status}).`;
+        showToast(String(msg));
+        return false;
+      }
+      return true;
+    } catch {
+      showToast('Save failed. Check your connection.');
+      return false;
+    }
+  };
+
+  const persistLineTransferable = async (docKeyN, lineNo, transferable, cbEl) => {
+    if (!setLineTransferableUrl || !csrfToken) {
+      showToast('Cannot save: page is missing save configuration.');
+      return false;
+    }
+    const wasDisabled = cbEl.disabled;
+    cbEl.disabled = true;
+    try {
+      const res = await fetch(setLineTransferableUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': csrfToken
+        },
+        body: JSON.stringify({ docKey: docKeyN, lineNo, transferable })
+      });
+      let data = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+      if (!res.ok || !data || data.ok !== true) {
+        const msg = (data && data.error) || `Line save failed (${res.status}).`;
+        showToast(String(msg));
+        cbEl.checked = !transferable;
+        return false;
+      }
+      return true;
+    } catch {
+      showToast('Line save failed. Check your connection.');
+      cbEl.checked = !transferable;
+      return false;
+    } finally {
+      if (!wasDisabled) cbEl.disabled = false;
+    }
+  };
+
   const setLoading = (on) => {
     if (poSkeleton) poSkeleton.hidden = !on;
     if (poTableWrap) poTableWrap.classList.toggle('is-loading', !!on);
@@ -94,22 +177,62 @@
     status === 'Approved' ? 'po-status-stack--approved' : status === 'Rejected' ? 'po-status-stack--rejected' : 'po-status-stack--pending';
   const statusDisplay = (status) => (status === 'Rejected' ? 'Cancelled' : status);
 
+  const syncRowStatusDom = (tr, status) => {
+    if (!tr) return;
+    const stack = tr.querySelector('.po-status-stack');
+    const text = tr.querySelector('.po-status-text');
+    if (stack) {
+      stack.classList.remove('po-status-stack--pending', 'po-status-stack--approved', 'po-status-stack--rejected');
+      stack.classList.add(statusStackClass(status));
+    }
+    if (text) text.textContent = statusDisplay(status);
+  };
+
+  const listStatusFromSnapshot = (prev) => {
+    const s = String(prev?.status ?? '').trim();
+    if (s === 'Pending' || s === 'Approved' || s === 'Rejected') return s;
+    const t = String(prev?.transferable ?? '').trim();
+    if (t === 'true') return 'Approved';
+    if (t === 'false') return 'Rejected';
+    return 'Pending';
+  };
+
+  /** Server may send numeric PH_PQ.STATUS; tabs use Pending / Approved / Rejected only. */
+  const normalizeOrderStatus = (o) => {
+    const s = String(o?.status ?? '').trim();
+    if (s === 'Pending' || s === 'Approved' || s === 'Rejected') return s;
+    if (o?.transferable === true) return 'Approved';
+    if (o?.transferable === false) return 'Rejected';
+    return 'Pending';
+  };
+
+  /** DOM row: tri-state transferable (true / false / empty = null) + data-status. */
+  const rowListStatus = (tr) => {
+    if (!tr?.dataset) return 'Pending';
+    const s = String(tr.dataset.status ?? '').trim();
+    if (s === 'Pending' || s === 'Approved' || s === 'Rejected') return s;
+    if (tr.dataset.transferable === 'true') return 'Approved';
+    if (tr.dataset.transferable === 'false') return 'Rejected';
+    return 'Pending';
+  };
+
   const rowFromOrder = (o) => {
     const po = o.poNumber || '';
     const vendor = o.vendor || '';
     const amount =
       typeof o.amount === 'number' ? o.amount.toFixed(2) : String(o.amount ?? '0');
-    const status = o.status || 'Pending';
+    const status = normalizeOrderStatus(o);
     const desc = o.description || '';
-    const transfer = o.transferable === true ? 'true' : '';
+    const transfer = o.transferable === true ? 'true' : o.transferable === false ? 'false' : '';
     const dateStr = (o.orderDate && String(o.orderDate).slice(0, 10)) || '';
+    const docKey = o.docKey != null && o.docKey !== '' ? String(o.docKey) : '';
     const chk =
       status === 'Pending'
         ? `<input type="checkbox" class="row-select" aria-label="Select ${escapeHtml(po)}" />`
         : '';
     const amtNum = Number.parseFloat(amount) || 0;
     const stack = statusStackClass(status);
-    return `<tr class="po-row" data-po="${escapeHtml(po)}" data-vendor="${escapeHtml(vendor)}" data-amount="${escapeHtml(amount)}" data-transferable="${transfer}" data-status="${escapeHtml(status)}" data-description="${escapeHtml(desc)}" data-order-date="${escapeHtml(dateStr)}">
+    return `<tr class="po-row" data-po="${escapeHtml(po)}" data-doc-key="${escapeHtml(docKey)}" data-vendor="${escapeHtml(vendor)}" data-amount="${escapeHtml(amount)}" data-transferable="${transfer}" data-status="${escapeHtml(status)}" data-description="${escapeHtml(desc)}" data-order-date="${escapeHtml(dateStr)}">
       <td class="td-check" data-label="">${chk}</td>
       <td class="po-status-td" data-label=""><div class="po-status-stack ${stack}"><span class="po-status-icon" aria-hidden="true"></span><span class="po-status-text">${escapeHtml(statusDisplay(status))}</span></div></td>
       <td class="po-num" data-label="PO #"><span class="po-num-text">${escapeHtml(po)}</span></td>
@@ -176,6 +299,17 @@
     });
   });
 
+  modal?.addEventListener('change', (e) => {
+    const t = e.target;
+    if (!(t instanceof HTMLInputElement) || !t.classList.contains('line-transfer-cb')) return;
+    if (t.disabled) return;
+    const docKeyN = parseInt(t.dataset.docKey || '', 10);
+    const lineNo = parseInt(t.dataset.lineNo || '', 10);
+    if (!docKeyN) return;
+    const newVal = t.checked;
+    void persistLineTransferable(docKeyN, lineNo, newVal, t);
+  });
+
   confirmModal?.querySelectorAll('[data-confirm-close]').forEach((el) => {
     el.addEventListener('click', () => dismissConfirm());
   });
@@ -184,7 +318,7 @@
     const fn = confirmOkCallback;
     confirmOkCallback = null;
     closeModal(confirmModal);
-    if (typeof fn === 'function') fn();
+    if (typeof fn === 'function') void Promise.resolve(fn()).catch(() => {});
   });
 
   menuBtn?.addEventListener('click', (e) => {
@@ -204,31 +338,6 @@
     menuBtn.setAttribute('aria-expanded', 'false');
   });
 
-  const getMockItems = (po, vendor) => {
-    const seed = Number((po || '').replace(/\D/g, '').slice(-2)) || 1;
-    const v = vendor || '';
-    return [
-      {
-        code: `ITM-${(100 + seed).toString()}`,
-        name: `${v} — Main supply`,
-        qty: 1 + (seed % 3),
-        unitPrice: 120 + seed * 2
-      },
-      {
-        code: `ITM-${(200 + seed).toString()}`,
-        name: 'Support material',
-        qty: 2 + (seed % 4),
-        unitPrice: 45 + seed
-      },
-      {
-        code: `ITM-${(300 + seed).toString()}`,
-        name: 'Service charge',
-        qty: 1,
-        unitPrice: 80 + seed * 1.5
-      }
-    ];
-  };
-
   const getVisibleRowsInList = () => rows.filter((r) => !r.classList.contains('is-hidden'));
 
   const updateModalNav = () => {
@@ -243,7 +352,7 @@
     modalNextBtn.setAttribute('aria-disabled', hasNext ? 'false' : 'true');
   };
 
-  const navigateModal = (delta) => {
+  const navigateModal = async (delta) => {
     if (!currentRow) return;
     const visible = getVisibleRowsInList();
     const idx = visible.indexOf(currentRow);
@@ -252,17 +361,32 @@
     if (nextIdx < 0 || nextIdx >= visible.length) return;
     const target = visible[nextIdx];
     currentRow = target;
-    renderReview(target);
+    await renderReview(target);
     updateModalNav();
     target.scrollIntoView({ block: 'nearest' });
   };
 
-  const renderReview = (tr) => {
+  /** PH_PQDTL.TRANSFERABLE: only true ticks the review checkbox; false or null is unticked. */
+  const isLineTransferableTicked = (item) => {
+    if (!item || item.transferable === undefined || item.transferable === null) return false;
+    const v = item.transferable;
+    if (v === true || v === 'true' || v === 1 || v === '1') return true;
+    return false;
+  };
+
+  /** Approved: ticked → green row; not ticked → red row. Cancelled: all red rows. Pending: default. */
+  const lineXferRowClass = (listStatus, ticked) => {
+    if (listStatus === 'Rejected') return 'items-row--xfer-bad';
+    if (listStatus === 'Approved') return ticked ? 'items-row--xfer-ok' : 'items-row--xfer-bad';
+    return '';
+  };
+
+  const renderReview = async (tr) => {
     if (!reviewBody || !modalApproveBtn) return;
     const modalRejectBtnEl = document.getElementById('modalRejectBtn');
     const po = tr.dataset.po || '';
     const vendor = tr.dataset.vendor || '';
-    const status = tr.dataset.status || '';
+    const status = rowListStatus(tr);
     const desc = tr.dataset.description || '';
     const orderIso = tr.dataset.orderDate || '';
     const displayDate = formatDisplayDate(orderIso);
@@ -272,28 +396,76 @@
     if (status === 'Approved') statusClass = 'review-badge--approved';
     else if (status === 'Rejected') statusClass = 'review-badge--rejected';
 
-    const items = getMockItems(po, vendor);
-    const totalQty = items.reduce((sum, item) => sum + item.qty, 0);
-    const lineTotal = (item) => item.qty * item.unitPrice;
-    const itemsTotal = items.reduce((sum, item) => sum + lineTotal(item), 0);
-    const itemsHtml = items
-      .map(
-        (item) => `
-      <tr>
+    const docKey = (tr.dataset.docKey || '').trim();
+    let itemsHtml = `<tr><td colspan="5" class="items-empty">No line items loaded.</td></tr>`;
+    let totalQty = 0;
+    let itemsTotal = 0;
+
+    if (docKey && linesJsonUrlBase) {
+      const sep = linesJsonUrlBase.includes('?') ? '&' : '?';
+      const url = `${linesJsonUrlBase}${sep}docKey=${encodeURIComponent(docKey)}`;
+      const docKeyNum = parseInt(String(docKey), 10) || 0;
+      const linePending = status === 'Pending';
+      try {
+        const res = await fetch(url, { method: 'GET', credentials: 'same-origin', cache: 'no-store' });
+        const data = await res.json();
+        if (res.ok && Array.isArray(data) && data.length > 0) {
+          itemsHtml = data
+            .map((item) => {
+              const code = escapeHtml(item.itemCode || '');
+              const name = escapeHtml(item.description || '');
+              const qty = Number(item.qty) || 0;
+              const up = Number(item.unitPrice) || 0;
+              const lineAmt =
+                item.lineAmount != null && item.lineAmount !== ''
+                  ? Number(item.lineAmount)
+                  : qty * up;
+              const lineStr = lineAmt.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              });
+              const ticked = isLineTransferableTicked(item);
+              const lineNoRaw = Number.parseInt(String(item.lineNo ?? ''), 10);
+              const lineNoSafe = Number.isFinite(lineNoRaw) ? lineNoRaw : 0;
+              const disabledAttr = linePending ? '' : ' disabled';
+              const labelClass = linePending
+                ? 'po-check po-check--line-xfer'
+                : 'po-check po-check--line-xfer po-check--line-xfer-readonly';
+              const xferRowClass = lineXferRowClass(status, ticked);
+              return `
+      <tr${xferRowClass ? ` class="${xferRowClass}"` : ''}>
         <td class="items-check">
-          <label class="po-check" aria-label="Select item ${escapeHtml(item.code)}">
-            <input type="checkbox" checked />
+          <label class="${labelClass}" aria-label="Line transferable (PH_PQDTL.TRANSFERABLE) for item ${code}: ${ticked ? 'true' : 'false'}">
+            <input type="checkbox" class="line-transfer-cb" data-doc-key="${docKeyNum}" data-line-no="${lineNoSafe}" ${ticked ? 'checked' : ''}${disabledAttr} />
             <span class="po-check__box" aria-hidden="true"></span>
           </label>
         </td>
-        <td class="items-code">${escapeHtml(item.code)}</td>
-        <td class="items-desc">${escapeHtml(item.name)}</td>
-        <td class="num">${item.qty}</td>
-        <td class="num">${lineTotal(item).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-      </tr>
-    `
-      )
-      .join('');
+        <td class="items-code">${code}</td>
+        <td class="items-desc">${name}</td>
+        <td class="num">${qty}</td>
+        <td class="num">${lineStr}</td>
+      </tr>`;
+            })
+            .join('');
+          totalQty = data.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+          itemsTotal = data.reduce((sum, item) => {
+            const qty = Number(item.qty) || 0;
+            const up = Number(item.unitPrice) || 0;
+            const la =
+              item.lineAmount != null && item.lineAmount !== '' ? Number(item.lineAmount) : qty * up;
+            return sum + la;
+          }, 0);
+        } else if (res.ok && Array.isArray(data)) {
+          itemsHtml = `<tr><td colspan="5" class="items-empty">No detail lines on this purchase request.</td></tr>`;
+        } else {
+          itemsHtml = `<tr><td colspan="5" class="items-empty">Could not load line items (${res.status}).</td></tr>`;
+        }
+      } catch {
+        itemsHtml = `<tr><td colspan="5" class="items-empty">Could not load line items.</td></tr>`;
+      }
+    } else if (!docKey) {
+      itemsHtml = `<tr><td colspan="5" class="items-empty">No document key (DOCKEY) for this row — include DOCKEY in the PH_PQ list SQL.</td></tr>`;
+    }
 
     const note =
       amt >= highValueThreshold && status === 'Pending'
@@ -339,7 +511,7 @@
           <table class="items-table">
             <thead>
               <tr>
-                <th class="items-th-check" aria-label="Select"></th>
+                <th class="items-th-check" scope="col" title="PH_PQDTL.TRANSFERABLE">Transfer</th>
                 <th>Item code</th>
                 <th>Description</th>
                 <th class="num">Qty</th>
@@ -360,12 +532,19 @@
     `;
 
     const pending = status === 'Pending';
-    modalApproveBtn.disabled = !pending;
-    modalApproveBtn.title =
-      status === 'Approved' ? 'Already approved' : status === 'Rejected' ? 'Cannot approve rejected PO' : '';
+    const approved = status === 'Approved';
+    const rejected = status === 'Rejected';
+    const canApprove = pending || rejected;
+    const canReject = pending || approved;
+
+    modalApproveBtn.disabled = !canApprove;
+    modalApproveBtn.style.display = canApprove ? '' : 'none';
+    modalApproveBtn.title = '';
+
     if (modalRejectBtnEl) {
-      modalRejectBtnEl.disabled = !pending;
-      modalRejectBtnEl.style.display = pending ? '' : 'none';
+      modalRejectBtnEl.textContent = approved ? 'Cancel approval' : 'Reject';
+      modalRejectBtnEl.disabled = !canReject;
+      modalRejectBtnEl.style.display = canReject ? '' : 'none';
     }
 
     updateModalNav();
@@ -379,10 +558,13 @@
     undoToastMsg.textContent = msg;
     undoToast.hidden = false;
     undoBtn.onclick = () => {
-      revertFn();
-      undoToast.hidden = true;
-      if (undoTimer) clearTimeout(undoTimer);
-      undoBtn.onclick = null;
+      void Promise.resolve(typeof revertFn === 'function' ? revertFn() : undefined)
+        .catch(() => {})
+        .finally(() => {
+          undoToast.hidden = true;
+          if (undoTimer) clearTimeout(undoTimer);
+          undoBtn.onclick = null;
+        });
     };
     undoTimer = setTimeout(() => {
       undoToast.hidden = true;
@@ -398,47 +580,57 @@
     const { quiet = false } = opts;
     tr.dataset.status = 'Approved';
     tr.dataset.transferable = 'true';
-    const approveBtn = tr.querySelector('.btn-approve');
-    const rejectBtn = tr.querySelector('.btn-reject');
-    if (approveBtn) approveBtn.style.display = 'none';
-    if (rejectBtn) rejectBtn.style.display = 'none';
+    syncRowStatusDom(tr, 'Approved');
     const cb = tr.querySelector('.row-select');
     if (cb) {
       cb.checked = false;
       cb.disabled = true;
     }
+    updateRowButtons(tr);
     if (!quiet) showToast(`PO ${tr.dataset.po} approved.`);
+    refreshView();
+  };
+
+  const rejectRowInternal = (tr, opts = {}) => {
+    const { quiet = false } = opts;
+    tr.dataset.status = 'Rejected';
+    tr.dataset.transferable = 'false';
+    syncRowStatusDom(tr, 'Rejected');
+    const cb = tr.querySelector('.row-select');
+    if (cb) {
+      cb.checked = false;
+      cb.disabled = true;
+    }
+    updateRowButtons(tr);
+    if (!quiet) showToast(`PO ${tr.dataset.po} cancelled.`);
     refreshView();
   };
 
   const revertRowApproval = (tr, prev) => {
     tr.dataset.status = prev.status;
     tr.dataset.transferable = prev.transferable;
-    const ab = tr.querySelector('.btn-approve');
-    const rb = tr.querySelector('.btn-reject');
-    if (ab) {
-      ab.style.display = '';
-      ab.disabled = prev.status !== 'Pending';
-    }
-    if (rb) {
-      rb.style.display = '';
-      rb.disabled = prev.status !== 'Pending';
-    }
     const c = tr.querySelector('.row-select');
-    if (c) {
-      c.disabled = false;
-    }
+    if (c) c.disabled = rowListStatus(tr) !== 'Pending';
+    updateRowButtons(tr);
+    syncRowStatusDom(tr, rowListStatus(tr));
   };
 
   const runApprove = (tr) => {
     const amt = parseAmount(tr);
-    const doApprove = () => {
+    const doApprove = async () => {
       const prev = {
         status: tr.dataset.status,
         transferable: tr.dataset.transferable || ''
       };
+      const ok = await persistListStatus(tr, 'Approved');
+      if (!ok) return;
       approveRowInternal(tr, { quiet: true });
-      showUndo('Approved.', () => {
+      showUndo('Approved.', async () => {
+        const uok = await persistListStatus(tr, listStatusFromSnapshot(prev));
+        if (!uok) {
+          showToast('Undo could not be saved to the database.');
+          return;
+        }
         revertRowApproval(tr, prev);
         refreshView();
       });
@@ -448,75 +640,63 @@
       openConfirm(
         'Confirm high-value approval',
         `<p>Approve <strong>${escapeHtml(tr.dataset.po)}</strong> for <strong>${amt.toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</strong>?</p>`,
-        doApprove
+        () => void doApprove()
       );
       return;
     }
-    doApprove();
+    void doApprove();
   };
 
   const approveRow = (tr) => {
-    if (tr.dataset.status === 'Approved') {
+    const st = rowListStatus(tr);
+    if (st === 'Approved') {
       showToast('Already approved.');
+      return;
+    }
+    if (st !== 'Pending' && st !== 'Rejected') {
+      showToast('Approve is only available for pending or cancelled purchase orders.');
       return;
     }
     runApprove(tr);
   };
 
   const rejectRow = (tr) => {
-    if (tr.dataset.status !== 'Pending') {
-      showToast('Only pending PO can be cancelled.');
+    const st = rowListStatus(tr);
+    if (st !== 'Pending' && st !== 'Approved') {
+      showToast('Cancel is only available for pending or approved purchase orders.');
       return;
     }
-    const prev = {
-      status: tr.dataset.status,
-      transferable: tr.dataset.transferable || ''
-    };
-    tr.dataset.status = 'Rejected';
-    tr.dataset.transferable = '';
-    const ab = tr.querySelector('.btn-approve');
-    const rb = tr.querySelector('.btn-reject');
-    if (ab) {
-      ab.style.display = 'none';
-      ab.disabled = true;
-    }
-    if (rb) {
-      rb.style.display = 'none';
-      rb.disabled = true;
-    }
-    const c = tr.querySelector('.row-select');
-    if (c) {
-      c.checked = false;
-      c.disabled = true;
-    }
-    showUndo('Rejected.', () => {
-      tr.dataset.status = prev.status;
-      tr.dataset.transferable = prev.transferable;
-      if (ab) {
-        ab.style.display = '';
-        ab.disabled = false;
-      }
-      if (rb) {
-        rb.style.display = '';
-        rb.disabled = false;
-      }
-      if (c) c.disabled = false;
-      refreshView();
-    });
-    refreshView();
+    void (async () => {
+      const prev = {
+        status: tr.dataset.status,
+        transferable: tr.dataset.transferable || ''
+      };
+      const ok = await persistListStatus(tr, 'Rejected');
+      if (!ok) return;
+      rejectRowInternal(tr, { quiet: true });
+      showUndo('Cancelled.', async () => {
+        const uok = await persistListStatus(tr, listStatusFromSnapshot(prev));
+        if (!uok) {
+          showToast('Undo could not be saved to the database.');
+          return;
+        }
+        revertRowApproval(tr, prev);
+        refreshView();
+      });
+    })();
   };
 
   const updateRowButtons = (tr) => {
-    const status = tr.dataset.status || 'Pending';
+    const status = rowListStatus(tr);
     const approveBtn = tr.querySelector('.btn-approve');
     const rejectBtn = tr.querySelector('.btn-reject');
     if (approveBtn) {
-      approveBtn.style.display = status === 'Pending' ? '' : 'none';
-      approveBtn.disabled = status !== 'Pending';
+      approveBtn.style.display = status === 'Pending' || status === 'Rejected' ? '' : 'none';
+      approveBtn.disabled = status === 'Approved';
     }
     if (rejectBtn) {
-      rejectBtn.style.display = status === 'Pending' ? '' : 'none';
-      rejectBtn.disabled = status !== 'Pending';
+      rejectBtn.style.display = status === 'Pending' || status === 'Approved' ? '' : 'none';
+      rejectBtn.disabled = status === 'Rejected';
     }
   };
 
@@ -545,18 +725,14 @@
     if (tab === 'Approved') activeListTab = 'Approved';
     else if (tab === 'Rejected') activeListTab = 'Rejected';
     else activeListTab = 'Pending';
-    setLoading(true);
-    window.setTimeout(() => {
-      updateTabUi();
-      refreshView();
-      setLoading(false);
-    }, 220);
+    updateTabUi();
+    refreshView();
   };
 
   const syncBulkHeaderCheckbox = () => {
     if (!bulkSelectAll) return;
     const visiblePending = rows.filter(
-      (r) => !r.classList.contains('is-hidden') && r.dataset.status === 'Pending'
+      (r) => !r.classList.contains('is-hidden') && rowListStatus(r) === 'Pending'
     );
     if (visiblePending.length === 0) {
       bulkSelectAll.checked = false;
@@ -577,9 +753,9 @@
   };
 
   const refreshView = () => {
-    const pendingCount = rows.filter((r) => (r.dataset.status || 'Pending') === 'Pending').length;
-    const approvedCount = rows.filter((r) => r.dataset.status === 'Approved').length;
-    const rejectedCount = rows.filter((r) => r.dataset.status === 'Rejected').length;
+    const pendingCount = rows.filter((r) => rowListStatus(r) === 'Pending').length;
+    const approvedCount = rows.filter((r) => rowListStatus(r) === 'Approved').length;
+    const rejectedCount = rows.filter((r) => rowListStatus(r) === 'Rejected').length;
     if (countPending) countPending.textContent = String(pendingCount);
     if (countApproved) countApproved.textContent = String(approvedCount);
     if (countRejected) countRejected.textContent = String(rejectedCount);
@@ -588,7 +764,7 @@
     let countInTab = 0;
     rows.forEach((tr) => {
       updateRowButtons(tr);
-      const status = tr.dataset.status || 'Pending';
+      const status = rowListStatus(tr);
       const matchesStatus =
         activeListTab === 'Pending'
           ? status === 'Pending'
@@ -607,7 +783,7 @@
     const selectedPending = rows.filter(
       (r) =>
         !r.classList.contains('is-hidden') &&
-        r.dataset.status === 'Pending' &&
+        rowListStatus(r) === 'Pending' &&
         r.querySelector('.row-select')?.checked
     );
     if (bulkApproveBtn) bulkApproveBtn.disabled = selectedPending.length === 0;
@@ -640,9 +816,11 @@
       const tr = reviewBtn.closest('tr');
       if (!tr) return;
       currentRow = tr;
-      renderReview(tr);
-      openModal(modal);
-      updateModalNav();
+      void (async () => {
+        await renderReview(tr);
+        openModal(modal);
+        updateModalNav();
+      })();
       return;
     }
     const approveBtn = e.target.closest('.btn-approve');
@@ -666,18 +844,24 @@
 
   const modalRejectBtn = document.getElementById('modalRejectBtn');
   modalRejectBtn?.addEventListener('click', () => {
-    if (!currentRow || currentRow.dataset.status !== 'Pending') return;
+    if (!currentRow) return;
+    const st = rowListStatus(currentRow);
+    if (st !== 'Pending' && st !== 'Approved') return;
     rejectRow(currentRow);
     closeModal(modal);
     currentRow = null;
   });
 
-  modalPrevBtn?.addEventListener('click', () => navigateModal(-1));
-  modalNextBtn?.addEventListener('click', () => navigateModal(1));
+  modalPrevBtn?.addEventListener('click', () => void navigateModal(-1));
+  modalNextBtn?.addEventListener('click', () => void navigateModal(1));
 
-  tabPending?.addEventListener('click', () => setListTab('Pending'));
-  tabApproved?.addEventListener('click', () => setListTab('Approved'));
-  tabRejected?.addEventListener('click', () => setListTab('Rejected'));
+  tableHeadEl?.addEventListener('click', (e) => {
+    const tabBtn = e.target.closest('.tab-btn');
+    if (!tabBtn || !tableHeadEl.contains(tabBtn)) return;
+    if (tabBtn.id === 'tabPending') setListTab('Pending');
+    else if (tabBtn.id === 'tabApproved') setListTab('Approved');
+    else if (tabBtn.id === 'tabRejected') setListTab('Rejected');
+  });
   filterVendor?.addEventListener('change', () => {
     filters.vendor = (filterVendor.value || '').trim();
     refreshView();
@@ -701,7 +885,7 @@
     const on = bulkSelectAll.checked;
     rows.forEach((tr) => {
       if (tr.classList.contains('is-hidden')) return;
-      if (tr.dataset.status !== 'Pending') return;
+      if (rowListStatus(tr) !== 'Pending') return;
       const c = tr.querySelector('.row-select');
       if (c) c.checked = on;
     });
@@ -712,11 +896,38 @@
     if (e.target.classList?.contains('row-select')) refreshView();
   });
 
+  const bulkApproveConfirmed = async (selected) => {
+    const snapshots = selected.map((tr) => ({
+      tr,
+      prev: { status: tr.dataset.status, transferable: tr.dataset.transferable || '' }
+    }));
+    for (const tr of selected) {
+      const ok = await persistListStatus(tr, 'Approved');
+      if (!ok) {
+        await refreshRowsFromServer();
+        return;
+      }
+      approveRowInternal(tr, { quiet: true });
+    }
+    showUndo(`${selected.length} PO(s) approved.`, async () => {
+      for (const { tr, prev } of snapshots) {
+        const uok = await persistListStatus(tr, listStatusFromSnapshot(prev));
+        if (!uok) {
+          showToast('Bulk undo failed partway; refreshing list.');
+          await refreshRowsFromServer();
+          return;
+        }
+        revertRowApproval(tr, prev);
+      }
+      refreshView();
+    });
+  };
+
   bulkApproveBtn?.addEventListener('click', () => {
     const selected = rows.filter(
       (r) =>
         !r.classList.contains('is-hidden') &&
-        r.dataset.status === 'Pending' &&
+        rowListStatus(r) === 'Pending' &&
         r.querySelector('.row-select')?.checked
     );
     if (selected.length === 0) return;
@@ -734,17 +945,7 @@
           ? '<p class="modal__note">Includes high-value PO(s). Only use bulk approve if your process allows it.</p>'
           : ''
       }`,
-      () => {
-        const snapshots = selected.map((tr) => ({
-          tr,
-          prev: { status: tr.dataset.status, transferable: tr.dataset.transferable || '' }
-        }));
-        selected.forEach((tr) => approveRowInternal(tr, { quiet: true }));
-        showUndo(`${selected.length} PO(s) approved.`, () => {
-          snapshots.forEach(({ tr, prev }) => revertRowApproval(tr, prev));
-          refreshView();
-        });
-      }
+      () => void bulkApproveConfirmed(selected)
     );
   });
 
