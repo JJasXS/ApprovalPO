@@ -12,11 +12,14 @@
         <span class="muted">Purchase Order Approval</span>
     </div>
 
-    <h2>Sign in with OTP</h2>
-    <p class="sub">Enter the <strong>email on your SY_USER</strong> profile in SQL Accounting. We send a one-time code; wrong codes and repeat sends are rate-limited.</p>
-
+    <center><h2>Sign in with OTP</h2></center>
+    
     <div id="idGroup">
-        <label class="field-label" for="loginId">Work email (SY_USER.EMAIL)</label>
+        <div class="hp-field" aria-hidden="true">
+            <label for="companyWebsite">Company website</label>
+            <input type="text" id="companyWebsite" name="companyWebsite" tabindex="-1" autocomplete="off" data-lpignore="true" inputmode="none" />
+        </div>
+       
         <input type="email" id="loginId" name="loginId" autocomplete="username" inputmode="email" placeholder="you@company.com" />
 
         <button id="sendBtn" type="button">Send OTP</button>
@@ -39,6 +42,55 @@
     </div>
 
     <div id="message" class="msg" role="status"></div>
+
+    <div class="install-cta">
+        <button type="button" id="installTrigger" class="install-link" aria-haspopup="dialog" aria-expanded="false">
+            <span class="install-icon" aria-hidden="true">?</span>
+            Install app
+        </button>
+    </div>
+</div>
+
+<div id="installModal" class="install-modal" aria-hidden="true" hidden>
+    <div class="install-modal__backdrop" data-install-close></div>
+    <div class="install-modal__card" role="dialog" aria-modal="true" aria-labelledby="installModalTitle">
+        <div class="install-modal__header">
+            <div id="installModalTitle">Install app</div>
+            <button type="button" class="install-modal__close" data-install-close aria-label="Close install instructions">×</button>
+        </div>
+        <div class="install-modal__body">
+            <div class="install-section">
+                <div class="install-badge">Android · Chrome</div>
+                <ol>
+                    <li>Tap the ⋮ More menu.</li>
+                    <li>
+                        Select
+                        <button type="button" id="installFromModalBtn" class="install-inline-btn">
+                            Add to home screen
+                        </button>
+                    </li>
+                </ol>
+                <p id="androidInstallHint" class="install-hint" hidden>
+                    Native install prompt is not available yet. Use Chrome menu (⋮) and choose Add to home screen.
+                </p>
+            </div>
+            <div class="install-section">
+                <div class="install-badge">iOS · Safari</div>
+                <ol>
+                    <li>Tap <strong>Share</strong>.</li>
+                    <li>
+                        Choose
+                        <button type="button" id="installFromIosBtn" class="install-inline-btn">
+                            Add to Home Screen
+                        </button>
+                    </li>
+                </ol>
+                <p id="iosInstallHint" class="install-hint" hidden>
+                    Safari cannot open the install prompt automatically. Tap Share, then Add to Home Screen to create the shortcut.
+                </p>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -59,6 +111,18 @@
     const otpBoxes = document.getElementById('otpBoxes');
 
     const otpString = () => otpInputs.map((input) => (input.value || '').replace(/\D/g, '').slice(0, 1)).join('');
+
+    /** Main row 0–9 and numeric keypad (Numpad0–Numpad9); ignores NumLock off navigation keys. */
+    const digitFromKeyEvent = (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return null;
+      const k = e.key;
+      if (k && k.length === 1 && k >= '0' && k <= '9') return k;
+      if (e.code) {
+        const m = /^Numpad(\d)$/.exec(e.code);
+        if (m) return m[1];
+      }
+      return null;
+    };
 
     let verifyInFlight = false;
 
@@ -89,6 +153,8 @@
             const fd = new FormData();
             fd.append('LoginId', loginId);
             fd.append('Otp', otp);
+            const hp = document.getElementById('companyWebsite');
+            if (hp) fd.append('companyWebsite', hp.value || '');
             const ru = document.getElementById('returnUrlField');
             if (ru && ru.value) fd.append('ReturnUrl', ru.value);
             const res = await fetch('@Url.Page("/Login", null, new { handler = "VerifyOtp" })', {
@@ -114,7 +180,7 @@
         }
     };
 
-    sendBtn.addEventListener('click', async () => {
+    const runSendOtp = async () => {
         const loginId = (loginIdEl.value || '').trim();
         if (!loginId) {
             msg('Please enter your work email.', true);
@@ -126,6 +192,8 @@
         try {
             const fd = new FormData();
             fd.append('LoginId', loginId);
+            const hp = document.getElementById('companyWebsite');
+            if (hp) fd.append('companyWebsite', hp.value || '');
             const res = await fetch('@Url.Page("/Login", null, new { handler = "SendOtp" })', {
                 method: 'POST',
                 body: fd
@@ -149,9 +217,17 @@
             sendBtn.disabled = false;
             sendBtn.textContent = 'Send OTP';
         }
+    };
+
+    sendBtn.addEventListener('click', () => void runSendOtp());
+
+    loginIdEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            void runSendOtp();
+        }
     });
 
-    /** Digits from main keyboard and numeric keypad (both use e.key '0'–'9'). */
     otpBoxes.addEventListener('keydown', (e) => {
         const el = e.target;
         if (!el.classList?.contains('otp')) return;
@@ -167,9 +243,16 @@
             return;
         }
 
-        if (e.key.length === 1 && e.key >= '0' && e.key <= '9' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (e.key === 'Enter' || e.code === 'NumpadEnter') {
             e.preventDefault();
-            el.value = e.key;
+            if (otpString().length === 6) void runVerify();
+            return;
+        }
+
+        const digit = digitFromKeyEvent(e);
+        if (digit) {
+            e.preventDefault();
+            el.value = digit;
             if (idx < otpInputs.length - 1) {
                 otpInputs[idx + 1].focus();
             } else {
@@ -204,5 +287,144 @@
     });
 
     verifyBtn.addEventListener('click', () => void runVerify());
+})();
+</script>
+<script>
+(() => {
+    let deferredPrompt = null;
+    let canInstall = false;
+    let isInstalled = false;
+
+    const modal = document.getElementById('installModal');
+    const trigger = document.getElementById('installTrigger');
+    const installFromModalBtn = document.getElementById('installFromModalBtn');
+    const installFromIosBtn = document.getElementById('installFromIosBtn');
+    const androidInstallHint = document.getElementById('androidInstallHint');
+    const iosInstallHint = document.getElementById('iosInstallHint');
+    const body = document.body;
+
+    if (!modal || !trigger) {
+        return;
+    }
+
+    const isIosSafari = () => {
+        const ua = window.navigator.userAgent;
+        const isIOS = /iphone|ipad|ipod/i.test(ua);
+        const isWebKit = /webkit/i.test(ua);
+        const isCriOS = /crios/i.test(ua);
+        const isFxiOS = /fxios/i.test(ua);
+        return isIOS && isWebKit && !isCriOS && !isFxiOS;
+    };
+
+    const updateInstallVisibility = () => {
+        const showInstall = !isInstalled;
+        trigger.hidden = !showInstall;
+    };
+
+    const standaloneDisplay = window.matchMedia('(display-mode: standalone)').matches;
+    const iosStandalone = window.navigator.standalone === true;
+    isInstalled = standaloneDisplay || iosStandalone;
+    updateInstallVisibility();
+
+    const closeTargets = modal.querySelectorAll('[data-install-close]');
+
+    const openModal = () => {
+        modal.hidden = false;
+        modal.classList.add('open');
+        modal.setAttribute('aria-hidden', 'false');
+        trigger.setAttribute('aria-expanded', 'true');
+        body.classList.add('modal-open');
+    };
+
+    const closeModal = () => {
+        modal.hidden = true;
+        modal.classList.remove('open');
+        modal.setAttribute('aria-hidden', 'true');
+        trigger.setAttribute('aria-expanded', 'false');
+        body.classList.remove('modal-open');
+    };
+
+    const openIosShareSheet = async () => {
+        if (!isIosSafari() || typeof navigator.share !== 'function') {
+            return false;
+        }
+
+        try {
+            await navigator.share({
+                title: document.title,
+                text: 'Open the Share menu and choose Add to Home Screen.',
+                url: window.location.href
+            });
+            return true;
+        } catch (_) {
+            return false;
+        }
+    };
+
+    const handleInstallClick = async (showFallbackModal = true, hintTarget = 'none') => {
+        if (androidInstallHint) androidInstallHint.hidden = true;
+        if (iosInstallHint) iosInstallHint.hidden = true;
+
+        if (deferredPrompt) {
+            await deferredPrompt.prompt();
+            try {
+                const choice = await deferredPrompt.userChoice;
+                if (choice.outcome === 'accepted') {
+                    canInstall = false;
+                }
+            } catch (_) {
+            }
+
+            deferredPrompt = null;
+            canInstall = false;
+            updateInstallVisibility();
+            return;
+        }
+
+        if (!isInstalled && showFallbackModal) {
+            openModal();
+        }
+
+        if (!isInstalled && hintTarget === 'android' && androidInstallHint) {
+            androidInstallHint.hidden = false;
+        }
+
+        if (!isInstalled && hintTarget === 'ios' && iosInstallHint) {
+            const shareOpened = await openIosShareSheet();
+            iosInstallHint.textContent = shareOpened
+                ? 'Share menu opened. Tap Add to Home Screen to create the shortcut.'
+                : 'Safari cannot open the install prompt automatically. Tap Share, then Add to Home Screen to create the shortcut.';
+            iosInstallHint.hidden = false;
+        }
+    };
+
+    const handleBeforeInstallPrompt = (event) => {
+        event.preventDefault();
+        deferredPrompt = event;
+        canInstall = true;
+        updateInstallVisibility();
+    };
+
+    const handleAppInstalled = () => {
+        isInstalled = true;
+        canInstall = false;
+        deferredPrompt = null;
+        closeModal();
+        updateInstallVisibility();
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    trigger.addEventListener('click', handleInstallClick);
+    installFromModalBtn?.addEventListener('click', () => handleInstallClick(true, 'android'));
+    installFromIosBtn?.addEventListener('click', () => handleInstallClick(false, 'ios'));
+    closeTargets.forEach((el) => el.addEventListener('click', closeModal));
+
+    document.addEventListener('keydown', (evt) => {
+        if (evt.key === 'Escape') {
+            closeModal();
+        }
+    });
 })();
 </script>

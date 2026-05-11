@@ -19,6 +19,7 @@ public class LoginModel : PageModel
     private static readonly Regex SixDigitOtp = new(@"^\d{6}$", RegexOptions.Compiled);
 
     private readonly OtpSessionStore _otpStore;
+    private readonly LoginIpThrottle _ipThrottle;
     private readonly IOtpEmailSender _emailSender;
     private readonly ISyUserLoginValidator _syUser;
     private readonly ApprovalOptions _approval;
@@ -27,6 +28,7 @@ public class LoginModel : PageModel
 
     public LoginModel(
         OtpSessionStore otpStore,
+        LoginIpThrottle ipThrottle,
         IOtpEmailSender emailSender,
         ISyUserLoginValidator syUser,
         IOptions<ApprovalOptions> approval,
@@ -34,6 +36,7 @@ public class LoginModel : PageModel
         ILogger<LoginModel> logger)
     {
         _otpStore = otpStore;
+        _ipThrottle = ipThrottle;
         _emailSender = emailSender;
         _syUser = syUser;
         _approval = approval.Value;
@@ -46,6 +49,10 @@ public class LoginModel : PageModel
 
     [BindProperty]
     public string Otp { get; set; } = "";
+
+    /// <summary>Honeypot field; must stay empty (bots often fill hidden &quot;website&quot; fields).</summary>
+    [BindProperty(Name = "companyWebsite")]
+    public string? CompanyWebsite { get; set; }
 
     /// <summary>After sign-in redirect; only same-site relative paths are accepted.</summary>
     [BindProperty(SupportsGet = true)]
@@ -62,6 +69,12 @@ public class LoginModel : PageModel
 
     public async Task<IActionResult> OnPostSendOtpAsync(CancellationToken cancellationToken)
     {
+        if (HoneypotTripped())
+            return HoneypotJson();
+
+        if (!_ipThrottle.TrySend(HttpContext, out var sendLimitMsg))
+            return JsonThrottle(sendLimitMsg);
+
         LoginId = (LoginId ?? "").Trim();
         if (string.IsNullOrWhiteSpace(LoginId))
             return new JsonResult(new { success = false, message = "Please enter your email or username." });
@@ -111,6 +124,12 @@ public class LoginModel : PageModel
 
     public async Task<IActionResult> OnPostVerifyOtpAsync(CancellationToken cancellationToken)
     {
+        if (HoneypotTripped())
+            return HoneypotJson();
+
+        if (!_ipThrottle.TryVerify(HttpContext, out var verifyLimitMsg))
+            return JsonThrottle(verifyLimitMsg);
+
         LoginId = (LoginId ?? "").Trim();
         Otp = (Otp ?? "").Trim();
 
@@ -149,12 +168,58 @@ public class LoginModel : PageModel
             ? ReturnUrl!
             : Url.Page("/PurchaseOrders") ?? "/PurchaseOrders";
 
+        if (IsLikelyPurchaseOrdersPage(redirect))
+            redirect = AppendQueryParam(redirect, "promptNotify", "1");
+
         return new JsonResult(new
         {
             success = true,
             message = "Signed in.",
             redirectUrl = redirect
         }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+    }
+
+    private bool HoneypotTripped()
+    {
+        if (string.IsNullOrWhiteSpace(CompanyWebsite))
+            return false;
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        _logger.LogWarning("Login honeypot field filled from {Ip}", ip);
+        return true;
+    }
+
+    private IActionResult HoneypotJson() =>
+        new JsonResult(
+            new { success = false, message = "Sign-in could not be completed. Please try again." },
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+
+    private IActionResult JsonThrottle(string message)
+    {
+        Response.Headers.Append("Retry-After", "60");
+        return new JsonResult(
+            new { success = false, message },
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
+        {
+            StatusCode = StatusCodes.Status429TooManyRequests,
+        };
+    }
+
+    private static bool IsLikelyPurchaseOrdersPage(string pathAndQuery)
+    {
+        var p = (pathAndQuery ?? "").Trim();
+        if (p.Length == 0)
+            return false;
+        var q = p.IndexOf('?', StringComparison.Ordinal);
+        if (q >= 0)
+            p = p[..q];
+        return p.Equals("/PurchaseOrders", StringComparison.OrdinalIgnoreCase)
+               || p.Equals("PurchaseOrders", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string AppendQueryParam(string pathAndQuery, string key, string value)
+    {
+        var sep = pathAndQuery.Contains('?', StringComparison.Ordinal) ? "&" : "?";
+        return $"{pathAndQuery}{sep}{Uri.EscapeDataString(key)}={Uri.EscapeDataString(value)}";
     }
 
     private string? NormalizeLocalReturn(string? url)

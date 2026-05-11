@@ -3,6 +3,7 @@ using ApprovalPO.Options;
 using ApprovalPO.Services;
 using ApprovalPO.Helpers;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.HttpOverrides;
 
 // Optional .env: typically only TENANT_CODE (see appsettings / .env.example). All other config lives in appsettings.json.
 foreach (var envPath in new[]
@@ -42,7 +43,12 @@ builder.Services.Configure<Microsoft.AspNetCore.Antiforgery.AntiforgeryOptions>(
 
 builder.Services.Configure<ApprovalOptions>(builder.Configuration.GetSection(ApprovalOptions.SectionName));
 builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection(SmtpOptions.SectionName));
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+});
 builder.Services.AddSingleton<OtpSessionStore>();
+builder.Services.AddSingleton<LoginIpThrottle>();
 builder.Services.AddSingleton<IOtpEmailSender, SmtpOtpEmailSender>();
 
 builder.Services.AddRazorPages(options =>
@@ -74,6 +80,16 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+app.UseForwardedHeaders();
+
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+    context.Response.Headers.Append("X-Frame-Options", "SAMEORIGIN");
+    context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
+    await next();
+});
 
 if (!app.Environment.IsDevelopment())
 {

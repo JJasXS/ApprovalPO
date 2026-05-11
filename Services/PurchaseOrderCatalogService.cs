@@ -8,14 +8,14 @@ using Microsoft.Extensions.Options;
 namespace ApprovalPO.Services;
 
 /// <summary>
-/// Loads purchase requests from Firebird <c>PH_PQ</c> for the configured tenant.
+/// Loads purchase orders from Firebird <c>PH_PO</c> for the configured tenant.
 /// Tabs: <c>TRANSFERABLE</c> null → Pending, true → Approved, false → Cancelled (stored as Rejected for existing UI).
 /// </summary>
 public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
 {
     /// <summary>
-    /// Default targets SQL Accounting <c>PH_PQ.TRANSFERABLE</c> as Firebird <c>BOOLEAN</c> (null / true / false).
-    /// Tab labels use alias <c>PQSTATUS</c> so the result never collides with numeric <c>PH_PQ.STATUS</c>.
+    /// Default targets SQL Accounting <c>PH_PO.TRANSFERABLE</c> as Firebird <c>BOOLEAN</c> (null / true / false).
+    /// Tab labels use alias <c>PQSTATUS</c> so the result never collides with numeric <c>PH_PO.STATUS</c>.
     /// For legacy CHAR/SMALLINT <c>TRANSFERABLE</c>, set <see cref="ApprovalOptions.PurchaseOrdersSql"/>.
     /// Include <c>DOCKEY</c> (or override with same alias) so line items can load.
     /// </summary>
@@ -39,16 +39,18 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
             WHEN TRANSFERABLE IS FALSE THEN 'Rejected'
             ELSE 'Pending'
           END AS VARCHAR(20)) AS PQSTATUS
-        FROM PH_PQ
+        FROM PH_PO
         ORDER BY DOCDATE DESC NULLS LAST, DOCNO DESC
         """;
 
-    /// <summary>Same shape as eQuotation <c>_fetch_detail_rows</c> for <c>PH_PQDTL</c>; parameter <c>@DocKey</c>. Includes <c>TRANSFERABLEINT</c> from <c>D.TRANSFERABLE</c>.</summary>
+    /// <summary>Detail lines for <c>PH_PODTL</c>; parameter <c>@DocKey</c>. Includes <c>SQTY</c>, <c>SUOMQTY</c>, and <c>TRANSFERABLEINT</c> from <c>D.TRANSFERABLE</c>.</summary>
     internal const string DefaultPurchaseRequestLinesSql = """
         SELECT
           COALESCE(D.SEQ, 0) AS LINENO,
           TRIM(COALESCE(D.ITEMCODE, '')) AS ITEMCODE,
           TRIM(COALESCE(CAST(D.DESCRIPTION AS VARCHAR(800)), '')) AS DESCRIPTION,
+          COALESCE(D.SQTY, 0) AS SQTY,
+          COALESCE(D.SUOMQTY, 0) AS SUOMQTY,
           COALESCE(D.QTY, 0) AS QTY,
           COALESCE(D.UNITPRICE, 0) AS UNITPRICE,
           COALESCE(D.AMOUNT, 0) AS LINEAMOUNT,
@@ -58,7 +60,7 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
             WHEN D.TRANSFERABLE IS FALSE THEN 0
             ELSE NULL
           END AS SMALLINT) AS TRANSFERABLEINT
-        FROM PH_PQDTL D
+        FROM PH_PODTL D
         WHERE D.DOCKEY = @DocKey
         ORDER BY COALESCE(D.SEQ, 0)
         """;
@@ -81,7 +83,7 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
     {
         var tenant = (_configuration["TenantBootstrap:TenantCode"] ?? "").Trim();
         if (string.IsNullOrWhiteSpace(tenant))
-            throw new InvalidOperationException("TenantBootstrap:TenantCode is required to load PH_PQ.");
+            throw new InvalidOperationException("TenantBootstrap:TenantCode is required to load PH_PO.");
 
         var sql = string.IsNullOrWhiteSpace(_approval.Value.PurchaseOrdersSql)
             ? DefaultPurchaseOrdersSql
@@ -123,7 +125,7 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
             await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
 
             await using var cmd = new FbCommand(
-                "UPDATE PH_PQ SET TRANSFERABLE = @T WHERE DOCKEY = @D",
+                "UPDATE PH_PO SET TRANSFERABLE = @T WHERE DOCKEY = @D",
                 conn);
 
             var pT = new FbParameter("@T", FbDbType.Boolean)
@@ -169,11 +171,11 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
             await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
 
             const string sql = """
-                UPDATE PH_PQDTL D
+                UPDATE PH_PODTL D
                 SET D.TRANSFERABLE = @T
                 WHERE D.DOCKEY = @D
                   AND COALESCE(D.SEQ, 0) = @L
-                  AND EXISTS (SELECT 1 FROM PH_PQ P WHERE P.DOCKEY = @D AND P.TRANSFERABLE IS NULL)
+                  AND EXISTS (SELECT 1 FROM PH_PO P WHERE P.DOCKEY = @D AND P.TRANSFERABLE IS NULL)
                 """;
 
             await using var cmd = new FbCommand(sql, conn);
@@ -200,7 +202,7 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
 
         var tenant = (_configuration["TenantBootstrap:TenantCode"] ?? "").Trim();
         if (string.IsNullOrWhiteSpace(tenant))
-            throw new InvalidOperationException("TenantBootstrap:TenantCode is required to load PH_PQDTL.");
+            throw new InvalidOperationException("TenantBootstrap:TenantCode is required to load PH_PODTL.");
 
         var sql = string.IsNullOrWhiteSpace(_approval.Value.PurchaseRequestLinesSql)
             ? DefaultPurchaseRequestLinesSql
@@ -222,7 +224,7 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
         return list;
     }
 
-    /// <summary>Maps UI tab status; ignores numeric or other <c>PH_PQ.STATUS</c> values when <paramref name="transferable"/> is available.</summary>
+    /// <summary>Maps UI tab status; ignores numeric or other <c>PH_PO.STATUS</c> values when <paramref name="transferable"/> is available.</summary>
     internal static string NormalizeTabStatus(string? rawFromReader, bool? transferable)
     {
         if (!string.IsNullOrWhiteSpace(rawFromReader))
@@ -251,13 +253,13 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
         var description = GetString(reader, "DESCRIPTION") ?? "";
         var orderDate = GetDateTime(reader, "ORDERDATE", "DOCDATE") ?? DateTime.UtcNow.Date;
         var transferable = GetBoolNullable(reader, "TRANSFERABLEINT", "TRANSFERABLE");
-        var rawStatus = (GetString(reader, "PQSTATUS", "STATUS") ?? "").Trim();
-        // PH_PQ.STATUS is often an integer workflow code — never use it for tabs unless it matches our labels.
+        var rawStatus = (GetString(reader, "PQSTATUS", "POSTATUS", "STATUS") ?? "").Trim();
+        // PH_PO.STATUS is often an integer workflow code — never use it for tabs unless it matches our labels.
         var status = NormalizeTabStatus(rawStatus, transferable);
 
         return new PurchaseOrderRow
         {
-            DocKey = GetInt32(reader, "DOCKEY", "PQKEY", "ID"),
+            DocKey = GetInt32(reader, "DOCKEY", "POKEY", "PQKEY", "ID"),
             PoNumber = po.Trim(),
             Vendor = vendor.Trim(),
             Amount = amount,
@@ -275,6 +277,8 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
             LineNo = GetInt32(reader, "LINENO", "SEQ", "LINE_NO", "LINENO"),
             ItemCode = (GetString(reader, "ITEMCODE") ?? "").Trim(),
             Description = (GetString(reader, "DESCRIPTION") ?? "").Trim(),
+            Sqty = GetDecimal(reader, "SQTY"),
+            SuomQty = GetDecimal(reader, "SUOMQTY"),
             Qty = GetDecimal(reader, "QTY", "QUANTITY"),
             UnitPrice = GetDecimal(reader, "UNITPRICE", "RATE"),
             LineAmount = GetDecimal(reader, "LINEAMOUNT", "AMOUNT", "TOTAL"),

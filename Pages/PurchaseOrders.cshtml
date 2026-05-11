@@ -7,6 +7,7 @@
     var linesJsonUrlBase = Url.Page("/PurchaseOrders", null, new { handler = "LinesJson" })!;
     var setTransferableUrl = Url.Page("/PurchaseOrders", null, new { handler = "SetTransferable" })!;
     var setLineTransferableUrl = Url.Page("/PurchaseOrders", null, new { handler = "SetLineTransferable" })!;
+    var pendingNotifySnapshotUrl = Url.Page("/PurchaseOrders", null, new { handler = "PendingNotifySnapshot" })!;
     var csrf = Antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 }
 
@@ -20,6 +21,8 @@
      data-lines-json-url-base="@linesJsonUrlBase"
      data-set-transferable-url="@setTransferableUrl"
      data-set-line-transferable-url="@setLineTransferableUrl"
+     data-pending-notify-url="@pendingNotifySnapshotUrl"
+     data-pending-notify-poll-ms="@Model.PendingNotifyPollMilliseconds"
      data-csrf-token="@csrf"
      data-high-value-threshold="@Model.HighValueThreshold.ToString(System.Globalization.CultureInfo.InvariantCulture)"></div>
 
@@ -27,7 +30,7 @@
     <header class="po-header po-header--hero">
         <div class="po-header__inner">
             <div class="po-header__titles">
-                <h1 class="po-header__title">Purchase request approvals</h1>
+                <h1 class="po-header__title">Purchase order approvals</h1>
             </div>
             <div class="po-header__actions">
                 <div class="po-header__menu">
@@ -36,6 +39,11 @@
                     </button>
                     <div id="menuPanel" class="menu-panel" hidden>
                         <div class="menu-user">@User.Identity?.Name</div>
+                        <button type="button" id="poNotifyMenuStop" class="menu-link menu-link--button" hidden>Stop order alerts</button>
+                        @if (Model.ShowDevNotifyTools)
+                        {
+                            <button type="button" id="poDevNotifyPing" class="menu-link menu-link--button">Test browser notify</button>
+                        }
                         <form method="post" asp-page="/Logout" class="menu-logout-form">
                             <button type="submit" class="menu-link menu-link--button">Sign out</button>
                         </form>
@@ -184,6 +192,17 @@
     </div>
 </div>
 
+<div id="poNotifyToast" class="po-notify-toast" hidden role="dialog" aria-modal="false" aria-labelledby="poNotifyToastTitle">
+    <button type="button" id="poNotifyToastClose" class="po-notify-toast__x" aria-label="Dismiss">&times;</button>
+    <p id="poNotifyToastTitle" class="po-notify-toast__title">New pending orders?</p>
+    <p class="po-notify-toast__text">Short desktop alert while this tab stays open (~2 min checks).</p>
+    <p class="po-notify-toast__fine">Incognito/private: allow each session. “Blocked” is the browser, not this app.</p>
+    <div class="po-notify-toast__actions">
+        <button type="button" id="poNotifyEnableBtn" class="po-notify-toast__btn po-notify-toast__btn--primary">Allow</button>
+        <button type="button" id="poNotifyDismissBtn" class="po-notify-toast__btn">Not now</button>
+    </div>
+</div>
+
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <div id="undoToast" class="undo-toast" hidden role="status" aria-live="polite">
     <span id="undoToastMsg"></span>
@@ -191,3 +210,4 @@
 </div>
 
 <script src="~/js/po-list.js" asp-append-version="true"></script>
+<script src="~/js/po-notify.js" asp-append-version="true"></script>

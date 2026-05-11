@@ -21,14 +21,27 @@ public class ApprovalOptions
     public int OtpLockoutMinutes { get; set; } = 15;
 
     /// <summary>
-    /// Optional override SQL; must expose columns compatible with the default (DOCKEY, PONUMBER, VENDOR, AMOUNT, PQSTATUS or STATUS, DESCRIPTION, ORDERDATE, TRANSFERABLEINT or TRANSFERABLE).
-    /// Default reads <c>PH_PQ</c>: <c>PQSTATUS</c> from boolean <c>TRANSFERABLE</c> (null → Pending, true → Approved, false → Rejected/Cancelled tab). Use override for non-boolean encodings.
+    /// Max OTP send requests per client IP per rolling UTC minute; <c>0</c> disables IP send throttling.
+    /// Mobile and carrier-grade NAT often put many real users behind one public IP — use <c>0</c> (default) and rely on
+    /// per-email limits, or set higher values only when the resolved client IP reliably maps to one real user (e.g. known reverse-proxy setup).
+    /// </summary>
+    public int LoginMaxSendOtpPerIpPerMinute { get; set; }
+
+    /// <summary>
+    /// Max OTP verify attempts per client IP per rolling UTC minute; <c>0</c> disables IP verify throttling.
+    /// Same mobile/CGNAT caveat as <see cref="LoginMaxSendOtpPerIpPerMinute"/>.
+    /// </summary>
+    public int LoginMaxVerifyOtpPerIpPerMinute { get; set; }
+
+    /// <summary>
+    /// Optional override SQL; must expose columns compatible with the default (DOCKEY, PONUMBER, VENDOR, AMOUNT, PQSTATUS or POSTATUS or STATUS, DESCRIPTION, ORDERDATE, TRANSFERABLEINT or TRANSFERABLE).
+    /// Default reads <c>PH_PO</c>: <c>PQSTATUS</c> (or <c>POSTATUS</c>) from boolean <c>TRANSFERABLE</c> (null → Pending, true → Approved, false → Rejected/Cancelled tab). Use override for non-boolean encodings.
     /// </summary>
     public string? PurchaseOrdersSql { get; set; }
 
     /// <summary>
-    /// Optional SQL for <c>PH_PQDTL</c> lines; single parameter <c>@DocKey</c> (integer header key).
-    /// Default selects line fields plus <c>TRANSFERABLEINT</c> (or <c>TRANSFERABLE</c>) for review checkboxes.
+    /// Optional SQL for purchase order detail lines (<c>PH_PODTL</c>); single parameter <c>@DocKey</c> (integer header key).
+    /// Default selects line fields including <c>SQTY</c>, <c>SUOMQTY</c>, and <c>TRANSFERABLEINT</c> (or <c>TRANSFERABLE</c>).
     /// </summary>
     public string? PurchaseRequestLinesSql { get; set; }
 
@@ -42,4 +55,9 @@ public class ApprovalOptions
     /// When true, prints the generated OTP to the process console as <c>[DEBUG]</c> (for local testing). Do not enable in production.
     /// </summary>
     public bool DebugOtpToConsole { get; set; }
+
+    /// <summary>
+    /// How often the browser polls for new <strong>pending</strong> orders when desktop alerts are on. Seconds, clamped between 30 and 600; default 120.
+    /// </summary>
+    public int PendingNotifyPollSeconds { get; set; } = 120;
 }

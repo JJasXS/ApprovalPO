@@ -197,7 +197,7 @@
     return 'Pending';
   };
 
-  /** Server may send numeric PH_PQ.STATUS; tabs use Pending / Approved / Rejected only. */
+  /** Server may send numeric PH_PO.STATUS; tabs use Pending / Approved / Rejected only. */
   const normalizeOrderStatus = (o) => {
     const s = String(o?.status ?? '').trim();
     if (s === 'Pending' || s === 'Approved' || s === 'Rejected') return s;
@@ -366,7 +366,7 @@
     target.scrollIntoView({ block: 'nearest' });
   };
 
-  /** PH_PQDTL.TRANSFERABLE: only true ticks the review checkbox; false or null is unticked. */
+  /** PH_PODTL.TRANSFERABLE: only true ticks the review checkbox; false or null is unticked. */
   const isLineTransferableTicked = (item) => {
     if (!item || item.transferable === undefined || item.transferable === null) return false;
     const v = item.transferable;
@@ -397,8 +397,9 @@
     else if (status === 'Rejected') statusClass = 'review-badge--rejected';
 
     const docKey = (tr.dataset.docKey || '').trim();
-    let itemsHtml = `<tr><td colspan="5" class="items-empty">No line items loaded.</td></tr>`;
-    let totalQty = 0;
+    let itemsHtml = `<tr><td colspan="6" class="items-empty">No line items loaded.</td></tr>`;
+    let totalSqty = 0;
+    let totalSuomQty = 0;
     let itemsTotal = 0;
 
     if (docKey && linesJsonUrlBase) {
@@ -414,12 +415,15 @@
             .map((item) => {
               const code = escapeHtml(item.itemCode || '');
               const name = escapeHtml(item.description || '');
-              const qty = Number(item.qty) || 0;
+              const sqty = Number(item.sqty) || 0;
+              const suomQty = Number(item.suomQty) || 0;
+              const qtyFallback = Number(item.qty) || 0;
               const up = Number(item.unitPrice) || 0;
+              const baseQtyForAmt = sqty || qtyFallback;
               const lineAmt =
                 item.lineAmount != null && item.lineAmount !== ''
                   ? Number(item.lineAmount)
-                  : qty * up;
+                  : baseQtyForAmt * up;
               const lineStr = lineAmt.toLocaleString(undefined, {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
@@ -435,36 +439,40 @@
               return `
       <tr${xferRowClass ? ` class="${xferRowClass}"` : ''}>
         <td class="items-check">
-          <label class="${labelClass}" aria-label="Line transferable (PH_PQDTL.TRANSFERABLE) for item ${code}: ${ticked ? 'true' : 'false'}">
+          <label class="${labelClass}" aria-label="Line transferable (PH_PODTL.TRANSFERABLE) for item ${code}: ${ticked ? 'true' : 'false'}">
             <input type="checkbox" class="line-transfer-cb" data-doc-key="${docKeyNum}" data-line-no="${lineNoSafe}" ${ticked ? 'checked' : ''}${disabledAttr} />
             <span class="po-check__box" aria-hidden="true"></span>
           </label>
         </td>
         <td class="items-code">${code}</td>
         <td class="items-desc">${name}</td>
-        <td class="num">${qty}</td>
+        <td class="num items-qty-sqty">${sqty}</td>
+        <td class="num items-qty-suom">${suomQty}</td>
         <td class="num">${lineStr}</td>
       </tr>`;
             })
             .join('');
-          totalQty = data.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+          totalSqty = data.reduce((sum, item) => sum + (Number(item.sqty) || 0), 0);
+          totalSuomQty = data.reduce((sum, item) => sum + (Number(item.suomQty) || 0), 0);
           itemsTotal = data.reduce((sum, item) => {
-            const qty = Number(item.qty) || 0;
+            const sq = Number(item.sqty) || 0;
+            const qf = Number(item.qty) || 0;
             const up = Number(item.unitPrice) || 0;
+            const base = sq || qf;
             const la =
-              item.lineAmount != null && item.lineAmount !== '' ? Number(item.lineAmount) : qty * up;
+              item.lineAmount != null && item.lineAmount !== '' ? Number(item.lineAmount) : base * up;
             return sum + la;
           }, 0);
         } else if (res.ok && Array.isArray(data)) {
-          itemsHtml = `<tr><td colspan="5" class="items-empty">No detail lines on this purchase request.</td></tr>`;
+          itemsHtml = `<tr><td colspan="6" class="items-empty">No detail lines on this purchase order.</td></tr>`;
         } else {
-          itemsHtml = `<tr><td colspan="5" class="items-empty">Could not load line items (${res.status}).</td></tr>`;
+          itemsHtml = `<tr><td colspan="6" class="items-empty">Could not load line items (${res.status}).</td></tr>`;
         }
       } catch {
-        itemsHtml = `<tr><td colspan="5" class="items-empty">Could not load line items.</td></tr>`;
+        itemsHtml = `<tr><td colspan="6" class="items-empty">Could not load line items.</td></tr>`;
       }
     } else if (!docKey) {
-      itemsHtml = `<tr><td colspan="5" class="items-empty">No document key (DOCKEY) for this row — include DOCKEY in the PH_PQ list SQL.</td></tr>`;
+      itemsHtml = `<tr><td colspan="6" class="items-empty">No document key (DOCKEY) for this row — include DOCKEY in the PH_PO list SQL.</td></tr>`;
     }
 
     const note =
@@ -511,10 +519,11 @@
           <table class="items-table">
             <thead>
               <tr>
-                <th class="items-th-check" scope="col" title="PH_PQDTL.TRANSFERABLE">Transfer</th>
+                <th class="items-th-check" scope="col" title="PH_PODTL.TRANSFERABLE">Transfer</th>
                 <th>Item code</th>
                 <th>Description</th>
-                <th class="num">Qty</th>
+                <th class="num" scope="col" title="PH_PODTL.SQTY">SQTY</th>
+                <th class="num" scope="col" title="PH_PODTL.SUOMQTY">SUOMQTY</th>
                 <th class="num">Amount</th>
               </tr>
             </thead>
@@ -522,7 +531,8 @@
             <tfoot>
               <tr>
                 <td colspan="3" class="items-total-label">Total</td>
-                <td class="num items-total-qty">${totalQty}</td>
+                <td class="num items-total-qty">${totalSqty}</td>
+                <td class="num items-total-qty">${totalSuomQty}</td>
                 <td class="num items-total-amt">${itemsTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
               </tr>
             </tfoot>

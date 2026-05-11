@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using ApprovalPO.Models;
 using ApprovalPO.Options;
 using ApprovalPO.Services;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Options;
@@ -21,7 +22,7 @@ public sealed class SetLineTransferableRequest
 {
     public int DocKey { get; set; }
 
-    /// <summary>Matches <c>PH_PQDTL.SEQ</c> (same as list JSON <c>lineNo</c>, <c>COALESCE(SEQ,0)</c>).</summary>
+    /// <summary>Matches <c>PH_PODTL.SEQ</c> (same as list JSON <c>lineNo</c>, <c>COALESCE(SEQ,0)</c>).</summary>
     public int LineNo { get; set; }
 
     public bool Transferable { get; set; }
@@ -38,11 +39,25 @@ public class PurchaseOrdersModel : PageModel
 
     private readonly IOptions<ApprovalOptions> _approval;
     private readonly IPurchaseOrderCatalog _orders;
+    private readonly IWebHostEnvironment _env;
 
-    public PurchaseOrdersModel(IOptions<ApprovalOptions> approval, IPurchaseOrderCatalog orders)
+    public PurchaseOrdersModel(IOptions<ApprovalOptions> approval, IPurchaseOrderCatalog orders, IWebHostEnvironment env)
     {
         _approval = approval;
         _orders = orders;
+        _env = env;
+    }
+
+    /// <summary>Development-only UI for quick notification smoke tests.</summary>
+    public bool ShowDevNotifyTools => _env.IsDevelopment();
+
+    public int PendingNotifyPollMilliseconds
+    {
+        get
+        {
+            var sec = Math.Clamp(_approval.Value.PendingNotifyPollSeconds, 30, 600);
+            return sec * 1000;
+        }
     }
 
     public IReadOnlyList<PurchaseOrderRow> Orders { get; private set; } = Array.Empty<PurchaseOrderRow>();
@@ -62,6 +77,23 @@ public class PurchaseOrdersModel : PageModel
         var list = await _orders.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
         return new JsonResult(list, JsonCamel);
     }
+
+    /// <summary>Lightweight snapshot for desktop notifications: pending orders only (same <c>Status</c> rules as the list).</summary>
+    public async Task<IActionResult> OnGetPendingNotifySnapshotAsync(CancellationToken cancellationToken)
+    {
+        var list = await _orders.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
+        var pending = list
+            .Where(o => string.Equals(o.Status, "Pending", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(o => o.DocKey)
+            .Select(o => new PendingNotifyItem(o.DocKey, o.PoNumber))
+            .ToList();
+
+        return new JsonResult(new PendingNotifySnapshot(pending.Count, pending), JsonCamel);
+    }
+
+    private sealed record PendingNotifyItem(int DocKey, string PoNumber);
+
+    private sealed record PendingNotifySnapshot(int PendingCount, IReadOnlyList<PendingNotifyItem> Pending);
 
     public async Task<IActionResult> OnGetLinesJsonAsync(int docKey, CancellationToken cancellationToken)
     {
