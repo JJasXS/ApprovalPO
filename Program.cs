@@ -1,4 +1,5 @@
 using ApprovalPO.Configuration;
+using ApprovalPO.Hosting;
 using ApprovalPO.Options;
 using ApprovalPO.Services;
 using ApprovalPO.Helpers;
@@ -42,6 +43,7 @@ builder.Services.Configure<Microsoft.AspNetCore.Antiforgery.AntiforgeryOptions>(
 });
 
 builder.Services.Configure<ApprovalOptions>(builder.Configuration.GetSection(ApprovalOptions.SectionName));
+builder.Services.Configure<WebPushOptions>(builder.Configuration.GetSection(WebPushOptions.SectionName));
 builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection(SmtpOptions.SectionName));
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
@@ -50,6 +52,9 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 builder.Services.AddSingleton<OtpSessionStore>();
 builder.Services.AddSingleton<LoginIpThrottle>();
 builder.Services.AddSingleton<IOtpEmailSender, SmtpOtpEmailSender>();
+builder.Services.AddSingleton<WebPushSubscriptionFileStore>();
+builder.Services.AddSingleton<WebPushPendingCursorStore>();
+builder.Services.AddHostedService<PendingOrderWebPushWorker>();
 
 builder.Services.AddRazorPages(options =>
 {
@@ -103,5 +108,6 @@ app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapRazorPages();
+app.MapWebPushEndpoints();
 
 app.Run();

@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\sqlsupport\\ApprovalPO\\ApprovalPO.csproj": {}
+    "c:\\Users\\sqlsupport\\ApprovalPO\\ApprovalPO.csproj": {}
   },
   "projects": {
-    "C:\\Users\\sqlsupport\\ApprovalPO\\ApprovalPO.csproj": {
+    "c:\\Users\\sqlsupport\\ApprovalPO\\ApprovalPO.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\sqlsupport\\ApprovalPO\\ApprovalPO.csproj",
+        "projectUniqueName": "c:\\Users\\sqlsupport\\ApprovalPO\\ApprovalPO.csproj",
         "projectName": "ApprovalPO",
-        "projectPath": "C:\\Users\\sqlsupport\\ApprovalPO\\ApprovalPO.csproj",
+        "projectPath": "c:\\Users\\sqlsupport\\ApprovalPO\\ApprovalPO.csproj",
         "packagesPath": "C:\\Users\\sqlsupport\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\sqlsupport\\ApprovalPO\\obj\\",
+        "outputPath": "c:\\Users\\sqlsupport\\ApprovalPO\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\sqlsupport\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -51,6 +51,10 @@
             "FirebirdSql.Data.FirebirdClient": {
               "target": "Package",
               "version": "[10.3.4, )"
+            },
+            "WebPush": {
+              "target": "Package",
+              "version": "[1.0.13, )"
             }
           },
           "imports": [

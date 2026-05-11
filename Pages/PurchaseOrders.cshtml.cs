@@ -38,15 +38,26 @@ public class PurchaseOrdersModel : PageModel
     };
 
     private readonly IOptions<ApprovalOptions> _approval;
+    private readonly IOptions<WebPushOptions> _webPush;
     private readonly IPurchaseOrderCatalog _orders;
     private readonly IWebHostEnvironment _env;
 
-    public PurchaseOrdersModel(IOptions<ApprovalOptions> approval, IPurchaseOrderCatalog orders, IWebHostEnvironment env)
+    public PurchaseOrdersModel(
+        IOptions<ApprovalOptions> approval,
+        IOptions<WebPushOptions> webPush,
+        IPurchaseOrderCatalog orders,
+        IWebHostEnvironment env)
     {
         _approval = approval;
+        _webPush = webPush;
         _orders = orders;
         _env = env;
     }
+
+    /// <summary>Browser Web Push (VAPID) keys are present; client may register a subscription.</summary>
+    public bool WebPushEnabled => _webPush.Value.HasVapidKeys;
+
+    public string? WebPushPublicKey => WebPushEnabled ? _webPush.Value.PublicKey.Trim() : null;
 
     /// <summary>Development-only UI for quick notification smoke tests.</summary>
     public bool ShowDevNotifyTools => _env.IsDevelopment();

@@ -23,6 +23,9 @@
      data-set-line-transferable-url="@setLineTransferableUrl"
      data-pending-notify-url="@pendingNotifySnapshotUrl"
      data-pending-notify-poll-ms="@Model.PendingNotifyPollMilliseconds"
+     data-web-push-public-key="@(Model.WebPushPublicKey ?? "")"
+     data-web-push-subscribe-url="/api/web-push/subscribe"
+     data-web-push-unsubscribe-url="/api/web-push/unsubscribe"
      data-csrf-token="@csrf"
      data-high-value-threshold="@Model.HighValueThreshold.ToString(System.Globalization.CultureInfo.InvariantCulture)"></div>
 
@@ -211,3 +214,4 @@
 
 <script src="~/js/po-list.js" asp-append-version="true"></script>
 <script src="~/js/po-notify.js" asp-append-version="true"></script>
+<script src="~/js/push-register.js" asp-append-version="true"></script>

@@ -159,6 +159,19 @@
           "System.Xml.XDocument": "4.3.0"
         }
       },
+      "Portable.BouncyCastle/1.9.0": {
+        "type": "package",
+        "compile": {
+          "lib/netstandard2.0/BouncyCastle.Crypto.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/netstandard2.0/BouncyCastle.Crypto.dll": {
+            "related": ".xml"
+          }
+        }
+      },
       "runtime.debian.8-x64.runtime.native.System.Security.Cryptography.OpenSsl/4.3.2": {
         "type": "package",
         "runtimeTargets": {
@@ -1404,6 +1417,18 @@
         "runtime": {
           "lib/netstandard1.3/System.Xml.XDocument.dll": {}
         }
+      },
+      "WebPush/1.0.13": {
+        "type": "package",
+        "dependencies": {
+          "Portable.BouncyCastle": "1.9.0"
+        },
+        "compile": {
+          "lib/net8.0/WebPush.dll": {}
+        },
+        "runtime": {
+          "lib/net8.0/WebPush.dll": {}
+        }
       }
     }
   },
@@ -1561,6 +1586,21 @@
         "dotnet_library_license.txt",
         "netstandard.library.1.6.1.nupkg.sha512",
         "netstandard.library.nuspec"
+      ]
+    },
+    "Portable.BouncyCastle/1.9.0": {
+      "sha512": "eZZBCABzVOek+id9Xy04HhmgykF0wZg9wpByzrWN7q8qEI0Qen9b7tfd7w8VA3dOeesumMG7C5ZPy0jk7PSRHw==",
+      "type": "package",
+      "path": "portable.bouncycastle/1.9.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "lib/net40/BouncyCastle.Crypto.dll",
+        "lib/net40/BouncyCastle.Crypto.xml",
+        "lib/netstandard2.0/BouncyCastle.Crypto.dll",
+        "lib/netstandard2.0/BouncyCastle.Crypto.xml",
+        "portable.bouncycastle.1.9.0.nupkg.sha512",
+        "portable.bouncycastle.nuspec"
       ]
     },
     "runtime.debian.8-x64.runtime.native.System.Security.Cryptography.OpenSsl/4.3.2": {
@@ -4764,12 +4804,30 @@
         "system.xml.xdocument.4.3.0.nupkg.sha512",
         "system.xml.xdocument.nuspec"
       ]
+    },
+    "WebPush/1.0.13": {
+      "sha512": "Qyypsk6j+GqncCa/IgbmZLnL7DxqKFGz3jIdquGSLeiD3NtN+HPnIFBMwIJHffDU9ZEztTkaMMYxvW3PJxJL7Q==",
+      "type": "package",
+      "path": "webpush/1.0.13",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "README.md",
+        "lib/net10.0/WebPush.dll",
+        "lib/net48/WebPush.dll",
+        "lib/net8.0/WebPush.dll",
+        "lib/net9.0/WebPush.dll",
+        "lib/netstandard2.1/WebPush.dll",
+        "webpush.1.0.13.nupkg.sha512",
+        "webpush.nuspec"
+      ]
     }
   },
   "projectFileDependencyGroups": {
     "net8.0": [
       "DotNetEnv >= 3.1.1",
-      "FirebirdSql.Data.FirebirdClient >= 10.3.4"
+      "FirebirdSql.Data.FirebirdClient >= 10.3.4",
+      "WebPush >= 1.0.13"
     ]
   },
   "packageFolders": {
@@ -4778,11 +4836,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\sqlsupport\\ApprovalPO\\ApprovalPO.csproj",
+      "projectUniqueName": "c:\\Users\\sqlsupport\\ApprovalPO\\ApprovalPO.csproj",
       "projectName": "ApprovalPO",
-      "projectPath": "C:\\Users\\sqlsupport\\ApprovalPO\\ApprovalPO.csproj",
+      "projectPath": "c:\\Users\\sqlsupport\\ApprovalPO\\ApprovalPO.csproj",
       "packagesPath": "C:\\Users\\sqlsupport\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\sqlsupport\\ApprovalPO\\obj\\",
+      "outputPath": "c:\\Users\\sqlsupport\\ApprovalPO\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\sqlsupport\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -4822,6 +4880,10 @@
           "FirebirdSql.Data.FirebirdClient": {
             "target": "Package",
             "version": "[10.3.4, )"
+          },
+          "WebPush": {
+            "target": "Package",
+            "version": "[1.0.13, )"
           }
         },
         "imports": [

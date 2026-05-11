@@ -1,0 +1,10 @@
+{
+  "name": "Approval PO",
+  "short_name": "ApprovalPO",
+  "description": "Purchase order approvals",
+  "start_url": "/PurchaseOrders",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f6fb",
+  "theme_color": "#0f172a"
+}

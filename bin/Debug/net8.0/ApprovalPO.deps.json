@@ -9,7 +9,8 @@
       "ApprovalPO/1.0.0": {
         "dependencies": {
           "DotNetEnv": "3.1.1",
-          "FirebirdSql.Data.FirebirdClient": "10.3.4"
+          "FirebirdSql.Data.FirebirdClient": "10.3.4",
+          "WebPush": "1.0.13"
         },
         "runtime": {
           "ApprovalPO.dll": {}
@@ -34,11 +35,30 @@
           }
         }
       },
+      "Portable.BouncyCastle/1.9.0": {
+        "runtime": {
+          "lib/netstandard2.0/BouncyCastle.Crypto.dll": {
+            "assemblyVersion": "1.9.0.0",
+            "fileVersion": "1.9.0.1"
+          }
+        }
+      },
       "Sprache/2.3.1": {
         "runtime": {
           "lib/netstandard2.1/Sprache.dll": {
             "assemblyVersion": "2.3.1.0",
             "fileVersion": "2.3.1.0"
+          }
+        }
+      },
+      "WebPush/1.0.13": {
+        "dependencies": {
+          "Portable.BouncyCastle": "1.9.0"
+        },
+        "runtime": {
+          "lib/net8.0/WebPush.dll": {
+            "assemblyVersion": "1.0.13.0",
+            "fileVersion": "1.0.13.0"
           }
         }
       }
@@ -64,12 +84,26 @@
       "path": "firebirdsql.data.firebirdclient/10.3.4",
       "hashPath": "firebirdsql.data.firebirdclient.10.3.4.nupkg.sha512"
     },
+    "Portable.BouncyCastle/1.9.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-eZZBCABzVOek+id9Xy04HhmgykF0wZg9wpByzrWN7q8qEI0Qen9b7tfd7w8VA3dOeesumMG7C5ZPy0jk7PSRHw==",
+      "path": "portable.bouncycastle/1.9.0",
+      "hashPath": "portable.bouncycastle.1.9.0.nupkg.sha512"
+    },
     "Sprache/2.3.1": {
       "type": "package",
       "serviceable": true,
       "sha512": "sha512-Q+mXeiTxiUYG3lKYF6TS82/SyB4F2613Q1yXTMwg4jWGHEEVC3yrzHtNcI4B3qnDI0+eJsezGJ0V+cToUytHWw==",
       "path": "sprache/2.3.1",
       "hashPath": "sprache.2.3.1.nupkg.sha512"
+    },
+    "WebPush/1.0.13": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-Qyypsk6j+GqncCa/IgbmZLnL7DxqKFGz3jIdquGSLeiD3NtN+HPnIFBMwIJHffDU9ZEztTkaMMYxvW3PJxJL7Q==",
+      "path": "webpush/1.0.13",
+      "hashPath": "webpush.1.0.13.nupkg.sha512"
     }
   }
 }

@@ -18659,3 +18659,5 @@ c:\Users\sqlsupport\ApprovalPO\_build_verify\ApprovalPO.pdb
 c:\Users\sqlsupport\ApprovalPO\_build_verify\DotNetEnv.dll
 c:\Users\sqlsupport\ApprovalPO\_build_verify\FirebirdSql.Data.FirebirdClient.dll
 c:\Users\sqlsupport\ApprovalPO\_build_verify\Sprache.dll
+c:\Users\sqlsupport\ApprovalPO\bin\Debug\net8.0\BouncyCastle.Crypto.dll
+c:\Users\sqlsupport\ApprovalPO\bin\Debug\net8.0\WebPush.dll

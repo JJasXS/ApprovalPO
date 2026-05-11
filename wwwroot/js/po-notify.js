@@ -186,6 +186,9 @@
       syncMenuStop();
       await pollTick(true);
       startIntervalOnly();
+      if (typeof window.approvalPoTrySubscribeWebPush === 'function') {
+        window.approvalPoTrySubscribeWebPush();
+      }
     });
   }
 
