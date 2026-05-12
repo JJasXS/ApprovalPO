@@ -173,11 +173,15 @@
         perm = await Notification.requestPermission();
       }
       if (perm !== 'granted') {
-        window.alert(
+        let msg =
           perm === 'denied'
             ? 'The browser blocked notifications for this site. Use the lock icon or site settings to allow them. In Incognito/Private mode you may need to allow each visit, and some browsers restrict alerts there.'
-            : 'Notifications were not allowed.'
-        );
+            : 'Notifications were not allowed.';
+        if (perm === 'denied' && typeof window !== 'undefined' && window.isSecureContext === false) {
+          msg +=
+            ' On http://LAN addresses (e.g. 192.168.x.x), many browsers never grant notification permission — use HTTPS, localhost, or a tunnel if you need alerts from another device.';
+        }
+        window.alert(msg);
         return;
       }
 

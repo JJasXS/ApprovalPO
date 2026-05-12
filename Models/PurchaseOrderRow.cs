@@ -8,10 +8,10 @@ public class PurchaseOrderRow
     public string PoNumber { get; set; } = "";
     public string Vendor { get; set; } = "";
     public decimal Amount { get; set; }
-    /// <summary><c>PH_PO.TRANSFERABLE</c>: null = pending tab, true = approved, false = cancelled.</summary>
+    /// <summary>Derived from <c>PH_PO.UDF_POSTATUS</c> for JSON: null = pending, true = approved, false = cancelled (Rejected tab).</summary>
     public bool? Transferable { get; set; }
 
-    /// <summary>Pending / Approved / Rejected (UI shows Rejected as Cancelled); aligned with <see cref="Transferable"/> for <c>PH_PO</c>.</summary>
+    /// <summary>Pending / Approved / Rejected (UI shows Rejected as Cancelled); from <c>UDF_POSTATUS</c> when using default list SQL.</summary>
     public string Status { get; set; } = "Pending";
     public string Description { get; set; } = "";
 

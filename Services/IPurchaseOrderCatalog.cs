@@ -8,9 +8,9 @@ public interface IPurchaseOrderCatalog
 
     Task<IReadOnlyList<PurchaseRequestLineRow>> GetPurchaseRequestLinesAsync(int docKey, CancellationToken cancellationToken = default);
 
-    /// <summary>Writes <c>PH_PO.TRANSFERABLE</c>: null = pending, true = approved, false = rejected/cancelled.</summary>
+    /// <summary>Writes <c>PH_PO.UDF_POSTATUS</c>: <c>PENDING</c> / <c>APPROVED</c> / <c>CANCELLED</c> (from tri-state <c>transferable</c>: null / true / false).</summary>
     Task<(bool Success, string? ErrorMessage)> TrySetTransferableAsync(int docKey, bool? transferable, CancellationToken cancellationToken = default);
 
-    /// <summary>Writes <c>PH_PODTL.TRANSFERABLE</c> for one line (matches <c>COALESCE(SEQ,0)</c> to LINENO). Only when header <c>PH_PO.TRANSFERABLE</c> is still null (pending).</summary>
+    /// <summary>Writes <c>PH_PODTL.TRANSFERABLE</c> for one line (matches <c>COALESCE(SEQ,0)</c> to LINENO). Only when header <c>PH_PO.UDF_POSTATUS</c> is pending (or null/blank).</summary>
     Task<(bool Success, string? ErrorMessage)> TrySetLineTransferableAsync(int docKey, int lineNo, bool transferable, CancellationToken cancellationToken = default);
 }

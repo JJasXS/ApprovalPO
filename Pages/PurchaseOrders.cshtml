@@ -37,6 +37,13 @@
             </div>
             <div class="po-header__actions">
                 <div class="po-header__menu">
+                    <button id="poHeadToggleBtn" class="menu-btn menu-btn--head-toggle" type="button" aria-expanded="true" aria-controls="poTableHeadPanel" aria-label="Hide filters and tabs" title="Show or hide filters and tabs">
+                        <svg class="menu-btn__chev" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <path d="M6 14l6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="po-header__menu">
                     <button id="menuBtn" class="menu-btn" type="button" aria-expanded="false" aria-controls="menuPanel" aria-label="Open menu">
                         <span></span><span></span><span></span>
                     </button>
@@ -57,9 +64,13 @@
     </header>
 
     <div class="po-main__inner">
-        <div class="po-table-wrap__head">
+        <div id="poTableHeadPanel" class="po-table-wrap__head">
             <div class="po-toolbar">
                 <div class="po-toolbar__cluster">
+                    <label class="po-toolbar-select-all" title="Select every pending PO shown in the list (respects the Pending tab and filters)">
+                        <input type="checkbox" id="bulkSelectAll" disabled aria-label="Select all visible pending purchase orders" />
+                        <span class="po-toolbar-select-all__text">Select all</span>
+                    </label>
                     <button type="button" id="bulkApproveBtn" class="po-btn po-btn--bulk" disabled>Bulk approve</button>
                     <button type="button" id="filterClearBtn" class="po-btn po-btn--filter-clear">Clear</button>
                 </div>
@@ -104,6 +115,18 @@
                 <div class="po-skeleton__card"></div>
             </div>
             <table class="po-table">
+                <thead>
+                    <tr>
+                        <th class="th-check" scope="col"><span class="visually-hidden">Select</span></th>
+                        <th class="th-status" scope="col">Status</th>
+                        <th scope="col">PO #</th>
+                        <th scope="col">Vendor</th>
+                        <th class="po-th-agent" scope="col">Created by</th>
+                        <th class="num po-th-date" scope="col">Date</th>
+                        <th class="num" scope="col">Amount</th>
+                        <th scope="col" class="actions">Actions</th>
+                    </tr>
+                </thead>
                 <tbody id="poTableBody">
                 @foreach (var row in Model.Orders)
                 {
@@ -199,7 +222,7 @@
     <button type="button" id="poNotifyToastClose" class="po-notify-toast__x" aria-label="Dismiss">&times;</button>
     <p id="poNotifyToastTitle" class="po-notify-toast__title">New pending orders?</p>
     <p class="po-notify-toast__text">Short desktop alert while this tab stays open (~2 min checks).</p>
-    <p class="po-notify-toast__fine">Incognito/private: allow each session. “Blocked” is the browser, not this app.</p>
+    <p class="po-notify-toast__fine">Incognito/private: allow each session. “Blocked” is the browser, not this app. On <strong>http://</strong> LAN IPs (192.168…), many browsers never allow notifications — use HTTPS or localhost if alerts are required.</p>
     <div class="po-notify-toast__actions">
         <button type="button" id="poNotifyEnableBtn" class="po-notify-toast__btn po-notify-toast__btn--primary">Allow</button>
         <button type="button" id="poNotifyDismissBtn" class="po-notify-toast__btn">Not now</button>

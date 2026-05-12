@@ -9,15 +9,14 @@ namespace ApprovalPO.Services;
 
 /// <summary>
 /// Loads purchase orders from Firebird <c>PH_PO</c> for the configured tenant.
-/// Tabs: <c>TRANSFERABLE</c> null → Pending, true → Approved, false → Cancelled (stored as Rejected for existing UI).
+/// Default: <c>PH_PO.UDF_POSTATUS</c> (<c>PENDING</c> / <c>APPROVED</c> / <c>CANCELLED</c>) drives tabs; <c>TRANSFERABLEINT</c> is derived for JSON compatibility.
 /// </summary>
 public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
 {
     /// <summary>
-    /// Default targets SQL Accounting <c>PH_PO.TRANSFERABLE</c> as Firebird <c>BOOLEAN</c> (null / true / false).
-    /// Tab labels use alias <c>PQSTATUS</c> so the result never collides with numeric <c>PH_PO.STATUS</c>.
-    /// For legacy CHAR/SMALLINT <c>TRANSFERABLE</c>, set <see cref="ApprovalOptions.PurchaseOrdersSql"/>.
-    /// Include <c>DOCKEY</c> (or override with same alias) so line items can load.
+    /// Default reads <c>PH_PO.UDF_POSTATUS</c> (VARCHAR). Maps to <c>PQSTATUS</c> + <c>TRANSFERABLEINT</c> for the UI/API.
+    /// Override with <see cref="ApprovalOptions.PurchaseOrdersSql"/> if your view uses different column names.
+    /// Include <c>DOCKEY</c> so line items can load.
     /// </summary>
     internal const string DefaultPurchaseOrdersSql = """
         SELECT FIRST 200
@@ -27,16 +26,14 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
           COALESCE(DOCAMT, 0) AS AMOUNT,
           TRIM(COALESCE(CAST(DESCRIPTION AS VARCHAR(2000)), '')) AS DESCRIPTION,
           COALESCE(DOCDATE, CURRENT_DATE) AS ORDERDATE,
-          CAST(CASE
-            WHEN TRANSFERABLE IS NULL THEN NULL
-            WHEN TRANSFERABLE IS TRUE THEN 1
-            WHEN TRANSFERABLE IS FALSE THEN 0
+          CAST(CASE UPPER(TRIM(COALESCE(CAST(UDF_POSTATUS AS VARCHAR(40)), '')))
+            WHEN 'APPROVED' THEN 1
+            WHEN 'CANCELLED' THEN 0
             ELSE NULL
           END AS SMALLINT) AS TRANSFERABLEINT,
-          CAST(CASE
-            WHEN TRANSFERABLE IS NULL THEN 'Pending'
-            WHEN TRANSFERABLE IS TRUE THEN 'Approved'
-            WHEN TRANSFERABLE IS FALSE THEN 'Rejected'
+          CAST(CASE UPPER(TRIM(COALESCE(CAST(UDF_POSTATUS AS VARCHAR(40)), '')))
+            WHEN 'APPROVED' THEN 'Approved'
+            WHEN 'CANCELLED' THEN 'Rejected'
             ELSE 'Pending'
           END AS VARCHAR(20)) AS PQSTATUS
         FROM PH_PO
@@ -124,20 +121,23 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
             await using var conn = new FbConnection(connStr);
             await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
 
+            var statusText = transferable switch
+            {
+                null => "PENDING",
+                true => "APPROVED",
+                false => "CANCELLED",
+            };
+
             await using var cmd = new FbCommand(
-                "UPDATE PH_PO SET TRANSFERABLE = @T WHERE DOCKEY = @D",
+                "UPDATE PH_PO SET UDF_POSTATUS = @S WHERE DOCKEY = @D",
                 conn);
 
-            var pT = new FbParameter("@T", FbDbType.Boolean)
-            {
-                Value = transferable.HasValue ? transferable.GetValueOrDefault() : DBNull.Value
-            };
-            cmd.Parameters.Add(pT);
+            cmd.Parameters.Add("@S", FbDbType.VarChar, 20).Value = statusText;
             cmd.Parameters.Add("@D", FbDbType.Integer).Value = docKey;
 
             var n = await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             if (n == 0)
-                return (false, "No row was updated (DOCKEY not found or TRANSFERABLE column mismatch).");
+                return (false, "No row was updated (DOCKEY not found or UDF_POSTATUS column mismatch).");
 
             return (true, null);
         }
@@ -175,7 +175,13 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
                 SET D.TRANSFERABLE = @T
                 WHERE D.DOCKEY = @D
                   AND COALESCE(D.SEQ, 0) = @L
-                  AND EXISTS (SELECT 1 FROM PH_PO P WHERE P.DOCKEY = @D AND P.TRANSFERABLE IS NULL)
+                  AND EXISTS (
+                    SELECT 1 FROM PH_PO P
+                    WHERE P.DOCKEY = @D
+                      AND (P.UDF_POSTATUS IS NULL
+                           OR TRIM(COALESCE(CAST(P.UDF_POSTATUS AS VARCHAR(40)), '')) = ''
+                           OR UPPER(TRIM(CAST(P.UDF_POSTATUS AS VARCHAR(40)))) = 'PENDING')
+                  )
                 """;
 
             await using var cmd = new FbCommand(sql, conn);
@@ -235,6 +241,10 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
                 return "Approved";
             if (string.Equals(rawFromReader, "Rejected", StringComparison.OrdinalIgnoreCase))
                 return "Rejected";
+            if (string.Equals(rawFromReader, "CANCELLED", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(rawFromReader, "Cancelled", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(rawFromReader, "Canceled", StringComparison.OrdinalIgnoreCase))
+                return "Rejected";
         }
 
         return transferable switch
@@ -253,7 +263,7 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
         var description = GetString(reader, "DESCRIPTION") ?? "";
         var orderDate = GetDateTime(reader, "ORDERDATE", "DOCDATE") ?? DateTime.UtcNow.Date;
         var transferable = GetBoolNullable(reader, "TRANSFERABLEINT", "TRANSFERABLE");
-        var rawStatus = (GetString(reader, "PQSTATUS", "POSTATUS", "STATUS") ?? "").Trim();
+        var rawStatus = (GetString(reader, "PQSTATUS", "POSTATUS", "STATUS", "UDF_POSTATUS") ?? "").Trim();
         // PH_PO.STATUS is often an integer workflow code — never use it for tabs unless it matches our labels.
         var status = NormalizeTabStatus(rawStatus, transferable);
 

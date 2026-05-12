@@ -14,6 +14,7 @@ public class ApprovalOptions
 
     public int OtpRateLimitWindowMinutes { get; set; } = 15;
 
+    /// <summary>Max OTP sends per email within <see cref="OtpRateLimitWindowMinutes"/>; <c>0</c> = no send cap.</summary>
     public int OtpMaxSendsPerWindow { get; set; } = 3;
 
     public int OtpMaxVerifyFailures { get; set; } = 5;
@@ -34,8 +35,8 @@ public class ApprovalOptions
     public int LoginMaxVerifyOtpPerIpPerMinute { get; set; }
 
     /// <summary>
-    /// Optional override SQL; must expose columns compatible with the default (DOCKEY, PONUMBER, VENDOR, AMOUNT, PQSTATUS or POSTATUS or STATUS, DESCRIPTION, ORDERDATE, TRANSFERABLEINT or TRANSFERABLE).
-    /// Default reads <c>PH_PO</c>: <c>PQSTATUS</c> (or <c>POSTATUS</c>) from boolean <c>TRANSFERABLE</c> (null → Pending, true → Approved, false → Rejected/Cancelled tab). Use override for non-boolean encodings.
+    /// Optional override SQL; must expose columns compatible with the default (DOCKEY, PONUMBER, VENDOR, AMOUNT, PQSTATUS or POSTATUS or STATUS or UDF_POSTATUS, DESCRIPTION, ORDERDATE, TRANSFERABLEINT or TRANSFERABLE).
+    /// Default reads <c>PH_PO.UDF_POSTATUS</c> (<c>PENDING</c> / <c>APPROVED</c> / <c>CANCELLED</c>) and exposes <c>PQSTATUS</c> + <c>TRANSFERABLEINT</c> for tabs/JSON. Use override for other encodings.
     /// </summary>
     public string? PurchaseOrdersSql { get; set; }
 

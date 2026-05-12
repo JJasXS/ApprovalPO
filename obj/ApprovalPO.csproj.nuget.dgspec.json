@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "c:\\Users\\sqlsupport\\ApprovalPO\\ApprovalPO.csproj": {}
+    "C:\\Users\\sqlsupport\\ApprovalPO\\ApprovalPO.csproj": {}
   },
   "projects": {
-    "c:\\Users\\sqlsupport\\ApprovalPO\\ApprovalPO.csproj": {
+    "C:\\Users\\sqlsupport\\ApprovalPO\\ApprovalPO.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "c:\\Users\\sqlsupport\\ApprovalPO\\ApprovalPO.csproj",
+        "projectUniqueName": "C:\\Users\\sqlsupport\\ApprovalPO\\ApprovalPO.csproj",
         "projectName": "ApprovalPO",
-        "projectPath": "c:\\Users\\sqlsupport\\ApprovalPO\\ApprovalPO.csproj",
+        "projectPath": "C:\\Users\\sqlsupport\\ApprovalPO\\ApprovalPO.csproj",
         "packagesPath": "C:\\Users\\sqlsupport\\.nuget\\packages\\",
-        "outputPath": "c:\\Users\\sqlsupport\\ApprovalPO\\obj\\",
+        "outputPath": "C:\\Users\\sqlsupport\\ApprovalPO\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\sqlsupport\\AppData\\Roaming\\NuGet\\NuGet.Config"

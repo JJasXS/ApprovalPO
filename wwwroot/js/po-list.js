@@ -37,6 +37,7 @@
   const filterClearBtn = document.getElementById('filterClearBtn');
   const menuBtn = document.getElementById('menuBtn');
   const menuPanel = document.getElementById('menuPanel');
+  const poHeadToggleBtn = document.getElementById('poHeadToggleBtn');
   const modalPrevBtn = document.getElementById('modalPrevBtn');
   const modalNextBtn = document.getElementById('modalNextBtn');
   const tableHeadEl = document.querySelector('.po-table-wrap__head');
@@ -47,8 +48,6 @@
   /** @type {'Pending' | 'Approved' | 'Rejected'} */
   let activeListTab = 'Pending';
   let undoTimer = null;
-  let pullStartY = null;
-  let pullArmed = false;
   /** @type {null | (() => void)} */
   let confirmOkCallback = null;
 
@@ -155,10 +154,31 @@
       document.documentElement.style.setProperty('--po-header-height', `${Math.ceil(hh)}px`);
     }
     if (tableHeadEl) {
-      const h = tableHeadEl.getBoundingClientRect().height || 0;
+      const collapsed = tableHeadEl.classList.contains('is-collapsed');
+      const h = collapsed ? 0 : tableHeadEl.getBoundingClientRect().height || 0;
       document.documentElement.style.setProperty('--po-table-wrap-head-height', `${Math.ceil(h)}px`);
     }
   };
+
+  const applyTableHeadCollapsed = (collapsed) => {
+    if (!tableHeadEl || !poHeadToggleBtn) return;
+    tableHeadEl.classList.toggle('is-collapsed', !!collapsed);
+    const expanded = !collapsed;
+    poHeadToggleBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    poHeadToggleBtn.setAttribute('aria-label', expanded ? 'Hide filters and tabs' : 'Show filters and tabs');
+    syncStickyHeights();
+    try {
+      localStorage.setItem('po-head-collapsed', collapsed ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  };
+
+  poHeadToggleBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const next = !tableHeadEl?.classList.contains('is-collapsed');
+    applyTableHeadCollapsed(next);
+  });
 
   const escapeHtml = (s) => {
     const d = document.createElement('div');
@@ -744,6 +764,7 @@
     const visiblePending = rows.filter(
       (r) => !r.classList.contains('is-hidden') && rowListStatus(r) === 'Pending'
     );
+    bulkSelectAll.disabled = visiblePending.length === 0;
     if (visiblePending.length === 0) {
       bulkSelectAll.checked = false;
       bulkSelectAll.indeterminate = false;
@@ -959,35 +980,13 @@
     );
   });
 
-  let pullAccum = 0;
-  poTableScroll?.addEventListener(
-    'touchstart',
-    (e) => {
-      if (poTableScroll.scrollTop <= 0) {
-        pullStartY = e.touches[0].clientY;
-        pullArmed = true;
-        pullAccum = 0;
-      }
-    },
-    { passive: true }
-  );
-  poTableScroll?.addEventListener(
-    'touchmove',
-    (e) => {
-      if (!pullArmed || pullStartY == null) return;
-      if (poTableScroll.scrollTop > 0) return;
-      pullAccum = e.touches[0].clientY - pullStartY;
-      if (pullAccum > 72) {
-        pullArmed = false;
-        refreshRowsFromServer();
-      }
-    },
-    { passive: true }
-  );
-  poTableScroll?.addEventListener('touchend', () => {
-    pullArmed = false;
-    pullStartY = null;
-  });
+  try {
+    if (localStorage.getItem('po-head-collapsed') === '1') {
+      applyTableHeadCollapsed(true);
+    }
+  } catch {
+    /* ignore */
+  }
 
   updateTabUi();
   refreshView();

@@ -242,7 +242,7 @@ public class LoginModel : PageModel
             SyUserEmailLookupStatus.Inactive =>
                 "This user is inactive in SQL Accounting. Contact your administrator.",
             SyUserEmailLookupStatus.ConfigurationMissing =>
-                "Login cannot verify your email: tenant database settings are missing. Configure TenantBootstrap in appsettings or .env (or set Approval:SkipSyUserEmailCheck for development only).",
+                "Login cannot verify your email: tenant is not configured. Set TENANT_CODE in the ApprovalPO folder .env (or TenantBootstrap:TenantCode in appsettings) and ensure TenantBootstrap:AwsApiBaseUrl and Firebird user/password are set.",
             SyUserEmailLookupStatus.DatabaseUnavailable =>
                 "We could not reach the company database to verify your email. Try again later.",
             _ => "Your email could not be verified.",

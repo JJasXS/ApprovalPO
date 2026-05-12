@@ -160,6 +160,24 @@ body {
   border-radius: 1px;
 }
 
+.menu-btn--head-toggle {
+  color: #334155;
+}
+
+.menu-btn--head-toggle .menu-btn__chev {
+  display: block;
+  margin: 0 auto;
+  transition: transform 0.2s ease;
+}
+
+.menu-btn--head-toggle[aria-expanded="false"] .menu-btn__chev {
+  transform: rotate(180deg);
+}
+
+.po-table-wrap__head.is-collapsed {
+  display: none;
+}
+
 .menu-panel {
   position: absolute;
   top: 50px;
@@ -237,6 +255,12 @@ body {
   padding-right: max(var(--po-space-3), var(--po-safe-right));
   padding-bottom: max(var(--po-space-4), var(--po-safe-bottom));
   padding-left: max(var(--po-space-3), var(--po-safe-left));
+  transition: margin-top 0.2s ease;
+}
+
+/* Breathing room below sticky hero when filters/tabs strip is visible (not collapsed). */
+.po-main__inner:has(.po-table-wrap__head:not(.is-collapsed)) {
+  margin-top: var(--po-space-4);
 }
 
 .po-pane {
@@ -419,6 +443,52 @@ body {
 
 .po-toolbar__cluster .po-btn {
   white-space: nowrap;
+}
+
+.po-toolbar-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 4px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--po-text);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.po-toolbar-select-all input {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--po-blue);
+  flex-shrink: 0;
+}
+
+.po-toolbar-select-all:has(input:disabled) {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.po-toolbar-select-all:has(input:disabled) input {
+  cursor: not-allowed;
+}
+
+.po-toolbar-select-all__text {
+  white-space: nowrap;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* ——— Filters ——— */

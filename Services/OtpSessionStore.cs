@@ -48,15 +48,19 @@ public class OtpSessionStore
                     return (false, $"Too many attempts. Try again in {(int)mins} minute(s).", null);
                 }
 
-                PruneSends(entry, now, opt.OtpRateLimitWindowMinutes);
-                if (entry.SendTimestamps.Count >= opt.OtpMaxSendsPerWindow)
-                    return (false, $"Too many OTP requests. Wait up to {opt.OtpRateLimitWindowMinutes} minutes and try again.", null);
+                if (opt.OtpMaxSendsPerWindow > 0)
+                {
+                    PruneSends(entry, now, opt.OtpRateLimitWindowMinutes);
+                    if (entry.SendTimestamps.Count >= opt.OtpMaxSendsPerWindow)
+                        return (false, $"Too many OTP requests. Wait up to {opt.OtpRateLimitWindowMinutes} minutes and try again.", null);
+                }
 
                 var otp = Random.Shared.Next(100000, 1000000).ToString();
                 entry.Otp = otp;
                 entry.ExpiresAt = now.AddMinutes(opt.OtpExpiryMinutes);
                 entry.FailedVerifications = 0;
-                entry.SendTimestamps.Add(now);
+                if (opt.OtpMaxSendsPerWindow > 0)
+                    entry.SendTimestamps.Add(now);
                 return (true, "OTP generated.", otp);
             }
         }

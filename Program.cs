@@ -5,6 +5,7 @@ using ApprovalPO.Services;
 using ApprovalPO.Helpers;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.HttpOverrides;
+using System.Security.Cryptography.X509Certificates;
 
 // Optional .env: typically only TENANT_CODE (see appsettings / .env.example). All other config lives in appsettings.json.
 foreach (var envPath in new[]
@@ -32,6 +33,35 @@ if (!string.IsNullOrEmpty(tenantFromEnv))
 
 // Empty process env vars (TenantBootstrap__*) override appsettings with blanks — restore from appsettings*.json.
 TenantBootstrapJsonReinstate.Apply(builder.Configuration, builder.Environment.ContentRootPath);
+
+// Development: optional "trusted" HTTPS for LAN IPs — place mkcert PEM here or set APPROVALPO_TLS_PEM / APPROVALPO_TLS_KEY.
+//   mkdir .certs && cd .certs && mkcert 192.168.x.x localhost 127.0.0.1
+//   copy the generated cert to dev.pem and key to dev.key (or set env paths). Install mkcert root CA on the phone once.
+if (builder.Environment.IsDevelopment())
+{
+    var root = builder.Environment.ContentRootPath;
+    var pemPath = (Environment.GetEnvironmentVariable("APPROVALPO_TLS_PEM") ?? Path.Combine(root, ".certs", "dev.pem")).Trim();
+    var keyPath = (Environment.GetEnvironmentVariable("APPROVALPO_TLS_KEY") ?? Path.Combine(root, ".certs", "dev.key")).Trim();
+    if (File.Exists(pemPath) && File.Exists(keyPath))
+    {
+        builder.WebHost.ConfigureKestrel(options =>
+        {
+            options.ConfigureHttpsDefaults(https =>
+            {
+                try
+                {
+                    https.ServerCertificate = X509Certificate2.CreateFromPemFile(pemPath, keyPath);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(
+                        $"[HTTPS] Could not load custom PEM ({pemPath} / {keyPath}): {ex.Message}. Falling back to the ASP.NET Core dev certificate.");
+                }
+            });
+        });
+        Console.WriteLine($"[HTTPS] Development: custom TLS from PEM files (see Program.cs comment for mkcert).");
+    }
+}
 
 builder.Services.AddSingleton<TenantDbConnectionResolver>();
 builder.Services.AddScoped<ISyUserLoginValidator, SyUserLoginValidator>();
@@ -96,13 +126,15 @@ app.Use(async (context, next) =>
     await next();
 });
 
+// In Development, skip HTTPS redirection so LAN/mobile testing via http://192.168.x.x:5288 works
+// (otherwise browsers may redirect to https:// with no dev cert). Production uses HTTPS below.
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
     app.UseHsts();
+    app.UseHttpsRedirection();
 }
 
-app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();

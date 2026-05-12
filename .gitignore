@@ -1,0 +1,2 @@
+# Local mkcert / OpenSSL TLS material (never commit)
+.certs/
