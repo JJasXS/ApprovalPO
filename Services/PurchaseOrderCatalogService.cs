@@ -9,7 +9,7 @@ namespace ApprovalPO.Services;
 
 /// <summary>
 /// Loads purchase orders from Firebird <c>PH_PO</c> for the configured tenant.
-/// Default: <c>PH_PO.UDF_POSTATUS</c> (<c>PENDING</c> / <c>APPROVED</c> / <c>CANCELLED</c>) drives tabs; <c>TRANSFERABLEINT</c> is derived for JSON compatibility.
+/// Default: <c>PH_PO.UDF_POSTATUS</c> (<c>PENDING</c> / <c>APPROVED</c> / <c>CANCELLED</c> / <c>REJECTED</c>) drives tabs; <c>TRANSFERABLEINT</c> is derived for JSON compatibility.
 /// </summary>
 public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
 {
@@ -29,11 +29,13 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
           CAST(CASE UPPER(TRIM(COALESCE(CAST(UDF_POSTATUS AS VARCHAR(40)), '')))
             WHEN 'APPROVED' THEN 1
             WHEN 'CANCELLED' THEN 0
+            WHEN 'REJECTED' THEN 0
             ELSE NULL
           END AS SMALLINT) AS TRANSFERABLEINT,
           CAST(CASE UPPER(TRIM(COALESCE(CAST(UDF_POSTATUS AS VARCHAR(40)), '')))
             WHEN 'APPROVED' THEN 'Approved'
-            WHEN 'CANCELLED' THEN 'Rejected'
+            WHEN 'CANCELLED' THEN 'Cancelled'
+            WHEN 'REJECTED' THEN 'Rejected'
             ELSE 'Pending'
           END AS VARCHAR(20)) AS PQSTATUS
         FROM PH_PO
@@ -102,13 +104,24 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
     }
 
     /// <inheritdoc />
-    public async Task<(bool Success, string? ErrorMessage)> TrySetTransferableAsync(
+    public async Task<(bool Success, string? ErrorMessage)> TrySetHeaderListStatusAsync(
         int docKey,
-        bool? transferable,
+        string listStatus,
         CancellationToken cancellationToken = default)
     {
         if (docKey <= 0)
             return (false, "Invalid document key.");
+
+        var statusText = (listStatus ?? "").Trim() switch
+        {
+            var s when s.Equals("Pending", StringComparison.OrdinalIgnoreCase) => "PENDING",
+            var s when s.Equals("Approved", StringComparison.OrdinalIgnoreCase) => "APPROVED",
+            var s when s.Equals("Cancelled", StringComparison.OrdinalIgnoreCase) => "CANCELLED",
+            var s when s.Equals("Rejected", StringComparison.OrdinalIgnoreCase) => "REJECTED",
+            _ => null,
+        };
+        if (statusText is null)
+            return (false, "ListStatus must be Pending, Approved, Cancelled, or Rejected.");
 
         var tenant = (_configuration["TenantBootstrap:TenantCode"] ?? "").Trim();
         if (string.IsNullOrWhiteSpace(tenant))
@@ -120,13 +133,6 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
 
             await using var conn = new FbConnection(connStr);
             await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
-
-            var statusText = transferable switch
-            {
-                null => "PENDING",
-                true => "APPROVED",
-                false => "CANCELLED",
-            };
 
             await using var cmd = new FbCommand(
                 "UPDATE PH_PO SET UDF_POSTATUS = @S WHERE DOCKEY = @D",
@@ -239,19 +245,21 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
                 return "Pending";
             if (string.Equals(rawFromReader, "Approved", StringComparison.OrdinalIgnoreCase))
                 return "Approved";
+            if (string.Equals(rawFromReader, "REJECTED", StringComparison.OrdinalIgnoreCase))
+                return "Rejected";
             if (string.Equals(rawFromReader, "Rejected", StringComparison.OrdinalIgnoreCase))
                 return "Rejected";
-            if (string.Equals(rawFromReader, "CANCELLED", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(rawFromReader, "Cancelled", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(rawFromReader, "Canceled", StringComparison.OrdinalIgnoreCase))
-                return "Rejected";
+            if (string.Equals(rawFromReader, "Cancelled", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(rawFromReader, "Canceled", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(rawFromReader, "CANCELLED", StringComparison.OrdinalIgnoreCase))
+                return "Cancelled";
         }
 
         return transferable switch
         {
             null => "Pending",
             true => "Approved",
-            false => "Rejected",
+            false => "Cancelled",
         };
     }
 

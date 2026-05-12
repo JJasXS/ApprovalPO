@@ -36,7 +36,7 @@ public class ApprovalOptions
 
     /// <summary>
     /// Optional override SQL; must expose columns compatible with the default (DOCKEY, PONUMBER, VENDOR, AMOUNT, PQSTATUS or POSTATUS or STATUS or UDF_POSTATUS, DESCRIPTION, ORDERDATE, TRANSFERABLEINT or TRANSFERABLE).
-    /// Default reads <c>PH_PO.UDF_POSTATUS</c> (<c>PENDING</c> / <c>APPROVED</c> / <c>CANCELLED</c>) and exposes <c>PQSTATUS</c> + <c>TRANSFERABLEINT</c> for tabs/JSON. Use override for other encodings.
+    /// Default reads <c>PH_PO.UDF_POSTATUS</c> (<c>PENDING</c> / <c>APPROVED</c> / <c>CANCELLED</c> / <c>REJECTED</c>) and exposes <c>PQSTATUS</c> + <c>TRANSFERABLEINT</c> for tabs/JSON. Use override for other encodings.
     /// </summary>
     public string? PurchaseOrdersSql { get; set; }
 

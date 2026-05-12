@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Net.Http;
 using System.Text.Json;
 using FirebirdSql.Data.FirebirdClient;
 using Microsoft.AspNetCore.WebUtilities;
@@ -12,13 +13,21 @@ namespace ApprovalPO.Helpers;
 /// </summary>
 public sealed class TenantDbConnectionResolver
 {
+    /// <summary>Named <see cref="IHttpClientFactory"/> client for tenant-config HTTP calls.</summary>
+    public const string HttpClientName = "TenantBootstrapConfig";
+
     /// <summary>Query parameter name required by <c>proacc-tenant-config-api</c> (camelCase).</summary>
     public const string TenantQueryParameter = "tenantCode";
 
     private readonly IConfiguration _configuration;
+    private readonly IHttpClientFactory _httpFactory;
     private readonly ConcurrentDictionary<string, string> _cache = new(StringComparer.OrdinalIgnoreCase);
 
-    public TenantDbConnectionResolver(IConfiguration configuration) => _configuration = configuration;
+    public TenantDbConnectionResolver(IConfiguration configuration, IHttpClientFactory httpFactory)
+    {
+        _configuration = configuration;
+        _httpFactory = httpFactory;
+    }
 
     public async Task<string> GetConnectionStringForTenantAsync(string tenantCode, CancellationToken cancellationToken = default)
     {
@@ -43,7 +52,7 @@ public sealed class TenantDbConnectionResolver
 
         var requestUri = QueryHelpers.AddQueryString(baseUrl, TenantQueryParameter, tenantCode);
 
-        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        var http = _httpFactory.CreateClient(HttpClientName);
         using var req = new HttpRequestMessage(HttpMethod.Get, requestUri);
         if (!string.IsNullOrWhiteSpace(apiKey))
             req.Headers.TryAddWithoutValidation("x-api-key", apiKey);

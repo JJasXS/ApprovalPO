@@ -93,8 +93,11 @@ public sealed class PendingOrderWebPushWorker : BackgroundService
 
         var payloadObj = new
         {
-            title = newOnes.Count == 1 ? "New pending purchase order" : $"{newOnes.Count} new pending purchase orders",
-            body = string.Join(", ", newOnes.Take(8).Select(o => string.IsNullOrWhiteSpace(o.PoNumber) ? $"#{o.DocKey}" : o.PoNumber.Trim())),
+            title = newOnes.Count == 1
+                ? "New order — PENDING approval"
+                : $"{newOnes.Count} new orders — PENDING approval",
+            body = "Status PENDING — "
+                + string.Join(", ", newOnes.Take(8).Select(o => string.IsNullOrWhiteSpace(o.PoNumber) ? $"#{o.DocKey}" : o.PoNumber.Trim())),
             url = "/PurchaseOrders",
         };
         var payload = JsonSerializer.Serialize(payloadObj);

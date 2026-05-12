@@ -114,6 +114,27 @@
 
     if (isBaseline) {
       saveLastKeys(keys);
+      // User turned alerts on while orders were already awaiting approval (PENDING tab / UDF_POSTATUS PENDING).
+      if (items.length > 0) {
+        const title =
+          items.length === 1
+            ? '1 purchase order awaiting approval'
+            : `${items.length} purchase orders awaiting approval`;
+        const list = items
+          .slice(0, 6)
+          .map((x) => (x.poNumber && String(x.poNumber).trim()) || `#${x.docKey}`)
+          .join(', ');
+        const body = `Status PENDING — ${list}${items.length > 6 ? '…' : ''}`;
+        try {
+          const n = new Notification(title, { body, tag: 'approval-po-pending-baseline' });
+          n.onclick = () => {
+            window.focus();
+            n.close();
+          };
+        } catch {
+          /* ignore */
+        }
+      }
       return;
     }
 
@@ -124,11 +145,13 @@
     });
 
     if (newOnes.length > 0) {
-      const title = newOnes.length === 1 ? 'New pending order' : `${newOnes.length} new pending orders`;
-      const body = newOnes
+      const title =
+        newOnes.length === 1 ? 'New order — PENDING approval' : `${newOnes.length} new orders — PENDING approval`;
+      const list = newOnes
         .slice(0, 6)
         .map((x) => (x.poNumber && String(x.poNumber).trim()) || `#${x.docKey}`)
         .join(', ');
+      const body = `Open ApprovalPO to review: ${list}${newOnes.length > 6 ? '…' : ''}`;
       try {
         const n = new Notification(title, { body, tag: 'approval-po-pending' });
         n.onclick = () => {

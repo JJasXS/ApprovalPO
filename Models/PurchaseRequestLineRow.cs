@@ -22,6 +22,6 @@ public sealed class PurchaseRequestLineRow
 
     public decimal LineAmount { get; set; }
 
-    /// <summary><c>PH_PODTL.TRANSFERABLE</c>: true = line shown as ticked in review; false or null = unticked.</summary>
+    /// <summary>Shown as <c>Sct</c> in the review grid; maps to <c>PH_PODTL.TRANSFERABLE</c>.</summary>
     public bool? Transferable { get; set; }
 }

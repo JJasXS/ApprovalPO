@@ -91,7 +91,8 @@
                 <div class="tabs" role="tablist" aria-label="PO status tabs">
                     <button id="tabPending" class="tab-btn is-active" type="button" role="tab" aria-selected="true">Pending (<span id="countPending">0</span>)</button>
                     <button id="tabApproved" class="tab-btn" type="button" role="tab" aria-selected="false">Approved (<span id="countApproved">0</span>)</button>
-                    <button id="tabRejected" class="tab-btn" type="button" role="tab" aria-selected="false">Cancelled (<span id="countRejected">0</span>)</button>
+                    <button id="tabCancelled" class="tab-btn" type="button" role="tab" aria-selected="false">Cancelled (<span id="countCancelled">0</span>)</button>
+                    <button id="tabRejected" class="tab-btn" type="button" role="tab" aria-selected="false">Rejected (<span id="countRejected">0</span>)</button>
                 </div>
             </div>
         </div>
@@ -130,7 +131,13 @@
                 <tbody id="poTableBody">
                 @foreach (var row in Model.Orders)
                 {
-                    var statusClass = row.Status == "Approved" ? "po-status-stack--approved" : row.Status == "Rejected" ? "po-status-stack--rejected" : "po-status-stack--pending";
+                    var statusClass = row.Status == "Approved"
+                        ? "po-status-stack--approved"
+                        : row.Status == "Rejected"
+                            ? "po-status-stack--rejected"
+                            : row.Status == "Cancelled"
+                                ? "po-status-stack--cancelled"
+                                : "po-status-stack--pending";
                     <tr class="po-row" data-po="@row.PoNumber"
                         data-doc-key="@row.DocKey"
                         data-vendor="@row.Vendor"
@@ -148,7 +155,7 @@
                         <td class="po-status-td" data-label="">
                             <div class="po-status-stack @statusClass">
                                 <span class="po-status-icon" aria-hidden="true"></span>
-                                <span class="po-status-text">@(row.Status == "Rejected" ? "Cancelled" : row.Status)</span>
+                                <span class="po-status-text">@row.Status</span>
                             </div>
                         </td>
                         <td class="po-num" data-label="PO #">
@@ -221,7 +228,7 @@
 <div id="poNotifyToast" class="po-notify-toast" hidden role="dialog" aria-modal="false" aria-labelledby="poNotifyToastTitle">
     <button type="button" id="poNotifyToastClose" class="po-notify-toast__x" aria-label="Dismiss">&times;</button>
     <p id="poNotifyToastTitle" class="po-notify-toast__title">New pending orders?</p>
-    <p class="po-notify-toast__text">Short desktop alert while this tab stays open (~2 min checks).</p>
+    <p class="po-notify-toast__text">Browser alerts when orders are <strong>PENDING</strong> approval: we notify on new queue items (and once when you turn this on if any are already waiting). While this tab stays open we recheck on a timer.</p>
     <p class="po-notify-toast__fine">Incognito/private: allow each session. “Blocked” is the browser, not this app. On <strong>http://</strong> LAN IPs (192.168…), many browsers never allow notifications — use HTTPS or localhost if alerts are required.</p>
     <div class="po-notify-toast__actions">
         <button type="button" id="poNotifyEnableBtn" class="po-notify-toast__btn po-notify-toast__btn--primary">Allow</button>

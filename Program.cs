@@ -63,6 +63,10 @@ if (builder.Environment.IsDevelopment())
     }
 }
 
+builder.Services.AddHttpClient(TenantDbConnectionResolver.HttpClientName, client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
 builder.Services.AddSingleton<TenantDbConnectionResolver>();
 builder.Services.AddScoped<ISyUserLoginValidator, SyUserLoginValidator>();
 builder.Services.AddScoped<IPurchaseOrderCatalog, PurchaseOrderCatalogService>();
@@ -142,4 +146,32 @@ app.UseAuthorization();
 app.MapRazorPages();
 app.MapWebPushEndpoints();
 
+async Task WarmupTenantConnectionStringAsync()
+{
+    var tenant = (app.Configuration["TenantBootstrap:TenantCode"] ?? "").Trim();
+    if (string.IsNullOrEmpty(tenant))
+        return;
+
+    await using var scope = app.Services.CreateAsyncScope();
+    var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+    var sw = System.Diagnostics.Stopwatch.StartNew();
+    try
+    {
+        var resolver = scope.ServiceProvider.GetRequiredService<TenantDbConnectionResolver>();
+        await resolver.GetConnectionStringForTenantAsync(tenant).ConfigureAwait(false);
+        logger.LogInformation(
+            "Tenant Firebird connection string cached for {Tenant} in {ElapsedMs} ms (startup warmup).",
+            tenant,
+            sw.ElapsedMilliseconds);
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(
+            ex,
+            "Tenant connection warmup failed after {ElapsedMs} ms; the first PO list load may wait on the tenant-config API and Firebird.",
+            sw.ElapsedMilliseconds);
+    }
+}
+
+await WarmupTenantConnectionStringAsync();
 app.Run();

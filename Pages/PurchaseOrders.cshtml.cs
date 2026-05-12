@@ -14,7 +14,7 @@ public sealed class SetTransferableRequest
 {
     public int DocKey { get; set; }
 
-    /// <summary>Pending, Approved, or Rejected (cancelled).</summary>
+    /// <summary>Pending, Approved, Cancelled, or Rejected (maps to <c>UDF_POSTATUS</c>).</summary>
     public string ListStatus { get; set; } = "";
 }
 
@@ -89,7 +89,7 @@ public class PurchaseOrdersModel : PageModel
         return new JsonResult(list, JsonCamel);
     }
 
-    /// <summary>Lightweight snapshot for desktop notifications: pending orders only (same <c>Status</c> rules as the list).</summary>
+    /// <summary>Lightweight snapshot for desktop notifications: orders in the Pending tab (e.g. <c>UDF_POSTATUS</c> <c>PENDING</c> when using default list SQL).</summary>
     public async Task<IActionResult> OnGetPendingNotifySnapshotAsync(CancellationToken cancellationToken)
     {
         var list = await _orders.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
@@ -122,10 +122,10 @@ public class PurchaseOrdersModel : PageModel
         if (body == null || body.DocKey <= 0)
             return new JsonResult(new { ok = false, error = "Invalid request." }, JsonCamel) { StatusCode = StatusCodes.Status400BadRequest };
 
-        if (!TryMapListStatus(body.ListStatus, out var transferable))
-            return new JsonResult(new { ok = false, error = "ListStatus must be Pending, Approved, or Rejected." }, JsonCamel) { StatusCode = StatusCodes.Status400BadRequest };
+        if (!TryNormalizeListStatus(body.ListStatus, out var normalized))
+            return new JsonResult(new { ok = false, error = "ListStatus must be Pending, Approved, Cancelled, or Rejected." }, JsonCamel) { StatusCode = StatusCodes.Status400BadRequest };
 
-        var (ok, err) = await _orders.TrySetTransferableAsync(body.DocKey, transferable, cancellationToken).ConfigureAwait(false);
+        var (ok, err) = await _orders.TrySetHeaderListStatusAsync(body.DocKey, normalized, cancellationToken).ConfigureAwait(false);
         if (!ok)
             return new JsonResult(new { ok = false, error = err ?? "Update failed." }, JsonCamel) { StatusCode = StatusCodes.Status409Conflict };
 
@@ -146,25 +146,32 @@ public class PurchaseOrdersModel : PageModel
         return new JsonResult(new { ok = true }, JsonCamel);
     }
 
-    private static bool TryMapListStatus(string? raw, out bool? transferable)
+    private static bool TryNormalizeListStatus(string? raw, out string normalized)
     {
-        transferable = null;
+        normalized = "";
         var s = (raw ?? "").Trim();
+        if (s.Equals("Pending", StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = "Pending";
+            return true;
+        }
+
         if (s.Equals("Approved", StringComparison.OrdinalIgnoreCase))
         {
-            transferable = true;
+            normalized = "Approved";
+            return true;
+        }
+
+        if (s.Equals("Cancelled", StringComparison.OrdinalIgnoreCase)
+            || s.Equals("Canceled", StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = "Cancelled";
             return true;
         }
 
         if (s.Equals("Rejected", StringComparison.OrdinalIgnoreCase))
         {
-            transferable = false;
-            return true;
-        }
-
-        if (s.Equals("Pending", StringComparison.OrdinalIgnoreCase))
-        {
-            transferable = null;
+            normalized = "Rejected";
             return true;
         }
 
