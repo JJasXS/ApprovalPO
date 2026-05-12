@@ -1,2 +1,44 @@
 # Local mkcert / OpenSSL TLS material (never commit)
 .certs/
+
+# Build outputs
+artifacts/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+publish/
+out/
+
+# Visual Studio / MSBuild
+.vs/
+*.user
+*.userosscache
+*.suo
+*.cache
+project.lock.json
+project.fragment.lock.json
+
+# JetBrains Rider
+.idea/
+*.sln.iml
+
+# NuGet
+*.nupkg
+**/packages/*
+!**/packages/build/
+
+# Test / coverage
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.trx
+coverage*.json
+coverage*.xml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local secrets and env (keep *.example committed)
+.env
+.env.*.local
