@@ -58,6 +58,12 @@ public class ApprovalOptions
     public bool DebugOtpToConsole { get; set; }
 
     /// <summary>
+    /// When true, if SMTP fails the OTP step still succeeds and the code is included in the JSON / message (like Development).
+    /// **Dangerous** if anyone can call Send OTP — use only on a locked LAN or until SMTP credentials are fixed.
+    /// </summary>
+    public bool ExposeOtpWhenEmailFails { get; set; }
+
+    /// <summary>
     /// How often the browser polls for new <strong>pending</strong> orders when desktop alerts are on. Seconds, clamped between 30 and 600; default 120.
     /// </summary>
     public int PendingNotifyPollSeconds { get; set; } = 120;

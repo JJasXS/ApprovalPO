@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net.Http;
 using System.Text.Json;
+using ApprovalPO.Models;
 using FirebirdSql.Data.FirebirdClient;
 using Microsoft.AspNetCore.WebUtilities;
 
@@ -9,6 +10,7 @@ namespace ApprovalPO.Helpers;
 
 /// <summary>
 /// Resolves Firebird connection strings from the AWS tenant-config API (DynamoDB JSON or plain JSON) and caches per tenant code.
+/// Also parses optional <c>email</c> SMTP overrides from the same payload (aligned with ProAccScanner).
 /// The API is called with query <c>tenantCode</c> (same as the browser/Postman URL for this API).
 /// </summary>
 public sealed class TenantDbConnectionResolver
@@ -21,7 +23,7 @@ public sealed class TenantDbConnectionResolver
 
     private readonly IConfiguration _configuration;
     private readonly IHttpClientFactory _httpFactory;
-    private readonly ConcurrentDictionary<string, string> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, TenantResolvedPayload> _cache = new(StringComparer.OrdinalIgnoreCase);
 
     public TenantDbConnectionResolver(IConfiguration configuration, IHttpClientFactory httpFactory)
     {
@@ -36,7 +38,7 @@ public sealed class TenantDbConnectionResolver
             throw new InvalidOperationException("Tenant code is required.");
 
         if (_cache.TryGetValue(tenantCode, out var cached))
-            return cached;
+            return cached.ConnectionString;
 
         var baseUrl = (_configuration["TenantBootstrap:AwsApiBaseUrl"] ?? "").Trim();
         var apiKey = (_configuration["TenantBootstrap:AwsApiKey"] ?? "").Trim();
@@ -99,13 +101,28 @@ public sealed class TenantDbConnectionResolver
                 Pooling = true,
             };
             var conn = csb.ConnectionString;
-            _cache[tenantCode] = conn;
+            var email = TryParseTenantEmailFromRoot(root);
+            _cache[tenantCode] = new TenantResolvedPayload { ConnectionString = conn, Email = email };
             return conn;
         }
         finally
         {
             innerDoc?.Dispose();
         }
+    }
+
+    /// <summary>SMTP-related overrides from the last successful tenant fetch (same cache as connection string).</summary>
+    public async Task<TenantEmailOverride?> GetTenantEmailOverrideAsync(string tenantCode, CancellationToken cancellationToken = default)
+    {
+        tenantCode = (tenantCode ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(tenantCode))
+            return null;
+
+        if (_cache.TryGetValue(tenantCode, out var hit))
+            return hit.Email;
+
+        await GetConnectionStringForTenantAsync(tenantCode, cancellationToken).ConfigureAwait(false);
+        return _cache.TryGetValue(tenantCode, out var hit2) ? hit2.Email : null;
     }
 
     /// <summary>
@@ -199,15 +216,18 @@ public sealed class TenantDbConnectionResolver
     /// Finds <c>database</c> on the root or inside common wrappers (<c>tenant</c>, <c>payload</c>, stringified JSON values, etc.).
     /// </summary>
     private static bool TryFindDatabaseAttribute(JsonElement root, out JsonElement databaseAttr) =>
-        TryFindDatabaseRecursive(root, depth: 0, maxDepth: 8, out databaseAttr);
+        TryFindSectionRecursive(root, "database", depth: 0, maxDepth: 8, out databaseAttr);
 
-    private static bool TryFindDatabaseRecursive(JsonElement e, int depth, int maxDepth, out JsonElement databaseAttr)
+    private static bool TryFindEmailAttribute(JsonElement root, out JsonElement emailAttr) =>
+        TryFindSectionRecursive(root, "email", depth: 0, maxDepth: 8, out emailAttr);
+
+    private static bool TryFindSectionRecursive(JsonElement e, string sectionName, int depth, int maxDepth, out JsonElement sectionAttr)
     {
-        databaseAttr = default;
+        sectionAttr = default;
         if (depth > maxDepth || e.ValueKind != JsonValueKind.Object)
             return false;
 
-        if (TryGetJsonPropertyIgnoreCase(e, "database", out databaseAttr))
+        if (TryGetJsonPropertyIgnoreCase(e, sectionName, out sectionAttr))
             return true;
 
         foreach (var p in e.EnumerateObject())
@@ -215,7 +235,7 @@ public sealed class TenantDbConnectionResolver
             switch (p.Value.ValueKind)
             {
                 case JsonValueKind.Object:
-                    if (TryFindDatabaseRecursive(p.Value, depth + 1, maxDepth, out databaseAttr))
+                    if (TryFindSectionRecursive(p.Value, sectionName, depth + 1, maxDepth, out sectionAttr))
                         return true;
                     break;
                 case JsonValueKind.String:
@@ -228,7 +248,7 @@ public sealed class TenantDbConnectionResolver
                     try
                     {
                         using var nested = JsonDocument.Parse(t);
-                        if (TryFindDatabaseRecursive(nested.RootElement, depth + 1, maxDepth, out databaseAttr))
+                        if (TryFindSectionRecursive(nested.RootElement, sectionName, depth + 1, maxDepth, out sectionAttr))
                             return true;
                     }
                     catch
@@ -241,6 +261,35 @@ public sealed class TenantDbConnectionResolver
         }
 
         return false;
+    }
+
+    private static TenantEmailOverride? TryParseTenantEmailFromRoot(JsonElement root)
+    {
+        if (!TryFindEmailAttribute(root, out var emailAttr))
+            return null;
+
+        var map = UnwrapDynamoMap(emailAttr);
+        var o = new TenantEmailOverride();
+
+        if (TryGetScalar(map, "smtpHost", out var host) && !string.IsNullOrWhiteSpace(host))
+            o.SmtpHost = host.Trim();
+
+        if (TryGetScalar(map, "smtpPort", out var portText) && int.TryParse(portText.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var port) && port > 0)
+            o.SmtpPort = port;
+
+        if (TryGetScalar(map, "smtpSenderEmail", out var sender) && !string.IsNullOrWhiteSpace(sender))
+            o.SmtpSenderEmail = sender.Trim();
+
+        if (TryGetScalar(map, "smtpAppPasswordSecretRef", out var secretRef) && !string.IsNullOrWhiteSpace(secretRef))
+            o.SmtpAppPasswordSecretRef = secretRef.Trim();
+
+        if (TryGetScalar(map, "otpEnabled", out var otpText))
+            o.OtpEnabled = otpText.Trim().Equals("true", StringComparison.OrdinalIgnoreCase) || otpText.Trim() == "1";
+
+        if (o.SmtpHost is null && o.SmtpPort is null && o.SmtpSenderEmail is null && o.SmtpAppPasswordSecretRef is null && o.OtpEnabled is null)
+            return null;
+
+        return o;
     }
 
     /// <summary>Detects minimal JSON like <c>{"status":"ok","service":"proacc-tenant-config-api"}</c> with no tenant payload.</summary>

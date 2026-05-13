@@ -3,15 +3,18 @@ using ApprovalPO.Hosting;
 using ApprovalPO.Options;
 using ApprovalPO.Services;
 using ApprovalPO.Helpers;
+using Amazon;
+using Amazon.SecretsManager;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.HttpOverrides;
 using System.Security.Cryptography.X509Certificates;
 
 // Optional .env: typically only TENANT_CODE (see appsettings / .env.example). All other config lives in appsettings.json.
+// Prefer exe folder first: Windows Services often have CurrentDirectory = System32, so publish\.env would be skipped if we checked CWD first.
 foreach (var envPath in new[]
          {
-             Path.Combine(Directory.GetCurrentDirectory(), ".env"),
              Path.Combine(AppContext.BaseDirectory, ".env"),
+             Path.Combine(Directory.GetCurrentDirectory(), ".env"),
          })
 {
     if (File.Exists(envPath))
@@ -34,6 +37,8 @@ if (!string.IsNullOrEmpty(tenantFromEnv))
 
 // Empty process env vars (TenantBootstrap__*) override appsettings with blanks — restore from appsettings*.json.
 TenantBootstrapJsonReinstate.Apply(builder.Configuration, builder.Environment.ContentRootPath);
+
+ProductionKestrelEndpoints.Apply(builder);
 
 // Development: optional "trusted" HTTPS for LAN IPs — place mkcert PEM here or set APPROVALPO_TLS_PEM / APPROVALPO_TLS_KEY.
 //   mkdir .certs && cd .certs && mkcert 192.168.x.x localhost 127.0.0.1
@@ -69,6 +74,14 @@ builder.Services.AddHttpClient(TenantDbConnectionResolver.HttpClientName, client
     client.Timeout = TimeSpan.FromSeconds(30);
 });
 builder.Services.AddSingleton<TenantDbConnectionResolver>();
+builder.Services.AddSingleton<IAmazonSecretsManager>(_ =>
+{
+    var regionName = builder.Configuration["AWS:Region"]
+        ?? builder.Configuration["TenantBootstrap:SecretsManagerRegion"]
+        ?? Environment.GetEnvironmentVariable("AWS_REGION")
+        ?? "ap-southeast-1";
+    return new AmazonSecretsManagerClient(RegionEndpoint.GetBySystemName(regionName));
+});
 builder.Services.AddScoped<ISyUserLoginValidator, SyUserLoginValidator>();
 builder.Services.AddScoped<IPurchaseOrderCatalog, PurchaseOrderCatalogService>();
 
@@ -113,8 +126,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.HttpOnly = true;
         options.Cookie.IsEssential = true;
         options.Cookie.SameSite = SameSiteMode.Lax;
-        if (!builder.Environment.IsDevelopment())
-            options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
     });
 
 builder.Services.AddAuthorization();
@@ -131,13 +143,15 @@ app.Use(async (context, next) =>
     await next();
 });
 
-// In Development, skip HTTPS redirection so LAN/mobile testing via http://192.168.x.x:5288 works
-// (otherwise browsers may redirect to https:// with no dev cert). Production uses HTTPS below.
+// In Development, skip HTTPS redirection so LAN/mobile testing via http://192.168.x.x:5288 works.
+// Production defaults for UseHsts / UseHttpsRedirection come from appsettings.Production.json (off for HTTP-only LAN publish).
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
-    app.UseHsts();
-    app.UseHttpsRedirection();
+    if (app.Configuration.GetValue("Approval:UseHsts", true))
+        app.UseHsts();
+    if (app.Configuration.GetValue("Approval:UseHttpsRedirection", true))
+        app.UseHttpsRedirection();
 }
 
 app.UseStaticFiles();

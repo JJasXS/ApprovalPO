@@ -210,6 +210,10 @@
             idGroup.style.display = 'none';
             otpGroup.style.display = 'block';
             otpInputs.forEach((input) => { input.value = ''; });
+            const d = (data.devOtp || '').toString().trim();
+            if (/^\d{6}$/.test(d)) {
+                for (let i = 0; i < 6; i++) otpInputs[i].value = d[i];
+            }
             otpInputs[0]?.focus();
         } catch {
             msg('Network error.', true);

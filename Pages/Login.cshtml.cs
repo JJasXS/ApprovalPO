@@ -100,9 +100,17 @@ public class LoginModel : PageModel
         var (sent, err) = await _emailSender.SendOtpAsync(LoginId, otpPlain, cancellationToken).ConfigureAwait(false);
         if (!sent)
         {
-            _logger.LogWarning("OTP email not sent for {LoginId}: {Error}", LoginId, err);
-            if (!_env.IsDevelopment())
+            var allowWithoutEmail = AllowOtpWithoutEmailDelivery();
+            if (!allowWithoutEmail)
+            {
+                _logger.LogWarning("OTP email not sent for {LoginId}: {Error}", LoginId, err);
                 return new JsonResult(new { success = false, message = err ?? "Could not send email. Try again later." });
+            }
+
+            _logger.LogInformation(
+                "OTP email not sent for {LoginId} (login continues; fix SMTP when ready): {Error}",
+                LoginId,
+                err);
         }
 
         var payload = new Dictionary<string, object?>
@@ -110,7 +118,7 @@ public class LoginModel : PageModel
             ["success"] = true,
             ["message"] = sent
                 ? "OTP sent to your email."
-                : "OTP generated (email not configured — check with administrator)."
+                : "OTP generated (email not delivered — use the code shown below)."
         };
 
         if (_env.IsDevelopment())
@@ -118,8 +126,27 @@ public class LoginModel : PageModel
             payload["devOtp"] = otpPlain;
             payload["message"] = (sent ? "OTP sent. " : "") + $"Development: OTP is {otpPlain}";
         }
+        else if (!sent && !_env.IsDevelopment())
+        {
+            payload["devOtp"] = otpPlain;
+            payload["message"] =
+                "SMTP failed; emergency bypass is on. Your OTP is " + otpPlain + ". Turn off Approval:ExposeOtpWhenEmailFails or APPROVALPO_ALLOW_OTP_WITHOUT_EMAIL after fixing mail.";
+        }
 
         return new JsonResult(payload, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+    }
+
+    /// <summary>Development always; Production when appsettings or flat env says to continue without SMTP.</summary>
+    private bool AllowOtpWithoutEmailDelivery()
+    {
+        if (_env.IsDevelopment())
+            return true;
+        if (_approval.ExposeOtpWhenEmailFails)
+            return true;
+        var v = (Environment.GetEnvironmentVariable("APPROVALPO_ALLOW_OTP_WITHOUT_EMAIL") ?? "").Trim();
+        return v.Equals("true", StringComparison.OrdinalIgnoreCase)
+               || v == "1"
+               || v.Equals("yes", StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task<IActionResult> OnPostVerifyOtpAsync(CancellationToken cancellationToken)
