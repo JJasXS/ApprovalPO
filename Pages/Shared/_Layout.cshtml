@@ -1,3 +1,4 @@
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -10,6 +11,13 @@
     @RenderSection("Styles", required: false)
 </head>
 <body>
+    @{
+        var tenantCode = (Configuration["TenantBootstrap:TenantCode"] ?? "").Trim();
+    }
+    @if (!string.IsNullOrEmpty(tenantCode))
+    {
+        <div class="tenant-env-chip" title="Drag to highlight and read tenant code (TENANT_CODE / TenantBootstrap:TenantCode).">Tenant: <strong>@tenantCode</strong></div>
+    }
     @RenderBody()
     @RenderSection("Scripts", required: false)
 </body>

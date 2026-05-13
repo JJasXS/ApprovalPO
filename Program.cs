@@ -22,6 +22,7 @@ foreach (var envPath in new[]
 }
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Host.UseWindowsService();
 
 // Tenant id: use TENANT_CODE from environment (.env) only — always wins over appsettings when set.
 var tenantFromEnv = (Environment.GetEnvironmentVariable("TENANT_CODE") ?? builder.Configuration["TENANT_CODE"])?.Trim();
