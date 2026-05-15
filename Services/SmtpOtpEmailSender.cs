@@ -10,8 +10,9 @@ using MimeKit;
 namespace ApprovalPO.Services;
 
 /// <summary>
-/// Sends OTP via MailKit, merging <c>Smtp</c> appsettings with tenant <c>email</c> from the same API as Firebird
-/// and optional AWS Secrets Manager app password (same pattern as ProAccScanner <c>EmailHelper</c>).
+/// Sends OTP via MailKit: <c>Smtp</c> appsettings + tenant <c>email</c> / <c>proaccEmail</c> from the tenant API,
+/// optional <c>smtpCredentialsSecretRef</c> (full JSON bundle), then <c>smtpAppPasswordSecretRef</c> or <c>Smtp:Password</c>
+/// (same merge order as ProAccScanner / ABS_System <c>EmailHelper</c>).
 /// </summary>
 public sealed class SmtpOtpEmailSender : IOtpEmailSender
 {
@@ -60,16 +61,50 @@ public sealed class SmtpOtpEmailSender : IOtpEmailSender
             return (false, "OTP email is disabled for this tenant.");
         }
 
-        var host = (tenantEmail?.SmtpHost ?? _defaults.Host ?? "smtp.gmail.com").Trim();
-        var port = tenantEmail?.SmtpPort is > 0 and var p ? p : (_defaults.Port <= 0 ? 587 : _defaults.Port);
-        var user = (tenantEmail?.SmtpSenderEmail ?? _defaults.User ?? "").Trim();
+        var host = (_defaults.Host ?? "smtp.gmail.com").Trim();
+        var port = _defaults.Port <= 0 ? 587 : _defaults.Port;
+        var user = (_defaults.User ?? "").Trim();
         var passRaw = _defaults.Password ?? "";
-        var pass = (await TenantSmtpSecretResolver.ResolveSmtpPasswordAsync(
-                _secrets,
-                tenantEmail?.SmtpAppPasswordSecretRef,
-                passRaw,
-                cancellationToken)
-            .ConfigureAwait(false) ?? "").Replace(" ", "").Trim();
+
+        if (tenantEmail is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(tenantEmail.SmtpHost))
+                host = tenantEmail.SmtpHost.Trim();
+            if (tenantEmail.SmtpPort is > 0)
+                port = tenantEmail.SmtpPort.Value;
+            if (!string.IsNullOrWhiteSpace(tenantEmail.SmtpSenderEmail))
+                user = tenantEmail.SmtpSenderEmail.Trim();
+        }
+
+        TenantSmtpCredentialsSecretPayload? bundle = null;
+        if (!string.IsNullOrWhiteSpace(tenantEmail?.SmtpCredentialsSecretRef))
+        {
+            bundle = await TenantSmtpSecretResolver
+                .ResolveSmtpCredentialsSecretAsync(_secrets, tenantEmail.SmtpCredentialsSecretRef, cancellationToken)
+                .ConfigureAwait(false);
+            if (bundle is not null)
+            {
+                if (!string.IsNullOrWhiteSpace(bundle.Host))
+                    host = bundle.Host.Trim();
+                if (bundle.Port is > 0)
+                    port = bundle.Port.Value;
+                if (!string.IsNullOrWhiteSpace(bundle.User))
+                    user = bundle.User.Trim();
+            }
+        }
+
+        string pass;
+        if (!string.IsNullOrWhiteSpace(bundle?.Password))
+            pass = bundle.Password;
+        else
+        {
+            pass = (await TenantSmtpSecretResolver.ResolveSmtpPasswordAsync(
+                    _secrets,
+                    tenantEmail?.SmtpAppPasswordSecretRef,
+                    passRaw,
+                    cancellationToken)
+                .ConfigureAwait(false) ?? "").Replace(" ", "").Trim();
+        }
 
         if (string.IsNullOrWhiteSpace(host))
             return (false, "SMTP is not configured.");
@@ -77,7 +112,7 @@ public sealed class SmtpOtpEmailSender : IOtpEmailSender
         if (string.IsNullOrEmpty(user) || string.IsNullOrEmpty(pass))
         {
             return (false,
-                "SMTP user or password empty after tenant merge. Set tenant email.smtpSenderEmail + smtpAppPasswordSecretRef (Secrets Manager) or Smtp:User/Smtp:Password.");
+                "SMTP user or password empty after tenant merge. Set tenant proaccEmail/email smtpCredentialsSecretRef, or smtpAppPasswordSecretRef + smtpSenderEmail, or Smtp:User/Smtp:Password.");
         }
 
         try
@@ -114,7 +149,7 @@ public sealed class SmtpOtpEmailSender : IOtpEmailSender
         if (low.Contains("5.7.9") || low.Contains("534") || low.Contains("webloginrequired"))
         {
             _logger.LogInformation(
-                "Gmail SMTP hint: use an App Password (2FA), or tenant smtpAppPasswordSecretRef + Secrets Manager; see ProAccScanner EmailHelper logs for the same hints.");
+                "Gmail SMTP hint: use an App Password (2FA), or tenant smtpCredentialsSecretRef / smtpAppPasswordSecretRef + Secrets Manager (same as ProAccScanner).");
         }
 
         if (low.Contains("5.7.0") && low.Contains("authentication"))

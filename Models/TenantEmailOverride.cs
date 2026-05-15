@@ -1,6 +1,6 @@
 namespace ApprovalPO.Models;
 
-/// <summary>Optional SMTP overrides from tenant AWS payload (<c>email</c> map / Dynamo).</summary>
+/// <summary>Optional SMTP overrides from tenant AWS payload: <c>email</c> base + <c>proaccEmail</c> overlay.</summary>
 public sealed class TenantEmailOverride
 {
     public string? SmtpHost { get; set; }
@@ -9,6 +9,8 @@ public sealed class TenantEmailOverride
     public string? SmtpSenderEmail { get; set; }
     /// <summary>Secrets Manager id or ARN; password loaded at send time.</summary>
     public string? SmtpAppPasswordSecretRef { get; set; }
+    /// <summary>Secrets Manager JSON with host, port, user, password (same as ProAccScanner).</summary>
+    public string? SmtpCredentialsSecretRef { get; set; }
     /// <summary>When false, OTP email sending is skipped.</summary>
     public bool? OtpEnabled { get; set; }
 }

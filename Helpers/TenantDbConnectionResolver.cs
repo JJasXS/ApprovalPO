@@ -10,7 +10,7 @@ namespace ApprovalPO.Helpers;
 
 /// <summary>
 /// Resolves Firebird connection strings from the AWS tenant-config API (DynamoDB JSON or plain JSON) and caches per tenant code.
-/// Also parses optional <c>email</c> SMTP overrides from the same payload (aligned with ProAccScanner).
+/// Also parses optional <c>email</c> + <c>proaccEmail</c> SMTP overrides from the same payload (aligned with ProAccScanner).
 /// The API is called with query <c>tenantCode</c> (same as the browser/Postman URL for this API).
 /// </summary>
 public sealed class TenantDbConnectionResolver
@@ -218,8 +218,68 @@ public sealed class TenantDbConnectionResolver
     private static bool TryFindDatabaseAttribute(JsonElement root, out JsonElement databaseAttr) =>
         TryFindSectionRecursive(root, "database", depth: 0, maxDepth: 8, out databaseAttr);
 
-    private static bool TryFindEmailAttribute(JsonElement root, out JsonElement emailAttr) =>
-        TryFindSectionRecursive(root, "email", depth: 0, maxDepth: 8, out emailAttr);
+    private static TenantEmailOverride? TryParseTenantEmailFromRoot(JsonElement root)
+    {
+        TenantEmailOverride? merged = null;
+
+        if (TryFindSectionRecursive(root, "email", depth: 0, maxDepth: 8, out var emailAttr))
+            merged = ParseTenantEmailMap(UnwrapDynamoMap(emailAttr));
+
+        if (TryFindSectionRecursive(root, "proaccEmail", depth: 0, maxDepth: 8, out var proaccAttr))
+            merged = MergeTenantEmail(merged, ParseTenantEmailMap(UnwrapDynamoMap(proaccAttr)));
+
+        if (merged is null || !TenantEmailOverrideHasAnyValue(merged))
+            return null;
+
+        return merged;
+    }
+
+    private static TenantEmailOverride MergeTenantEmail(TenantEmailOverride? baseline, TenantEmailOverride next)
+    {
+        baseline ??= new TenantEmailOverride();
+        if (next.SmtpHost != null)
+            baseline.SmtpHost = next.SmtpHost;
+        if (next.SmtpPort != null)
+            baseline.SmtpPort = next.SmtpPort;
+        if (next.SmtpSenderEmail != null)
+            baseline.SmtpSenderEmail = next.SmtpSenderEmail;
+        if (next.SmtpAppPasswordSecretRef != null)
+            baseline.SmtpAppPasswordSecretRef = next.SmtpAppPasswordSecretRef;
+        if (next.SmtpCredentialsSecretRef != null)
+            baseline.SmtpCredentialsSecretRef = next.SmtpCredentialsSecretRef;
+        if (next.OtpEnabled != null)
+            baseline.OtpEnabled = next.OtpEnabled;
+        return baseline;
+    }
+
+    private static bool TenantEmailOverrideHasAnyValue(TenantEmailOverride o) =>
+        o.SmtpHost is not null || o.SmtpPort is not null || o.SmtpSenderEmail is not null ||
+        o.SmtpAppPasswordSecretRef is not null || o.SmtpCredentialsSecretRef is not null || o.OtpEnabled is not null;
+
+    private static TenantEmailOverride ParseTenantEmailMap(JsonElement map)
+    {
+        var o = new TenantEmailOverride();
+
+        if (TryGetScalar(map, "smtpHost", out var host) && !string.IsNullOrWhiteSpace(host))
+            o.SmtpHost = host.Trim();
+
+        if (TryGetScalar(map, "smtpPort", out var portText) && int.TryParse(portText.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var port) && port > 0)
+            o.SmtpPort = port;
+
+        if (TryGetScalar(map, "smtpSenderEmail", out var sender) && !string.IsNullOrWhiteSpace(sender))
+            o.SmtpSenderEmail = sender.Trim();
+
+        if (TryGetScalar(map, "smtpAppPasswordSecretRef", out var secretRef) && !string.IsNullOrWhiteSpace(secretRef))
+            o.SmtpAppPasswordSecretRef = secretRef.Trim();
+
+        if (TryGetScalar(map, "smtpCredentialsSecretRef", out var credRef) && !string.IsNullOrWhiteSpace(credRef))
+            o.SmtpCredentialsSecretRef = credRef.Trim();
+
+        if (TryGetScalar(map, "otpEnabled", out var otpText))
+            o.OtpEnabled = otpText.Trim().Equals("true", StringComparison.OrdinalIgnoreCase) || otpText.Trim() == "1";
+
+        return o;
+    }
 
     private static bool TryFindSectionRecursive(JsonElement e, string sectionName, int depth, int maxDepth, out JsonElement sectionAttr)
     {
@@ -261,35 +321,6 @@ public sealed class TenantDbConnectionResolver
         }
 
         return false;
-    }
-
-    private static TenantEmailOverride? TryParseTenantEmailFromRoot(JsonElement root)
-    {
-        if (!TryFindEmailAttribute(root, out var emailAttr))
-            return null;
-
-        var map = UnwrapDynamoMap(emailAttr);
-        var o = new TenantEmailOverride();
-
-        if (TryGetScalar(map, "smtpHost", out var host) && !string.IsNullOrWhiteSpace(host))
-            o.SmtpHost = host.Trim();
-
-        if (TryGetScalar(map, "smtpPort", out var portText) && int.TryParse(portText.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var port) && port > 0)
-            o.SmtpPort = port;
-
-        if (TryGetScalar(map, "smtpSenderEmail", out var sender) && !string.IsNullOrWhiteSpace(sender))
-            o.SmtpSenderEmail = sender.Trim();
-
-        if (TryGetScalar(map, "smtpAppPasswordSecretRef", out var secretRef) && !string.IsNullOrWhiteSpace(secretRef))
-            o.SmtpAppPasswordSecretRef = secretRef.Trim();
-
-        if (TryGetScalar(map, "otpEnabled", out var otpText))
-            o.OtpEnabled = otpText.Trim().Equals("true", StringComparison.OrdinalIgnoreCase) || otpText.Trim() == "1";
-
-        if (o.SmtpHost is null && o.SmtpPort is null && o.SmtpSenderEmail is null && o.SmtpAppPasswordSecretRef is null && o.OtpEnabled is null)
-            return null;
-
-        return o;
     }
 
     /// <summary>Detects minimal JSON like <c>{"status":"ok","service":"proacc-tenant-config-api"}</c> with no tenant payload.</summary>
