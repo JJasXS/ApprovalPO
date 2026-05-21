@@ -11,6 +11,15 @@ artifacts/
 publish/
 out/
 
+# Ad-hoc publish/test output (never commit; causes huge nested bin trees)
+_lanbuild/
+_routechk/
+_verifybuild/
+_audit_build/
+_build_verify/
+_bc*/
+_out_*/
+
 # Visual Studio / MSBuild
 .vs/
 *.user

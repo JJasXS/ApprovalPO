@@ -14,7 +14,10 @@ $needBuild = -not (Test-Path $dll)
 if (-not $needBuild) {
     $dllTime = (Get-Item $dll).LastWriteTime
     $newer = Get-ChildItem -Recurse -Include *.cs, *.cshtml, *.csproj -ErrorAction SilentlyContinue |
-        Where-Object { $_.FullName -notmatch '\\(bin|obj)\\' -and $_.LastWriteTime -gt $dllTime } |
+        Where-Object {
+            $_.FullName -notmatch '\\(bin|obj|artifacts|_lanbuild|_routechk|_verifybuild|_audit_build|_build_verify|_bc\d+|_out_[^\\]+)\\' -and
+            $_.LastWriteTime -gt $dllTime
+        } |
         Select-Object -First 1
     if ($newer) { $needBuild = $true }
 }
