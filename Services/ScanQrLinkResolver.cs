@@ -5,7 +5,10 @@ namespace ApprovalPO.Services;
 
 public interface IScanQrLinkResolver
 {
-    Task<ScanQrResolveResult> ResolveAsync(string scanned, CancellationToken cancellationToken = default);
+    Task<ScanQrResolveResult> ResolveAsync(
+        string scanned,
+        IReadOnlyList<string>? knownItemCodes = null,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed class ScanQrResolveResult
@@ -14,10 +17,18 @@ public sealed class ScanQrResolveResult
     public string? ItemCode { get; init; }
     public string Source { get; init; } = "";
     public string? Error { get; init; }
+    public string? FinalUrl { get; init; }
+    public int? HttpStatus { get; init; }
+    public string? ContentType { get; init; }
+    /// <summary>Plain text read from the linked page (truncated).</summary>
+    public string? PagePreview { get; init; }
+    public IReadOnlyList<string> SearchedCodes { get; init; } = [];
 }
 
 public sealed class ScanQrLinkResolver(IHttpClientFactory httpClientFactory) : IScanQrLinkResolver
 {
+    private const int MaxPreviewChars = 3500;
+
     private static readonly string[] QueryKeys =
     [
         "itemcode", "item_code", "item", "code", "sku", "barcode", "product", "id"
@@ -25,60 +36,166 @@ public sealed class ScanQrLinkResolver(IHttpClientFactory httpClientFactory) : I
 
     private static readonly Regex[] HtmlItemPatterns =
     {
-        new("""(?:item\s*code|itemcode)\s*[:=]\s*["']?([A-Za-z0-9][\w\-.]*)""", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+        new("""(?:item\s*code|item\s*no|item\s*#|itemcode|stock\s*code|product\s*code|material\s*code|sku)\s*[:#=\s]+["']?([A-Za-z0-9][\w\-.]*)""", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+        new("""<(?:td|th|span|div|p|label|dd)[^>]*>\s*(?:item\s*code|itemcode|code)\s*:?\s*</[^>]+>\s*<[^>]+>\s*([^<]+)""", RegexOptions.IgnoreCase | RegexOptions.Compiled),
         new("""data-item-code\s*=\s*["']([^"']+)""", RegexOptions.IgnoreCase | RegexOptions.Compiled),
-        new("""["']itemCode["']\s*:\s*["']([^"']+)""", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+        new("""["'](?:itemCode|item_code|productCode|stockCode|materialCode)["']\s*:\s*["']([^"']+)""", RegexOptions.IgnoreCase | RegexOptions.Compiled),
     };
 
-    public async Task<ScanQrResolveResult> ResolveAsync(string scanned, CancellationToken cancellationToken = default)
+    private static readonly Regex ScriptStrip = new(@"<script[\s\S]*?</script>", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex StyleStrip = new(@"<style[\s\S]*?</style>", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex TagStrip = new("<[^>]+>", RegexOptions.Compiled);
+
+    public async Task<ScanQrResolveResult> ResolveAsync(
+        string scanned,
+        IReadOnlyList<string>? knownItemCodes = null,
+        CancellationToken cancellationToken = default)
     {
         var raw = (scanned ?? "").Trim();
         if (string.IsNullOrEmpty(raw))
             return new ScanQrResolveResult { Scanned = raw, Error = "Empty scan." };
 
+        var hints = NormalizeKnownCodes(knownItemCodes);
+
         if (!Uri.TryCreate(raw, UriKind.Absolute, out var uri) ||
             (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
         {
+            var direct = MatchKnownCode(raw, hints) ?? raw;
             return new ScanQrResolveResult
             {
                 Scanned = raw,
-                ItemCode = raw,
-                Source = "raw"
+                ItemCode = direct,
+                Source = MatchKnownCode(raw, hints) is not null ? "text-match" : "raw",
+                SearchedCodes = hints
             };
+        }
+
+        // PO detail scan: always open the link and read page text (code is inside the page).
+        if (hints.Count > 0)
+        {
+            try
+            {
+                var page = await FetchPageAsync(uri, hints, cancellationToken).ConfigureAwait(false);
+                return FromPage(raw, page, hints);
+            }
+            catch (Exception ex)
+            {
+                return new ScanQrResolveResult
+                {
+                    Scanned = raw,
+                    Error = $"Could not read link: {ex.Message}",
+                    SearchedCodes = hints
+                };
+            }
         }
 
         var fromQuery = TryQuery(uri);
         if (!string.IsNullOrEmpty(fromQuery))
-            return Ok(raw, fromQuery, "url-query");
+            return Ok(raw, fromQuery, "url-query", hints);
 
         var fromPath = TryPath(uri);
         if (!string.IsNullOrEmpty(fromPath))
-            return Ok(raw, fromPath, "url-path");
+            return Ok(raw, fromPath, "url-path", hints);
 
         try
         {
-            var fetched = await FetchAndExtractAsync(uri, cancellationToken).ConfigureAwait(false);
-            if (!string.IsNullOrEmpty(fetched))
-                return Ok(raw, fetched, "url-fetch");
+            var page = await FetchPageAsync(uri, hints, cancellationToken).ConfigureAwait(false);
+            return FromPage(raw, page, hints);
         }
         catch (Exception ex)
         {
             return new ScanQrResolveResult
             {
                 Scanned = raw,
-                Error = $"Could not read link: {ex.Message}"
+                Error = $"Could not read link: {ex.Message}",
+                SearchedCodes = hints
+            };
+        }
+    }
+
+    private static ScanQrResolveResult FromPage(string scanned, PageFetchResult page, List<string> hints)
+    {
+        if (!string.IsNullOrEmpty(page.Code))
+        {
+            return new ScanQrResolveResult
+            {
+                Scanned = scanned,
+                ItemCode = page.Code,
+                Source = page.Source,
+                FinalUrl = page.FinalUrl,
+                HttpStatus = page.HttpStatus,
+                ContentType = page.ContentType,
+                PagePreview = page.PagePreview,
+                SearchedCodes = hints
             };
         }
 
         return new ScanQrResolveResult
         {
-            Scanned = raw,
-            Error = "Link opened but no item code found in URL or page."
+            Scanned = scanned,
+            Error = hints.Count > 0
+                ? "Opened the link but none of this PO's item codes appear in the text below."
+                : "Opened the link but no item code was detected in the text below.",
+            FinalUrl = page.FinalUrl,
+            HttpStatus = page.HttpStatus,
+            ContentType = page.ContentType,
+            PagePreview = page.PagePreview,
+            SearchedCodes = hints
         };
     }
 
-    private static ScanQrResolveResult Ok(string scanned, string code, string source) =>
-        new() { Scanned = scanned, ItemCode = code.Trim(), Source = source };
+    private static ScanQrResolveResult Ok(string scanned, string code, string source, List<string> hints) =>
+        new()
+        {
+            Scanned = scanned,
+            ItemCode = code.Trim(),
+            Source = source,
+            SearchedCodes = hints
+        };
+
+    private sealed record PageFetchResult(
+        string? Code = null,
+        string Source = "",
+        string? FinalUrl = null,
+        int? HttpStatus = null,
+        string? ContentType = null,
+        string? PagePreview = null);
+
+    private static List<string> NormalizeKnownCodes(IReadOnlyList<string>? knownItemCodes)
+    {
+        if (knownItemCodes is null || knownItemCodes.Count == 0)
+            return [];
+        return knownItemCodes
+            .Select(c => (c ?? "").Trim())
+            .Where(c => c.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(c => c.Length)
+            .ToList();
+    }
+
+    private static string? PreferKnown(string candidate, List<string> hints)
+    {
+        if (hints.Count == 0) return candidate;
+        return MatchKnownCode(candidate, hints) ?? candidate;
+    }
+
+    private static string? MatchKnownCode(string haystack, List<string> hints)
+    {
+        if (string.IsNullOrEmpty(haystack) || hints.Count == 0)
+            return null;
+
+        foreach (var code in hints)
+        {
+            if (ContainsCode(haystack, code))
+                return code;
+        }
+
+        return null;
+    }
+
+    private static bool ContainsCode(string haystack, string code) =>
+        !string.IsNullOrEmpty(code) &&
+        haystack.Contains(code, StringComparison.OrdinalIgnoreCase);
 
     private static string? TryQuery(Uri uri)
     {
@@ -115,38 +232,109 @@ public sealed class ScanQrLinkResolver(IHttpClientFactory httpClientFactory) : I
         return last;
     }
 
-    private async Task<string?> FetchAndExtractAsync(Uri uri, CancellationToken cancellationToken)
+    private async Task<PageFetchResult> FetchPageAsync(
+        Uri uri,
+        List<string> hints,
+        CancellationToken cancellationToken)
     {
         if (IsBlockedHost(uri))
             throw new InvalidOperationException("Link host is not allowed.");
 
         var client = httpClientFactory.CreateClient(nameof(ScanQrLinkResolver));
         using var response = await client.GetAsync(uri, cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
 
         var finalUri = response.RequestMessage?.RequestUri ?? uri;
-        var fromFinalQuery = TryQuery(finalUri);
-        if (!string.IsNullOrEmpty(fromFinalQuery))
-            return fromFinalQuery;
-
+        var status = (int)response.StatusCode;
         var mediaType = response.Content.Headers.ContentType?.MediaType ?? "";
         var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        if (body.Length > 262_144)
-            body = body[..262_144];
+        if (body.Length > 512_000)
+            body = body[..512_000];
+
+        var preview = BuildPreview(body, mediaType);
+        var meta = new PageFetchResult(
+            FinalUrl: finalUri.ToString(),
+            HttpStatus: status,
+            ContentType: mediaType,
+            PagePreview: preview);
+
+        if (!response.IsSuccessStatusCode)
+            return meta;
+
+        var fromFinalQuery = TryQuery(finalUri);
+        if (!string.IsNullOrEmpty(fromFinalQuery))
+        {
+            return meta with
+            {
+                Code = PreferKnown(fromFinalQuery, hints) ?? fromFinalQuery,
+                Source = "url-query"
+            };
+        }
+
+        if (hints.Count > 0)
+        {
+            var onPage = MatchKnownCode(body, hints);
+            if (!string.IsNullOrEmpty(onPage))
+                return meta with { Code = onPage, Source = "page-match" };
+
+            var text = HtmlToText(body);
+            onPage = MatchKnownCode(text, hints);
+            if (!string.IsNullOrEmpty(onPage))
+                return meta with { Code = onPage, Source = "page-text-match", PagePreview = TruncatePreview(text) };
+        }
 
         if (mediaType.Contains("json", StringComparison.OrdinalIgnoreCase) ||
             body.TrimStart().StartsWith('{') || body.TrimStart().StartsWith('['))
-            return TryJson(body);
+        {
+            var json = TryJson(body);
+            if (!string.IsNullOrEmpty(json))
+                return meta with { Code = PreferKnown(json, hints) ?? json, Source = "page-json" };
+        }
 
-        return TryHtml(body);
+        var html = TryHtml(body);
+        if (!string.IsNullOrEmpty(html))
+            return meta with { Code = PreferKnown(html, hints) ?? html, Source = "page-html" };
+
+        var plain = HtmlToText(body);
+        html = TryHtml(plain);
+        if (!string.IsNullOrEmpty(html))
+            return meta with { Code = PreferKnown(html, hints) ?? html, Source = "page-text-html", PagePreview = TruncatePreview(plain) };
+
+        return meta with { PagePreview = TruncatePreview(string.IsNullOrWhiteSpace(plain) ? preview : plain) };
+    }
+
+    private static string BuildPreview(string body, string mediaType)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+            return "(empty response)";
+
+        if (mediaType.Contains("json", StringComparison.OrdinalIgnoreCase) ||
+            body.TrimStart().StartsWith('{') || body.TrimStart().StartsWith('['))
+            return TruncatePreview(body.Trim());
+
+        return TruncatePreview(HtmlToText(body));
+    }
+
+    private static string TruncatePreview(string text)
+    {
+        var t = (text ?? "").Trim();
+        if (t.Length <= MaxPreviewChars)
+            return t;
+        return t[..MaxPreviewChars] + "… (truncated)";
+    }
+
+    private static string HtmlToText(string html)
+    {
+        var s = ScriptStrip.Replace(html, " ");
+        s = StyleStrip.Replace(s, " ");
+        s = TagStrip.Replace(s, " ");
+        s = System.Net.WebUtility.HtmlDecode(s);
+        return Regex.Replace(s, @"\s+", " ").Trim();
     }
 
     private static bool IsBlockedHost(Uri uri)
     {
         if (uri.IsLoopback) return true;
-        if (string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase))
-            return true;
-        return false;
+        return string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? TryJson(string body)
@@ -168,8 +356,7 @@ public sealed class ScanQrLinkResolver(IHttpClientFactory httpClientFactory) : I
         {
             foreach (var prop in el.EnumerateObject())
             {
-                if (prop.Value.ValueKind == JsonValueKind.String &&
-                    IsCodeProperty(prop.Name))
+                if (prop.Value.ValueKind == JsonValueKind.String && IsCodeProperty(prop.Name))
                 {
                     var s = prop.Value.GetString()?.Trim();
                     if (!string.IsNullOrEmpty(s))
@@ -206,7 +393,10 @@ public sealed class ScanQrLinkResolver(IHttpClientFactory httpClientFactory) : I
         return n.Equals("itemcode", StringComparison.OrdinalIgnoreCase) ||
                n.Equals("code", StringComparison.OrdinalIgnoreCase) ||
                n.Equals("sku", StringComparison.OrdinalIgnoreCase) ||
-               n.Equals("barcode", StringComparison.OrdinalIgnoreCase);
+               n.Equals("barcode", StringComparison.OrdinalIgnoreCase) ||
+               n.Equals("productcode", StringComparison.OrdinalIgnoreCase) ||
+               n.Equals("stockcode", StringComparison.OrdinalIgnoreCase) ||
+               n.Equals("materialcode", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? TryHtml(string body)

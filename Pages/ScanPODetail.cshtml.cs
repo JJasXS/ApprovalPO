@@ -40,9 +40,9 @@ public class ScanPODetailModel : PageModel
         return Page();
     }
 
-    public async Task<IActionResult> OnGetResolveScanAsync(string url, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetResolveScanAsync(string url, [FromQuery] string[]? codes, CancellationToken cancellationToken)
     {
-        var result = await _scanResolver.ResolveAsync(url ?? "", cancellationToken).ConfigureAwait(false);
+        var result = await _scanResolver.ResolveAsync(url ?? "", codes, cancellationToken).ConfigureAwait(false);
         return new JsonResult(result);
     }
 }

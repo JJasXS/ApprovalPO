@@ -1,4 +1,4 @@
-/* scan-po-detail.js — QR scan; resolve link → item code → match PO lines */
+/* scan-po-detail.js — QR scan; open link, show page text, match PO lines */
 (function () {
   'use strict';
 
@@ -11,18 +11,32 @@
   const resultText = document.getElementById('scanLastResultText');
   const resultCode = document.getElementById('scanLastResultCode');
   const resultMatch = document.getElementById('scanLastResultMatch');
+  const resultMeta = document.getElementById('scanLastResultMeta');
+  const previewWrap = document.getElementById('scanLastResultPreviewWrap');
+  const previewEl = document.getElementById('scanLastResultPreview');
+
   const lineRows = () =>
     Array.from(document.querySelectorAll('.scan-lines-table tbody tr[data-item-code]'));
 
-  const showResult = (scanned, itemCode, matchMsg, warn, source) => {
+  const knownItemCodes = () =>
+    lineRows()
+      .map((row) => (row.dataset.itemCode || '').trim())
+      .filter(Boolean);
+
+  const showResult = (resolved, itemCode, matchMsg, warn) => {
     if (!resultBox || !resultText) return;
+    const scanned = resolved.scanned || '';
+    const source = resolved.source || '';
+
     resultBox.hidden = false;
     resultBox.classList.toggle('is-warn', !!warn);
     resultText.textContent = scanned;
+
     if (resultCode) {
       if (itemCode && itemCode !== scanned) {
         resultCode.hidden = false;
-        resultCode.textContent = `Item code from link: ${itemCode}${source ? ` (${source})` : ''}`;
+        const src = typeof ScanResolve.sourceLabel === 'function' ? ScanResolve.sourceLabel(source) : source;
+        resultCode.textContent = `Item code: ${itemCode}${src ? ` — ${src}` : ''}`;
       } else if (itemCode) {
         resultCode.hidden = false;
         resultCode.textContent = `Item code: ${itemCode}`;
@@ -31,6 +45,44 @@
         resultCode.textContent = '';
       }
     }
+
+    if (resultMeta) {
+      const parts = [];
+      if (resolved.finalUrl && resolved.finalUrl !== scanned) {
+        parts.push(`Opened: ${resolved.finalUrl}`);
+      }
+      if (resolved.httpStatus) {
+        parts.push(`HTTP ${resolved.httpStatus}`);
+      }
+      if (resolved.contentType) {
+        parts.push(resolved.contentType);
+      }
+      const searched = resolved.searchedCodes || resolved.SearchedCodes;
+      if (searched?.length) {
+        parts.push(`Looking for PO codes: ${searched.join(', ')}`);
+      }
+      if (parts.length) {
+        resultMeta.hidden = false;
+        resultMeta.textContent = parts.join(' · ');
+      } else {
+        resultMeta.hidden = true;
+        resultMeta.textContent = '';
+      }
+    }
+
+    const preview = resolved.pagePreview || resolved.PagePreview;
+    if (previewWrap && previewEl) {
+      if (preview) {
+        previewWrap.hidden = false;
+        previewEl.textContent = preview;
+        previewWrap.open = !itemCode || warn;
+      } else {
+        previewWrap.hidden = true;
+        previewEl.textContent = '';
+        previewWrap.open = false;
+      }
+    }
+
     if (resultMatch) {
       if (matchMsg) {
         resultMatch.textContent = matchMsg;
@@ -60,23 +112,21 @@
     let resolved;
     try {
       if (!resolveUrl) throw new Error('Resolve API not configured.');
-      resolved = await ScanResolve.resolve(resolveUrl, raw);
+      resolved = await ScanResolve.resolve(resolveUrl, raw, knownItemCodes());
     } catch (e) {
-      showResult(raw, null, `Could not resolve link: ${e.message}`, true, '');
+      showResult({ scanned: raw }, null, `Could not resolve link: ${e.message}`, true);
       return;
     }
 
-    if (resolved.error && !resolved.itemCode) {
-      showResult(resolved.scanned || raw, null, resolved.error, true, resolved.source || '');
+    const code = (resolved.itemCode || resolved.ItemCode || '').trim();
+
+    if (resolved.error && !code) {
+      showResult(resolved, null, resolved.error, true);
       return;
     }
-
-    const code = (resolved.itemCode || '').trim();
-    const scanned = resolved.scanned || raw;
-    const source = resolved.source || '';
 
     if (!code) {
-      showResult(scanned, null, resolved.error || 'No item code found.', true, source);
+      showResult(resolved, null, resolved.error || 'No item code found.', true);
       return;
     }
 
@@ -85,23 +135,21 @@
       highlightItem(code);
       const same = ScanResolve.codesEqual(code, matchRow.dataset.itemCode);
       showResult(
-        scanned,
+        resolved,
         code,
         same
           ? `Match: line item ${matchRow.dataset.itemCode} (exact).`
           : `Match: line item ${matchRow.dataset.itemCode} (same code).`,
-        false,
-        source
+        false
       );
       return;
     }
 
     showResult(
-      scanned,
+      resolved,
       code,
-      `No match — this PO has no line with item code "${code}".`,
-      true,
-      source
+      `No match — this PO has no line with item code "${code}". Compare with text below.`,
+      true
     );
   };
 
@@ -111,11 +159,12 @@
       setTimeout(async () => {
         qr.close();
         if (!t) return;
-        if (resultMatch) resultMatch.textContent = 'Resolving link…';
+        if (resultMatch) resultMatch.textContent = 'Opening link and reading page…';
         if (resultBox) {
           resultBox.hidden = false;
           resultBox.classList.remove('is-warn');
         }
+        if (previewWrap) previewWrap.hidden = true;
         await processScan(t);
       }, 400);
     },

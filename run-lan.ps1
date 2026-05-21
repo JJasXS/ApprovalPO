@@ -1,4 +1,5 @@
 # Run ApprovalPO so phones on the same Wi-Fi can connect (HTTP + HTTPS on all interfaces).
+# Same as:  dotnet run --launch-profile lan   (after . .\Register-FastDotnetRun.ps1)
 Set-Location $PSScriptRoot
 
 # Stop a previous run so dotnet build can copy ApprovalPO.dll

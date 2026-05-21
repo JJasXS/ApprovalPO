@@ -1,6 +1,6 @@
-# One-time setup: makes "dotnet run" in this repo skip MSBuild when bin\Debug\net8.0\ApprovalPO.dll exists.
+# One-time setup: "dotnet run" in this repo uses fast scripts (run.ps1 / run-lan.ps1).
 # Run:  . .\Register-FastDotnetRun.ps1
-# Then restart PowerShell (or reload profile).
+# Then restart PowerShell.
 
 $repoRoot = $PSScriptRoot
 $marker = Join-Path $repoRoot '.fast-dotnet-run-installed'
@@ -22,7 +22,23 @@ $block = @"
 function global:dotnet {
     param([Parameter(ValueFromRemainingArguments = `$true)][string[]] `$CommandArgs)
     if (`$CommandArgs.Count -ge 1 -and `$CommandArgs[0] -eq 'run' -and (Test-Path (Join-Path (Get-Location).Path 'ApprovalPO.csproj'))) {
-        & '$repoRoot\run.ps1' @(`$CommandArgs[1..(`$CommandArgs.Length - 1)])
+        `$lan = `$false
+        `$pass = [System.Collections.Generic.List[string]]::new()
+        for (`$i = 1; `$i -lt `$CommandArgs.Length; `$i++) {
+            if (`$CommandArgs[`$i] -in '--launch-profile', '-lp') {
+                if (`$i + 1 -lt `$CommandArgs.Length -and `$CommandArgs[`$i + 1] -eq 'lan') {
+                    `$lan = `$true
+                    `$i++
+                    continue
+                }
+            }
+            `$pass.Add(`$CommandArgs[`$i])
+        }
+        if (`$lan) {
+            & '$repoRoot\run-lan.ps1' @(`$pass)
+        } else {
+            & '$repoRoot\run.ps1' @(`$pass)
+        }
         return
     }
     & (Get-Command dotnet.exe -CommandType Application | Select-Object -First 1).Source @CommandArgs
@@ -33,7 +49,13 @@ function global:dotnet {
 if (Test-Path $profilePath) {
     $existing = Get-Content $profilePath -Raw
     if ($existing -match 'ApprovalPO: fast dotnet run') {
-        Write-Host 'PowerShell profile already has ApprovalPO fast dotnet run.'
+        $updated = $existing -replace '(?s)# ApprovalPO: fast dotnet run.*?^}\r?\n', $block.TrimEnd()
+        if ($updated -eq $existing) {
+            Write-Host 'Replacing ApprovalPO dotnet hook in profile...'
+            $updated = ($existing -replace '(?s)# ApprovalPO: fast dotnet run.*', $block.TrimEnd())
+        }
+        Set-Content -Path $profilePath -Value $updated -NoNewline
+        Write-Host "Updated fast dotnet run hook in: $profilePath"
     }
     else {
         Add-Content -Path $profilePath -Value $block
@@ -47,7 +69,7 @@ else {
 
 Set-Content -Path $marker -Value (Get-Date).ToString('o')
 Write-Host ''
-Write-Host 'Restart PowerShell, then from ApprovalPO:  dotnet run   (fast — uses run.ps1 / dotnet exec)'
-Write-Host 'Or type:  .\run.ps1   or   run'
-Write-Host 'After code edits: rebuild happens automatically when source is newer than the DLL'
-Write-Host 'Avoid plain dotnet run without this hook — it always runs MSBuild and feels slow'
+Write-Host 'Restart PowerShell, then from ApprovalPO:' -ForegroundColor Cyan
+Write-Host '  dotnet run --launch-profile lan   (phone / Wi-Fi — same as .\run-lan.ps1)'
+Write-Host '  dotnet run                        (PC only — localhost)'
+Write-Host 'Or:  .\run-lan.ps1   .\run.ps1'

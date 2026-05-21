@@ -11,3 +11,4 @@ foreach ($port in 5057, 5058) {
 }
 
 Start-Sleep -Seconds 1
+Write-Host 'Stopped ApprovalPO / dotnet hosts on ports 5057-5058.' -ForegroundColor DarkGray
