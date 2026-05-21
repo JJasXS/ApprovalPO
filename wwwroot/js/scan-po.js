@@ -6,6 +6,7 @@
   if (!cfg) return;
 
   const ordersUrl = cfg.dataset.ordersJsonUrl || '';
+  const resolveUrl = cfg.dataset.resolveScanUrl || '';
   const detailPageUrl = (cfg.dataset.detailPageUrl || '/ScanPODetail').replace(/\/$/, '');
 
   let allOrders = [];
@@ -15,6 +16,36 @@
   const emptyState = document.getElementById('scanEmpty');
   const resultCount = document.getElementById('scanResultCount');
   const searchInput = document.getElementById('scanSearch');
+  const resultBox = document.getElementById('scanLastResult');
+  const resultText = document.getElementById('scanLastResultText');
+  const resultCode = document.getElementById('scanLastResultCode');
+  const resultMatch = document.getElementById('scanLastResultMatch');
+
+  const showScanResult = (raw, code, matchMsg, warn) => {
+    if (!resultBox || !resultText) return;
+    resultBox.hidden = false;
+    resultBox.classList.toggle('is-warn', !!warn);
+    resultText.textContent = raw;
+    if (resultCode) {
+      if (code && code !== raw) {
+        resultCode.hidden = false;
+        resultCode.textContent = `Resolved: ${code}`;
+      } else {
+        resultCode.hidden = true;
+        resultCode.textContent = '';
+      }
+    }
+    if (resultMatch) {
+      if (matchMsg) {
+        resultMatch.textContent = matchMsg;
+        resultMatch.hidden = false;
+      } else {
+        resultMatch.hidden = true;
+        resultMatch.textContent = '';
+      }
+    }
+    resultBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -105,24 +136,40 @@
     });
   }
 
+  const findPoMatch = (code) => {
+    const key = String(code || '').trim().toLowerCase();
+    if (!key) return null;
+    return allOrders.find((o) => {
+      const po = (o.poNumber || '').trim().toLowerCase();
+      return po === key || po.includes(key) || key.includes(po);
+    });
+  };
+
   if (typeof ScanQrScanner !== 'undefined') {
     const qr = ScanQrScanner.create({
       onDetected(text) {
         const t = (text || '').trim();
-        const match = allOrders.find(
-          (o) => (o.poNumber || '').trim().toLowerCase() === t.toLowerCase()
-        );
-
-        setTimeout(() => {
+        setTimeout(async () => {
           qr.close();
+          let code = t;
+          if (typeof ScanResolve !== 'undefined' && resolveUrl && ScanResolve.isUrl(t)) {
+            if (resultMatch) resultMatch.textContent = 'Resolving link…';
+            try {
+              const resolved = await ScanResolve.resolve(resolveUrl, t);
+              if (resolved.itemCode) code = resolved.itemCode;
+            } catch (_) { /* use raw */ }
+          }
+
+          const match = findPoMatch(code) || findPoMatch(t);
           if (match) {
+            showScanResult(t, code, `Opening PO ${match.poNumber || match.docKey}…`, false);
             window.location.href = detailHref(match.docKey);
             return;
           }
-          searchTerm = t;
-          if (searchInput) searchInput.value = t;
+          searchTerm = code;
+          if (searchInput) searchInput.value = code;
           renderTable(allOrders);
-          alert(`QR scanned: "${t}"\nNo matching approved PO found.`);
+          showScanResult(t, code, 'No matching approved PO # for this scan.', true);
         }, 400);
       },
     });

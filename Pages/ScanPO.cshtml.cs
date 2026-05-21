@@ -16,10 +16,12 @@ public class ScanPOModel : PageModel
     };
 
     private readonly IPurchaseOrderCatalog _orders;
+    private readonly IScanQrLinkResolver _scanResolver;
 
-    public ScanPOModel(IPurchaseOrderCatalog orders)
+    public ScanPOModel(IPurchaseOrderCatalog orders, IScanQrLinkResolver scanResolver)
     {
         _orders = orders;
+        _scanResolver = scanResolver;
     }
 
     public IReadOnlyList<PurchaseOrderRow> Orders { get; private set; } = Array.Empty<PurchaseOrderRow>();
@@ -33,6 +35,12 @@ public class ScanPOModel : PageModel
     {
         var list = await LoadApprovedOrdersAsync(cancellationToken).ConfigureAwait(false);
         return new JsonResult(list, JsonCamel);
+    }
+
+    public async Task<IActionResult> OnGetResolveScanAsync(string url, CancellationToken cancellationToken)
+    {
+        var result = await _scanResolver.ResolveAsync(url ?? "", cancellationToken).ConfigureAwait(false);
+        return new JsonResult(result);
     }
 
     private async Task<IReadOnlyList<PurchaseOrderRow>> LoadApprovedOrdersAsync(CancellationToken cancellationToken)

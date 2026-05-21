@@ -89,6 +89,15 @@
                 </div>
             </div>
 
+            <div id="scanDetailConfig" hidden data-resolve-scan-url="@Url.Page("/ScanPODetail", null, new { handler = "ResolveScan" })"></div>
+
+            <div id="scanLastResult" class="scan-last-result" hidden>
+                <p class="scan-last-result-label">Last scan</p>
+                <p id="scanLastResultText" class="scan-last-result-value"></p>
+                <p id="scanLastResultCode" class="scan-last-result-code" hidden></p>
+                <p id="scanLastResultMatch" class="scan-last-result-match"></p>
+            </div>
+
             <p class="scan-lines-title">Line items (@Model.Lines.Count)</p>
             @if (Model.Lines.Count == 0)
             {
@@ -113,7 +122,7 @@
                             @foreach (var line in Model.Lines)
                             {
                                 n++;
-                                <tr>
+                                <tr data-item-code="@line.ItemCode">
                                     <td class="scan-line-num">@n</td>
                                     <td class="scan-line-code">@line.ItemCode</td>
                                     <td>@line.Description</td>
@@ -151,6 +160,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script src="~/js/scan-qr-scanner.js" asp-append-version="true"></script>
+<script src="~/js/scan-resolve.js" asp-append-version="true"></script>
 <script src="~/js/scan-po-detail.js" asp-append-version="true"></script>
 <script>
     (function () {

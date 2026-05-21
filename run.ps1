@@ -1,12 +1,7 @@
 # Fast start: rebuild only when needed, then run DLL directly (no "dotnet run" / MSBuild).
 Set-Location $PSScriptRoot
 
-Get-Process -Name ApprovalPO -ErrorAction SilentlyContinue | Stop-Process -Force
-foreach ($port in 5057, 5058) {
-    Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
-        ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
-}
-Start-Sleep -Seconds 1
+. (Join-Path $PSScriptRoot 'scripts\Stop-ApprovalPO.ps1')
 
 $dll = Join-Path $PSScriptRoot 'bin\Debug\net8.0\ApprovalPO.dll'
 $needBuild = -not (Test-Path $dll)

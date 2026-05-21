@@ -8,10 +8,12 @@ namespace ApprovalPO.Pages;
 public class ScanPODetailModel : PageModel
 {
     private readonly IPurchaseOrderCatalog _orders;
+    private readonly IScanQrLinkResolver _scanResolver;
 
-    public ScanPODetailModel(IPurchaseOrderCatalog orders)
+    public ScanPODetailModel(IPurchaseOrderCatalog orders, IScanQrLinkResolver scanResolver)
     {
         _orders = orders;
+        _scanResolver = scanResolver;
     }
 
     [BindProperty(SupportsGet = true)]
@@ -36,5 +38,11 @@ public class ScanPODetailModel : PageModel
 
         Lines = await _orders.GetPurchaseRequestLinesAsync(DocKey, cancellationToken).ConfigureAwait(false);
         return Page();
+    }
+
+    public async Task<IActionResult> OnGetResolveScanAsync(string url, CancellationToken cancellationToken)
+    {
+        var result = await _scanResolver.ResolveAsync(url ?? "", cancellationToken).ConfigureAwait(false);
+        return new JsonResult(result);
     }
 }

@@ -15,7 +15,8 @@
 
 <div id="scanPageConfig" hidden
      data-orders-json-url="@ordersJsonUrl"
-     data-detail-page-url="@detailPageUrl"></div>
+     data-detail-page-url="@detailPageUrl"
+     data-resolve-scan-url="@Url.Page("/ScanPO", null, new { handler = "ResolveScan" })"></div>
 
 <header class="scan-header">
     <div class="scan-header-inner">
@@ -54,6 +55,13 @@
 
 <main class="scan-main">
     <div class="scan-main-inner">
+        <div id="scanLastResult" class="scan-last-result" hidden>
+            <p class="scan-last-result-label">Last scan</p>
+            <p id="scanLastResultText" class="scan-last-result-value"></p>
+            <p id="scanLastResultCode" class="scan-last-result-code" hidden></p>
+            <p id="scanLastResultMatch" class="scan-last-result-match"></p>
+        </div>
+
         <div class="scan-search-bar">
             <input id="scanSearch" class="scan-search-input" type="search" placeholder="Search PO #…" autocomplete="off" />
             <span id="scanResultCount" class="scan-result-count"></span>
@@ -118,4 +126,5 @@
 
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script src="~/js/scan-qr-scanner.js" asp-append-version="true"></script>
+<script src="~/js/scan-resolve.js" asp-append-version="true"></script>
 <script src="~/js/scan-po.js" asp-append-version="true"></script>

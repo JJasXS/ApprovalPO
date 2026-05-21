@@ -2,12 +2,7 @@
 $repoRoot = Split-Path $PSScriptRoot -Parent
 Set-Location $repoRoot
 
-Get-Process -Name ApprovalPO -ErrorAction SilentlyContinue | Stop-Process -Force
-foreach ($port in 5057, 5058) {
-    Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
-        ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
-}
-Start-Sleep -Seconds 1
+. (Join-Path $PSScriptRoot 'Stop-ApprovalPO.ps1')
 
 $dirs = @(
     'bin', 'obj', 'artifacts',
