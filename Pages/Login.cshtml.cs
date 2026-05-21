@@ -61,7 +61,7 @@ public class LoginModel : PageModel
     public IActionResult OnGet()
     {
         if (User.Identity?.IsAuthenticated == true)
-            return RedirectToPage("/PurchaseOrders");
+            return RedirectToPage("/Dashboard");
 
         ReturnUrl = NormalizeLocalReturn(ReturnUrl);
         return Page();
@@ -193,7 +193,7 @@ public class LoginModel : PageModel
 
         var redirect = !string.IsNullOrEmpty(ReturnUrl)
             ? ReturnUrl!
-            : Url.Page("/PurchaseOrders") ?? "/PurchaseOrders";
+            : Url.Page("/Dashboard") ?? "/Dashboard";
 
         if (IsLikelyPurchaseOrdersPage(redirect))
             redirect = AppendQueryParam(redirect, "promptNotify", "1");

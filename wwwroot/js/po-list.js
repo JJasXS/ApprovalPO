@@ -34,7 +34,6 @@
   const refreshBtn = document.getElementById('refreshBtn');
   const bulkApproveBtn = document.getElementById('bulkApproveBtn');
   const bulkSelectAll = document.getElementById('bulkSelectAll');
-  const filterVendor = document.getElementById('filterVendor');
   const filterDateFrom = document.getElementById('filterDateFrom');
   const filterClearBtn = document.getElementById('filterClearBtn');
   const menuBtn = document.getElementById('menuBtn');
@@ -54,7 +53,6 @@
   let confirmOkCallback = null;
 
   const filters = {
-    vendor: '',
     dateFrom: '',
   };
 
@@ -251,7 +249,6 @@
 
   const rowFromOrder = (o) => {
     const po = o.poNumber || '';
-    const vendor = o.vendor || '';
     const amount =
       typeof o.amount === 'number' ? o.amount.toFixed(2) : String(o.amount ?? '0');
     const status = normalizeOrderStatus(o);
@@ -265,12 +262,10 @@
         : '';
     const amtNum = Number.parseFloat(amount) || 0;
     const stack = statusStackClass(status);
-    return `<tr class="po-row" data-po="${escapeHtml(po)}" data-doc-key="${escapeHtml(docKey)}" data-vendor="${escapeHtml(vendor)}" data-amount="${escapeHtml(amount)}" data-transferable="${transfer}" data-status="${escapeHtml(status)}" data-description="${escapeHtml(desc)}" data-order-date="${escapeHtml(dateStr)}">
+    return `<tr class="po-row" data-po="${escapeHtml(po)}" data-doc-key="${escapeHtml(docKey)}" data-amount="${escapeHtml(amount)}" data-transferable="${transfer}" data-status="${escapeHtml(status)}" data-description="${escapeHtml(desc)}" data-order-date="${escapeHtml(dateStr)}">
       <td class="td-check" data-label="">${chk}</td>
       <td class="po-status-td" data-label=""><div class="po-status-stack ${stack}"><span class="po-status-icon" aria-hidden="true"></span><span class="po-status-text">${escapeHtml(statusDisplay(status))}</span></div></td>
       <td class="po-num" data-label="PO #"><span class="po-num-text">${escapeHtml(po)}</span></td>
-      <td class="po-vendor" data-label="Vendor">${escapeHtml(vendor)}</td>
-      <td class="po-agent" data-label="Created by">—</td>
       <td class="num po-date" data-label="Date">${escapeHtml(formatDisplayDate(dateStr))}</td>
       <td class="num po-amount" data-label="Amount">${amtNum.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
       <td class="actions" data-label="">
@@ -418,7 +413,6 @@
     if (!reviewBody || !modalApproveBtn) return;
     const modalRejectBtnEl = document.getElementById('modalRejectBtn');
     const po = tr.dataset.po || '';
-    const vendor = tr.dataset.vendor || '';
     const status = rowListStatus(tr);
     const desc = tr.dataset.description || '';
     const orderIso = tr.dataset.orderDate || '';
@@ -523,16 +517,8 @@
       <div class="review-card">
         <div class="review-grid">
           <div class="review-field">
-            <div class="review-label">Company</div>
-            <div class="review-value">${escapeHtml(vendor)}</div>
-          </div>
-          <div class="review-field">
             <div class="review-label">Date</div>
             <div class="review-value">${escapeHtml(displayDate)}</div>
-          </div>
-          <div class="review-field">
-            <div class="review-label">Agent</div>
-            <div class="review-value">—</div>
           </div>
           <div class="review-field">
             <div class="review-label">Amount</div>
@@ -638,16 +624,16 @@
 
   const rejectRowInternal = (tr, opts = {}) => {
     const { quiet = false } = opts;
-    tr.dataset.status = 'Cancelled';
+    tr.dataset.status = 'Rejected';
     tr.dataset.transferable = 'false';
-    syncRowStatusDom(tr, 'Cancelled');
+    syncRowStatusDom(tr, 'Rejected');
     const cb = tr.querySelector('.row-select');
     if (cb) {
       cb.checked = false;
       cb.disabled = true;
     }
     updateRowButtons(tr);
-    if (!quiet) showToast(`PO ${tr.dataset.po} cancelled.`);
+    if (!quiet) showToast(`${tr.dataset.po} rejected.`);
     refreshView();
   };
 
@@ -708,7 +694,7 @@
   const rejectRow = (tr) => {
     const st = rowListStatus(tr);
     if (st !== 'Pending' && st !== 'Approved') {
-      showToast('Cancel is only available for pending or approved purchase orders.');
+      showToast('Reject is only available for pending or approved orders.');
       return;
     }
     void (async () => {
@@ -716,10 +702,10 @@
         status: tr.dataset.status,
         transferable: tr.dataset.transferable || ''
       };
-      const ok = await persistListStatus(tr, 'Cancelled');
+      const ok = await persistListStatus(tr, 'Rejected');
       if (!ok) return;
       rejectRowInternal(tr, { quiet: true });
-      showUndo('Cancelled.', async () => {
+      showUndo('Rejected.', async () => {
         const uok = await persistListStatus(tr, listStatusFromSnapshot(prev));
         if (!uok) {
           showToast('Undo could not be saved to the database.');
@@ -746,9 +732,7 @@
   };
 
   const rowMatchesFilters = (tr) => {
-    const vendor = (tr.dataset.vendor || '').toLowerCase();
     const od = tr.dataset.orderDate || '';
-    if (filters.vendor && vendor !== filters.vendor.toLowerCase()) return false;
     if (filters.dateFrom && od < filters.dateFrom) return false;
     return true;
   };
@@ -919,19 +903,13 @@
     else if (tabBtn.id === 'tabCancelled') setListTab('Cancelled');
     else if (tabBtn.id === 'tabRejected') setListTab('Rejected');
   });
-  filterVendor?.addEventListener('change', () => {
-    filters.vendor = (filterVendor.value || '').trim();
-    refreshView();
-  });
   filterDateFrom?.addEventListener('change', () => {
     filters.dateFrom = filterDateFrom.value || '';
     refreshView();
   });
 
   filterClearBtn?.addEventListener('click', () => {
-    if (filterVendor) filterVendor.value = '';
     if (filterDateFrom) filterDateFrom.value = '';
-    filters.vendor = '';
     filters.dateFrom = '';
     refreshView();
   });

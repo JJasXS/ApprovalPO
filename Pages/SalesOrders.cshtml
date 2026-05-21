@@ -1,0 +1,223 @@
+@page
+@model ApprovalPO.Pages.SalesOrdersModel
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@{
+    ViewData["Title"] = "Sales Orders";
+    ViewData["AppName"] = "Approval SO";
+    var ordersJsonUrl           = Url.Page("/SalesOrders", null, new { handler = "OrdersJson" })!;
+    var linesJsonUrlBase        = Url.Page("/SalesOrders", null, new { handler = "LinesJson" })!;
+    var setTransferableUrl      = Url.Page("/SalesOrders", null, new { handler = "SetTransferable" })!;
+    var setLineTransferableUrl  = Url.Page("/SalesOrders", null, new { handler = "SetLineTransferable" })!;
+    var pendingNotifySnapshotUrl = Url.Page("/SalesOrders", null, new { handler = "PendingNotifySnapshot" })!;
+    var csrf = Antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+}
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="~/css/po.css" asp-append-version="true" />
+
+<div id="poPageConfig" hidden
+     data-orders-json-url="@ordersJsonUrl"
+     data-lines-json-url-base="@linesJsonUrlBase"
+     data-set-transferable-url="@setTransferableUrl"
+     data-set-line-transferable-url="@setLineTransferableUrl"
+     data-pending-notify-url="@pendingNotifySnapshotUrl"
+     data-pending-notify-poll-ms="120000"
+     data-web-push-public-key=""
+     data-web-push-subscribe-url="/api/web-push/subscribe"
+     data-web-push-unsubscribe-url="/api/web-push/unsubscribe"
+     data-csrf-token="@csrf"
+     data-high-value-threshold="@Model.HighValueThreshold.ToString(System.Globalization.CultureInfo.InvariantCulture)"></div>
+
+<main class="po-main">
+    <header class="po-header po-header--hero">
+        <div class="po-header__inner">
+            <div class="po-header__titles">
+                <h1 class="po-header__title">Sales order approvals</h1>
+                <a href="/PurchaseOrders" class="po-module-switch-btn" style="color:#2563eb;background:#eff6ff;border-color:#bfdbfe;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/>
+                    </svg>
+                    Purchase Approval
+                </a>
+            </div>
+            <div class="po-header__actions">
+                <div class="po-header__menu">
+                    <button id="poHeadToggleBtn" class="menu-btn menu-btn--head-toggle" type="button" aria-expanded="true" aria-controls="poTableHeadPanel" aria-label="Hide filters and tabs" title="Show or hide filters and tabs">
+                        <svg class="menu-btn__chev" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <path d="M6 14l6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="po-header__menu">
+                    <button id="menuBtn" class="menu-btn" type="button" aria-expanded="false" aria-controls="menuPanel" aria-label="Open menu">
+                        <span></span><span></span><span></span>
+                    </button>
+                    <div id="menuPanel" class="menu-panel" hidden>
+                        <div class="menu-user">@User.Identity?.Name</div>
+                        <a href="/Dashboard" class="menu-link">&#8592; Back to home</a>
+                        <form method="post" asp-page="/Logout" class="menu-logout-form">
+                            <button type="submit" class="menu-link menu-link--button">Sign out</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="po-main__inner">
+        <div id="poTableHeadPanel" class="po-table-wrap__head">
+            <div class="po-toolbar">
+                <div class="po-toolbar__cluster">
+                    <label class="po-toolbar-select-all" title="Select every pending SO shown in the list">
+                        <input type="checkbox" id="bulkSelectAll" disabled aria-label="Select all visible pending sales orders" />
+                        <span class="po-toolbar-select-all__text">Select all</span>
+                    </label>
+                    <button type="button" id="bulkApproveBtn" class="po-btn po-btn--bulk" disabled>Bulk approve</button>
+                    <button type="button" id="filterClearBtn" class="po-btn po-btn--filter-clear">Clear</button>
+                </div>
+            </div>
+
+            <div class="po-filters" id="poFilters">
+                <input id="filterDateFrom" class="po-filter-input" type="date" aria-label="From date" />
+            </div>
+
+            <div class="tabs-wrap">
+                <div class="tabs" role="tablist" aria-label="SO status tabs">
+                    <button id="tabPending"   class="tab-btn is-active" type="button" role="tab" aria-selected="true">Pending (<span id="countPending">0</span>)</button>
+                    <button id="tabApproved"  class="tab-btn" type="button" role="tab" aria-selected="false">Approved (<span id="countApproved">0</span>)</button>
+                    <button id="tabCancelled" class="tab-btn" type="button" role="tab" aria-selected="false">Cancelled (<span id="countCancelled">0</span>)</button>
+                    <button id="tabRejected"  class="tab-btn" type="button" role="tab" aria-selected="false">Rejected (<span id="countRejected">0</span>)</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="po-table-wrap" id="poTableWrap">
+            <div id="poEmptyState" class="po-empty" hidden role="status" aria-live="polite">
+                <div class="po-empty__art" aria-hidden="true">
+                    <svg width="120" height="100" viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="18" y="22" width="84" height="56" rx="12" fill="#F1F5F9" stroke="#E2E8F0" stroke-width="2"/>
+                        <path d="M38 42h44M38 52h32" stroke="#CBD5E1" stroke-width="3" stroke-linecap="round"/>
+                        <circle cx="78" cy="38" r="8" fill="#DCFCE7"/>
+                        <path d="M74 38l2.5 2.5L82 34" stroke="#16A34A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <p class="po-empty__text"></p>
+            </div>
+            <div id="poTableScroll" class="po-table-scroll">
+                <div id="poSkeleton" class="po-skeleton" hidden aria-hidden="true">
+                    <div class="po-skeleton__card"></div>
+                    <div class="po-skeleton__card"></div>
+                    <div class="po-skeleton__card"></div>
+                    <div class="po-skeleton__card"></div>
+                </div>
+                <table class="po-table">
+                    <thead>
+                        <tr>
+                            <th class="th-check" scope="col"><span class="visually-hidden">Select</span></th>
+                            <th class="th-status" scope="col">Status</th>
+                            <th scope="col">SO #</th>
+                            <th class="num po-th-date" scope="col">Date</th>
+                            <th class="num" scope="col">Amount</th>
+                            <th scope="col" class="actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="poTableBody">
+                    @foreach (var row in Model.Orders)
+                    {
+                        var statusClass = row.Status == "Approved"  ? "po-status-stack--approved"
+                                        : row.Status == "Rejected"  ? "po-status-stack--rejected"
+                                        : row.Status == "Cancelled" ? "po-status-stack--cancelled"
+                                        : "po-status-stack--pending";
+                        <tr class="po-row" data-po="@row.SoNumber"
+                            data-doc-key="@row.DocKey"
+                            data-amount="@row.Amount.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)"
+                            data-transferable="@(row.Transferable == true ? "true" : row.Transferable == false ? "false" : "")"
+                            data-status="@row.Status"
+                            data-description="@row.Description"
+                            data-order-date="@row.OrderDate.ToString("yyyy-MM-dd")">
+                            <td class="td-check" data-label="">
+                                @if (row.Status == "Pending")
+                                {
+                                    <input type="checkbox" class="row-select" aria-label="Select @row.SoNumber" />
+                                }
+                            </td>
+                            <td class="po-status-td" data-label="">
+                                <div class="po-status-stack @statusClass">
+                                    <span class="po-status-icon" aria-hidden="true"></span>
+                                    <span class="po-status-text">@row.Status</span>
+                                </div>
+                            </td>
+                            <td class="po-num" data-label="SO #">
+                                <span class="po-num-text">@row.SoNumber</span>
+                            </td>
+                            <td class="num po-date" data-label="Date">@row.OrderDate.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</td>
+                            <td class="num po-amount" data-label="Amount">@row.Amount.ToString("N2")</td>
+                            <td class="actions" data-label="">
+                                <div class="actions-row-block">
+                                    <div class="actions-inner">
+                                        <button type="button" class="po-btn po-btn--review btn-review" data-action="review">Review</button>
+                                        <button type="button" class="po-btn po-btn--reject btn-reject" data-action="reject">Reject</button>
+                                        <button type="button" class="po-btn po-btn--approve btn-approve" data-action="approve">Approve</button>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <p class="po-footer-note">Managed by ProAcc System Consulting.</p>
+    </div>
+</main>
+
+<div id="reviewModal" class="modal modal--sheet" aria-hidden="true">
+    <div class="modal__backdrop" data-close></div>
+    <div class="modal__sheet" role="dialog" aria-modal="true" aria-label="Sales order details">
+        <div class="modal__sheet-handle" aria-hidden="true"></div>
+        <div class="modal__sheet-top">
+            <button type="button" class="modal__icon-btn" data-close aria-label="Close">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <div class="modal__sheet-top-fill"></div>
+            <button type="button" class="modal__icon-btn modal__nav-btn" id="modalPrevBtn" aria-label="Previous sales order">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <button type="button" class="modal__icon-btn modal__nav-btn" id="modalNextBtn" aria-label="Next sales order">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+        </div>
+        <div class="modal__sheet-scroll">
+            <div id="reviewBody" class="modal__body"></div>
+        </div>
+        <div class="modal__sheet-actions">
+            <button type="button" class="po-btn po-btn--reject-outline" id="modalRejectBtn">Reject</button>
+            <button type="button" class="po-btn po-btn--approve-solid" id="modalApproveBtn">Approve</button>
+        </div>
+    </div>
+</div>
+
+<div id="confirmModal" class="modal modal--sheet modal--confirm" aria-hidden="true">
+    <div class="modal__backdrop" data-confirm-close></div>
+    <div class="modal__sheet modal__sheet--narrow" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+        <div class="modal__sheet-handle" aria-hidden="true"></div>
+        <div class="modal__sheet-scroll modal__sheet-scroll--padded">
+            <h2 id="confirmTitle" class="modal__confirm-title">Confirm</h2>
+            <div id="confirmBody" class="modal__body modal__body--confirm"></div>
+        </div>
+        <div class="modal__sheet-actions modal__sheet-actions--confirm">
+            <button type="button" class="po-btn po-btn--neutral-outline" data-confirm-close>Cancel</button>
+            <button type="button" class="po-btn po-btn--approve-solid" id="confirmOkBtn">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<div id="undoToast" class="undo-toast" hidden role="status" aria-live="polite">
+    <span id="undoToastMsg"></span>
+    <button type="button" id="undoBtn" class="po-btn po-btn--undo">Undo</button>
+</div>
+
+<script src="~/js/po-list.js" asp-append-version="true"></script>

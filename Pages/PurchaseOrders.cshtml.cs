@@ -73,14 +73,11 @@ public class PurchaseOrdersModel : PageModel
 
     public IReadOnlyList<PurchaseOrderRow> Orders { get; private set; } = Array.Empty<PurchaseOrderRow>();
 
-    public IReadOnlyList<string> DistinctVendors { get; private set; } = Array.Empty<string>();
-
     public decimal HighValueThreshold => _approval.Value.HighValueAmountThreshold;
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         Orders = await _orders.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
-        DistinctVendors = Orders.Select(o => o.Vendor).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(v => v).ToList();
     }
 
     public async Task<IActionResult> OnGetOrdersJsonAsync(CancellationToken cancellationToken)

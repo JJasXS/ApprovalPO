@@ -1,0 +1,302 @@
+/* ─── Dashboard shell ─────────────────────────────────────── */
+.dash-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #f4f6fb;
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+/* ─── Header — mirrors po-header--hero ────────────────────── */
+.dash-header {
+  position: sticky;
+  top: 0;
+  z-index: 120;
+  padding: 12px 24px 20px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 72%, #f1f5f9 100%);
+  color: #0f172a;
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+/* Blue accent line at bottom of header */
+.dash-header::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: linear-gradient(90deg,
+    rgba(37, 99, 235, 0.22) 0%,
+    rgba(99, 102, 241, 0.28) 50%,
+    rgba(56, 189, 248, 0.22) 100%);
+  pointer-events: none;
+}
+
+.dash-header-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.dash-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.dash-brand-icon {
+  width: 20px;
+  height: 20px;
+  color: #2563eb;
+  flex-shrink: 0;
+}
+
+.dash-brand-name {
+  font-size: clamp(1.1rem, 3vw, 1.35rem);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+/* ─── Header right-side actions ───────────────────────────── */
+.dash-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.dash-header-user {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-signout-btn {
+  font-size: 13px;
+  font-weight: 600;
+  color: #dc2626;
+  text-decoration: none;
+  padding: 6px 14px;
+  border: 1.5px solid #fca5a5;
+  border-radius: 8px;
+  background: #fff;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.dash-signout-btn:hover {
+  background: #fef2f2;
+  border-color: #f87171;
+  color: #b91c1c;
+}
+
+/* ─── Responsive header ───────────────────────────────────── */
+@media (max-width: 600px) {
+  .dash-header {
+    padding: 10px 16px 16px;
+  }
+}
+
+/* ─── Main content ────────────────────────────────────────── */
+.dash-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 60px 24px 80px;
+}
+
+.dash-welcome {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.dash-welcome-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 8px;
+}
+
+.dash-welcome-sub {
+  font-size: 15px;
+  color: #64748b;
+  margin: 0;
+}
+
+/* ─── Cards grid ──────────────────────────────────────────── */
+.dash-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  width: 100%;
+  max-width: 680px;
+}
+
+/* ─── Card base ───────────────────────────────────────────── */
+.dash-card {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 28px 24px 24px;
+  border: 1.5px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: relative;
+  text-decoration: none;
+  color: inherit;
+  transition: box-shadow 0.18s, transform 0.18s, border-color 0.18s;
+}
+
+/* Active / clickable card */
+.dash-card--active {
+  cursor: pointer;
+}
+
+.dash-card--active:hover {
+  box-shadow: 0 8px 28px rgba(37, 99, 235, 0.14);
+  transform: translateY(-3px);
+  border-color: #93c5fd;
+}
+
+.dash-card--active:hover .dash-card-arrow {
+  transform: translateX(4px);
+}
+
+/* Disabled / coming soon card */
+.dash-card--soon {
+  opacity: 0.6;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* ─── Card icon ───────────────────────────────────────────── */
+.dash-card-icon-wrap {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.dash-card-icon-wrap svg {
+  width: 26px;
+  height: 26px;
+}
+
+.dash-card-icon-wrap--blue {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.dash-card-icon-wrap--green {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+.dash-card-icon-wrap--violet {
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+
+/* ─── Card body ───────────────────────────────────────────── */
+.dash-card-body {
+  flex: 1;
+}
+
+.dash-card-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 6px;
+}
+
+.dash-card-desc {
+  font-size: 13.5px;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.55;
+}
+
+/* ─── Arrow ───────────────────────────────────────────────── */
+.dash-card-arrow {
+  position: absolute;
+  top: 24px;
+  right: 22px;
+  color: #93c5fd;
+  transition: transform 0.18s;
+}
+
+.dash-card-arrow svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ─── Coming soon badge ───────────────────────────────────── */
+.dash-card-badge {
+  position: absolute;
+  top: 20px;
+  right: 18px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid #e2e8f0;
+}
+
+/* ─── Back chevron link in brand area ─────────────────────── */
+.dash-back-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  text-decoration: none;
+  padding: 4px;
+  border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+  margin-right: 2px;
+}
+
+.dash-back-link:hover {
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+/* ─── Responsive ──────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .dash-main {
+    padding: 40px 16px 60px;
+  }
+
+  .dash-welcome-title {
+    font-size: 21px;
+  }
+
+  .dash-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .dash-header-user {
+    display: none;
+  }
+}

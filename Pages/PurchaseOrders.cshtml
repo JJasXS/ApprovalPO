@@ -34,6 +34,12 @@
         <div class="po-header__inner">
             <div class="po-header__titles">
                 <h1 class="po-header__title">Purchase order approvals</h1>
+                <a href="/SalesOrders" class="po-module-switch-btn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                    </svg>
+                    Sales Approval
+                </a>
             </div>
             <div class="po-header__actions">
                 <div class="po-header__menu">
@@ -49,11 +55,7 @@
                     </button>
                     <div id="menuPanel" class="menu-panel" hidden>
                         <div class="menu-user">@User.Identity?.Name</div>
-                        <button type="button" id="poNotifyMenuStop" class="menu-link menu-link--button" hidden>Stop order alerts</button>
-                        @if (Model.ShowDevNotifyTools)
-                        {
-                            <button type="button" id="poDevNotifyPing" class="menu-link menu-link--button">Test browser notify</button>
-                        }
+                        <a href="/Dashboard" class="menu-link">&#8592; Back to home</a>
                         <form method="post" asp-page="/Logout" class="menu-logout-form">
                             <button type="submit" class="menu-link menu-link--button">Sign out</button>
                         </form>
@@ -77,13 +79,6 @@
             </div>
 
             <div class="po-filters" id="poFilters">
-                <select id="filterVendor" class="po-filter-input" aria-label="Vendor">
-                    <option value="">All vendors</option>
-                    @foreach (var v in Model.DistinctVendors)
-                    {
-                        <option value="@v">@v</option>
-                    }
-                </select>
                 <input id="filterDateFrom" class="po-filter-input" type="date" aria-label="From date" />
             </div>
 
@@ -121,8 +116,6 @@
                         <th class="th-check" scope="col"><span class="visually-hidden">Select</span></th>
                         <th class="th-status" scope="col">Status</th>
                         <th scope="col">PO #</th>
-                        <th scope="col">Vendor</th>
-                        <th class="po-th-agent" scope="col">Created by</th>
                         <th class="num po-th-date" scope="col">Date</th>
                         <th class="num" scope="col">Amount</th>
                         <th scope="col" class="actions">Actions</th>
@@ -140,7 +133,6 @@
                                 : "po-status-stack--pending";
                     <tr class="po-row" data-po="@row.PoNumber"
                         data-doc-key="@row.DocKey"
-                        data-vendor="@row.Vendor"
                         data-amount="@row.Amount.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)"
                         data-transferable="@(row.Transferable == true ? "true" : row.Transferable == false ? "false" : "")"
                         data-status="@row.Status"
@@ -161,8 +153,6 @@
                         <td class="po-num" data-label="PO #">
                             <span class="po-num-text">@row.PoNumber</span>
                         </td>
-                        <td class="po-vendor" data-label="Vendor">@row.Vendor</td>
-                        <td class="po-agent" data-label="Created by">—</td>
                         <td class="num po-date" data-label="Date">@row.OrderDate.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</td>
                         <td class="num po-amount" data-label="Amount">@row.Amount.ToString("N2")</td>
                         <td class="actions" data-label="">

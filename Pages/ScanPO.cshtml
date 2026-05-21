@@ -1,0 +1,121 @@
+@page "/ScanPO"
+@model ApprovalPO.Pages.ScanPOModel
+@{
+    ViewData["Title"] = "Scanning PO";
+    ViewData["AppName"] = "Approval PO";
+    var ordersJsonUrl = Url.Page("/ScanPO", null, new { handler = "OrdersJson" })!;
+    var detailPageUrl = "/ScanPODetail";
+    var userName = User.Identity?.Name ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "User";
+}
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="~/css/scan.css" asp-append-version="true" />
+
+<div id="scanPageConfig" hidden
+     data-orders-json-url="@ordersJsonUrl"
+     data-detail-page-url="@detailPageUrl"></div>
+
+<header class="scan-header">
+    <div class="scan-header-inner">
+        <div class="scan-header-titles">
+            <h1 class="scan-header-title">Scanning PO</h1>
+            <a asp-page="/Dashboard" class="scan-module-link">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polyline points="15 18 9 12 15 6"/>
+                </svg>
+                Back to home
+            </a>
+        </div>
+        <div class="scan-header-actions">
+            <button class="scan-qr-btn" id="scanQrBtn" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/>
+                    <path d="M21 16h-3a2 2 0 0 0-2 2v3"/><line x1="21" y1="21" x2="21" y2="21.01"/>
+                </svg>
+                <span>Scan QR</span>
+            </button>
+            <div class="scan-menu-wrap">
+                <button class="scan-menu-btn" id="scanMenuBtn" type="button" aria-expanded="false" aria-controls="scanMenuPanel" aria-label="Open menu">
+                    <span></span><span></span><span></span>
+                </button>
+                <div id="scanMenuPanel" class="scan-menu-panel" hidden>
+                    <div class="scan-menu-user">@userName</div>
+                    <a asp-page="/Dashboard" class="scan-menu-link">&#8592; Back to home</a>
+                    <form method="post" asp-page="/Logout" style="margin:0;padding:0">
+                        <button type="submit" class="scan-menu-link scan-menu-link--danger">Sign out</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<main class="scan-main">
+    <div class="scan-main-inner">
+        <div class="scan-search-bar">
+            <input id="scanSearch" class="scan-search-input" type="search" placeholder="Search PO #…" autocomplete="off" />
+            <span id="scanResultCount" class="scan-result-count"></span>
+        </div>
+
+        <div class="scan-list-hint">Approved purchase orders only — tap a row to open details.</div>
+
+        <div class="scan-table-wrap">
+            <table class="scan-table scan-table--list">
+                <thead>
+                    <tr>
+                        <th>PO #</th>
+                        <th>Date</th>
+                        <th class="num">Amount</th>
+                        <th class="scan-th-chev" aria-hidden="true"></th>
+                    </tr>
+                </thead>
+                <tbody id="scanTableBody">
+                @foreach (var row in Model.Orders)
+                {
+                    var detailHref = $"/ScanPODetail?docKey={row.DocKey}";
+                    <tr class="scan-row scan-row--link">
+                        <td colspan="4" class="scan-row-anchor-cell">
+                            <a href="@detailHref" class="scan-row-anchor">
+                                <span class="scan-po-num">@row.PoNumber</span>
+                                <span class="scan-date">@row.OrderDate.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</span>
+                                <span class="num scan-amount">@row.Amount.ToString("N2")</span>
+                                <span class="scan-row-chev" aria-hidden="true">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="9 18 15 12 9 6"/>
+                                    </svg>
+                                </span>
+                            </a>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+            <div id="scanEmpty" class="scan-empty" @(Model.Orders.Count == 0 ? "" : "hidden")>
+                No approved purchase orders found.
+            </div>
+        </div>
+    </div>
+</main>
+
+<div id="qrOverlay" class="qr-overlay">
+    <div class="qr-box">
+        <video id="qrVideo" class="qr-video" autoplay muted playsinline></video>
+        <canvas id="qrCanvas" class="qr-canvas"></canvas>
+        <div class="qr-guide"></div>
+        <div class="qr-guide-b"></div>
+        <div class="qr-scan-line"></div>
+    </div>
+    <div id="qrPhotoPanel" class="qr-photo-panel" hidden>
+        <p class="qr-photo-hint">Using HTTP — take a photo of the QR code (live scan needs HTTPS).</p>
+        <button type="button" id="qrPhotoBtn" class="qr-photo-btn">Take photo</button>
+        <input type="file" id="qrPhotoInput" accept="image/*" capture="environment" hidden />
+    </div>
+    <p id="qrStatus" class="qr-status">Point camera at a QR code…</p>
+    <button id="qrCloseBtn" class="qr-close-btn" type="button">Cancel</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="~/js/scan-qr-scanner.js" asp-append-version="true"></script>
+<script src="~/js/scan-po.js" asp-append-version="true"></script>

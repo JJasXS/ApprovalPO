@@ -1,0 +1,99 @@
+@page
+@model ApprovalPO.Pages.DashboardModel
+@{
+    ViewData["Title"] = "Home";
+    var userName = User.Identity?.Name ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "User";
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/dashboard.css" asp-append-version="true" />
+}
+
+<div class="dash-shell">
+    <header class="dash-header">
+        <div class="dash-header-inner">
+            <div class="dash-brand">
+                <svg class="dash-brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                    <polyline points="9 22 9 12 15 12 15 22"/>
+                </svg>
+                <span class="dash-brand-name">ProAcc Approvals</span>
+            </div>
+            <div class="dash-header-actions">
+                <span class="dash-header-user">@userName</span>
+                <a href="/Logout" class="dash-signout-btn">Sign out</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="dash-main">
+        <div class="dash-welcome">
+            <h1 class="dash-welcome-title">What would you like to do?</h1>
+            <p class="dash-welcome-sub">Select a module to get started.</p>
+        </div>
+
+        <div class="dash-cards">
+
+            <!-- Purchase Approval -->
+            <a href="/PurchaseOrders" class="dash-card dash-card--active">
+                <div class="dash-card-icon-wrap dash-card-icon-wrap--blue">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+                        <line x1="3" y1="6" x2="21" y2="6"/>
+                        <path d="M16 10a4 4 0 0 1-8 0"/>
+                    </svg>
+                </div>
+                <div class="dash-card-body">
+                    <h2 class="dash-card-title">Purchase Approval</h2>
+                    <p class="dash-card-desc">Review and approve pending purchase orders from your team.</p>
+                </div>
+                <div class="dash-card-arrow">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                        <polyline points="12 5 19 12 12 19"/>
+                    </svg>
+                </div>
+            </a>
+
+            <!-- Sales Approval -->
+            <a href="/SalesOrders" class="dash-card dash-card--active">
+                <div class="dash-card-icon-wrap dash-card-icon-wrap--green">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="1" x2="12" y2="23"/>
+                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                    </svg>
+                </div>
+                <div class="dash-card-body">
+                    <h2 class="dash-card-title">Sales Approval</h2>
+                    <p class="dash-card-desc">Manage and approve sales orders and quotations.</p>
+                </div>
+                <div class="dash-card-arrow">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                        <polyline points="12 5 19 12 12 19"/>
+                    </svg>
+                </div>
+            </a>
+
+            <!-- Scanning PO -->
+            <a asp-page="/ScanPO" class="dash-card dash-card--active">
+                <div class="dash-card-icon-wrap dash-card-icon-wrap--violet">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/>
+                        <path d="M21 16h-3a2 2 0 0 0-2 2v3"/><line x1="21" y1="21" x2="21" y2="21.01"/><line x1="12" y1="3" x2="12" y2="6"/><path d="M12 12v3h3"/><line x1="12" y1="21" x2="12" y2="18"/>
+                    </svg>
+                </div>
+                <div class="dash-card-body">
+                    <h2 class="dash-card-title">Scanning PO</h2>
+                    <p class="dash-card-desc">Scan QR codes to look up and verify purchase orders.</p>
+                </div>
+                <div class="dash-card-arrow">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+                    </svg>
+                </div>
+            </a>
+
+        </div>
+    </main>
+</div>

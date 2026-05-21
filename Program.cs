@@ -40,6 +40,30 @@ TenantBootstrapJsonReinstate.Apply(builder.Configuration, builder.Environment.Co
 
 ProductionKestrelEndpoints.Apply(builder);
 
+// Phone testing: run run-lan.ps1 (sets APPROVALPO_LISTEN_LAN=true). Binds HTTP+HTTPS on all interfaces, not localhost-only.
+if (builder.Environment.IsDevelopment()
+    && string.Equals(Environment.GetEnvironmentVariable("APPROVALPO_LISTEN_LAN"), "true", StringComparison.OrdinalIgnoreCase))
+{
+    var lanRoot = builder.Environment.ContentRootPath;
+    var lanPem = (Environment.GetEnvironmentVariable("APPROVALPO_TLS_PEM") ?? Path.Combine(lanRoot, ".certs", "dev.pem")).Trim();
+    var lanKey = (Environment.GetEnvironmentVariable("APPROVALPO_TLS_KEY") ?? Path.Combine(lanRoot, ".certs", "dev.key")).Trim();
+
+    builder.WebHost.ConfigureKestrel(options =>
+    {
+        options.ListenAnyIP(5057);
+        options.ListenAnyIP(5058, listen =>
+        {
+            if (File.Exists(lanPem) && File.Exists(lanKey))
+                listen.UseHttps(X509Certificate2.CreateFromPemFile(lanPem, lanKey));
+            else
+                listen.UseHttps();
+        });
+    });
+    builder.WebHost.UseSetting(WebHostDefaults.ServerUrlsKey, string.Empty);
+    builder.WebHost.PreferHostingUrls(false);
+    Console.WriteLine("[LAN] Listening on all interfaces: http://*:5057  https://*:5058 (use https on your phone for camera).");
+}
+
 // Development: optional "trusted" HTTPS for LAN IPs — place mkcert PEM here or set APPROVALPO_TLS_PEM / APPROVALPO_TLS_KEY.
 //   mkdir .certs && cd .certs && mkcert 192.168.x.x localhost 127.0.0.1
 //   copy the generated cert to dev.pem and key to dev.key (or set env paths). Install mkcert root CA on the phone once.
@@ -84,6 +108,7 @@ builder.Services.AddSingleton<IAmazonSecretsManager>(_ =>
 });
 builder.Services.AddScoped<ISyUserLoginValidator, SyUserLoginValidator>();
 builder.Services.AddScoped<IPurchaseOrderCatalog, PurchaseOrderCatalogService>();
+builder.Services.AddScoped<ISalesOrderCatalog, SalesOrderCatalogService>();
 
 builder.Services.Configure<Microsoft.AspNetCore.Antiforgery.AntiforgeryOptions>(options =>
 {
@@ -104,7 +129,7 @@ builder.Services.AddSingleton<WebPushSubscriptionFileStore>();
 builder.Services.AddSingleton<WebPushPendingCursorStore>();
 builder.Services.AddHostedService<PendingOrderWebPushWorker>();
 
-builder.Services.AddRazorPages(options =>
+var razorPages = builder.Services.AddRazorPages(options =>
 {
     // All pages under /Pages require authentication unless explicitly allowed below.
     options.Conventions.AuthorizeFolder("/");
@@ -113,6 +138,8 @@ builder.Services.AddRazorPages(options =>
     options.Conventions.AllowAnonymousToPage("/Logout");
     options.Conventions.AllowAnonymousToPage("/Error");
 });
+if (builder.Environment.IsDevelopment())
+    razorPages.AddRazorRuntimeCompilation();
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
@@ -143,7 +170,30 @@ app.Use(async (context, next) =>
     await next();
 });
 
-// In Development, skip HTTPS redirection so LAN/mobile testing via http://192.168.x.x:5288 works.
+// Development: phone camera needs HTTPS — redirect LAN http://*:5057 → https://*:5058 (same path).
+if (app.Environment.IsDevelopment())
+{
+    app.Use(async (ctx, next) =>
+    {
+        if (HttpMethods.IsGet(ctx.Request.Method)
+            && string.Equals(ctx.Request.Scheme, "http", StringComparison.OrdinalIgnoreCase)
+            && ctx.Request.Host.Port == 5057)
+        {
+            var host = ctx.Request.Host.Host;
+            if (host is not "localhost"
+                && !host.StartsWith("127.", StringComparison.Ordinal)
+                && host.Contains('.', StringComparison.Ordinal))
+            {
+                var path = ctx.Request.Path.Value ?? "/";
+                var qs = ctx.Request.QueryString.Value ?? "";
+                ctx.Response.Redirect($"https://{host}:5058{path}{qs}");
+                return;
+            }
+        }
+        await next();
+    });
+}
+
 // Production defaults for UseHsts / UseHttpsRedirection come from appsettings.Production.json (off for HTTP-only LAN publish).
 if (!app.Environment.IsDevelopment())
 {
@@ -159,6 +209,14 @@ app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapRazorPages();
+// Legacy bookmark / old JS: /ScanPO/Detail?docKey= → /ScanPODetail?docKey=
+app.MapGet("/ScanPO/Detail", (HttpContext ctx) =>
+{
+    var docKey = ctx.Request.Query["docKey"].ToString();
+    return string.IsNullOrWhiteSpace(docKey)
+        ? Results.Redirect("/ScanPO")
+        : Results.Redirect($"/ScanPODetail?docKey={Uri.EscapeDataString(docKey)}");
+});
 app.MapWebPushEndpoints();
 
 async Task WarmupTenantConnectionStringAsync()
@@ -188,5 +246,6 @@ async Task WarmupTenantConnectionStringAsync()
     }
 }
 
-await WarmupTenantConnectionStringAsync();
+// Fire warmup after the server is already listening — does not block startup.
+app.Lifetime.ApplicationStarted.Register(() => _ = Task.Run(WarmupTenantConnectionStringAsync));
 app.Run();

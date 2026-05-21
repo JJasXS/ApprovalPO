@@ -13,6 +13,7 @@
     <PackageReference Include="MailKit" Version="4.16.0" />
     <PackageReference Include="DotNetEnv" Version="3.1.1" />
     <PackageReference Include="FirebirdSql.Data.FirebirdClient" Version="10.3.4" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="8.0.11" />
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.1" />
     <PackageReference Include="WebPush" Version="1.0.13" />
   </ItemGroup>

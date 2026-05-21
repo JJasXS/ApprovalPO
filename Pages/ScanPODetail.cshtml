@@ -1,0 +1,168 @@
+@page "/ScanPODetail"
+@model ApprovalPO.Pages.ScanPODetailModel
+@{
+    ViewData["Title"] = Model.Order?.PoNumber ?? "PO detail";
+    ViewData["AppName"] = "Approval PO";
+    var userName = User.Identity?.Name ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "User";
+}
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="~/css/scan.css" asp-append-version="true" />
+
+<header class="scan-header">
+    <div class="scan-header-inner">
+        <div class="scan-header-titles">
+            <a asp-page="/ScanPO" class="scan-back-link" title="Back to list">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"/>
+                </svg>
+            </a>
+            <h1 class="scan-header-title">@(Model.Order?.PoNumber ?? "Purchase order")</h1>
+        </div>
+        <div class="scan-header-actions">
+            <div class="scan-menu-wrap">
+                <button class="scan-menu-btn" id="scanMenuBtn" type="button" aria-expanded="false" aria-controls="scanMenuPanel" aria-label="Open menu">
+                    <span></span><span></span><span></span>
+                </button>
+                <div id="scanMenuPanel" class="scan-menu-panel" hidden>
+                    <div class="scan-menu-user">@userName</div>
+                    <a asp-page="/ScanPO" class="scan-menu-link">&#8592; Back to PO list</a>
+                    <a asp-page="/Dashboard" class="scan-menu-link">Back to home</a>
+                    <form method="post" asp-page="/Logout" style="margin:0;padding:0">
+                        <button type="submit" class="scan-menu-link scan-menu-link--danger">Sign out</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<main class="scan-main scan-main--detail">
+    <div class="scan-main-inner">
+        @if (Model.Order is null)
+        {
+            <div class="scan-empty">
+                <p>Purchase order not found or not approved.</p>
+                <a asp-page="/ScanPO" class="scan-detail-back-btn">Back to list</a>
+            </div>
+        }
+        else
+        {
+            var o = Model.Order;
+            var today = DateTime.Today.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture);
+            <div class="scan-detail-meta">
+                <div class="scan-detail-meta-main">
+                    <div class="scan-detail-field">
+                        <label>PO #</label>
+                        <span>@o.PoNumber</span>
+                    </div>
+                    <div class="scan-detail-field">
+                        <label>PO date</label>
+                        <span>@o.OrderDate.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</span>
+                    </div>
+                    <div class="scan-detail-field">
+                        <label>Amount</label>
+                        <span>@o.Amount.ToString("N2")</span>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(o.Description))
+                    {
+                        <div class="scan-detail-field scan-detail-field--full">
+                            <label>Description</label>
+                            <span>@o.Description</span>
+                        </div>
+                    }
+                </div>
+                <div class="scan-detail-aside">
+                    <div class="scan-detail-sysdate">
+                        <span class="scan-detail-sysdate-label">Today</span>
+                        <span class="scan-detail-sysdate-value">@today</span>
+                    </div>
+                    <button type="button" class="scan-detail-scan-btn" id="scanDetailScanBtn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <rect x="3" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/>
+                            <path d="M21 16h-3a2 2 0 0 0-2 2v3"/><line x1="21" y1="21" x2="21" y2="21.01"/>
+                        </svg>
+                        <span>Scan</span>
+                    </button>
+                </div>
+            </div>
+
+            <p class="scan-lines-title">Line items (@Model.Lines.Count)</p>
+            @if (Model.Lines.Count == 0)
+            {
+                <p class="scan-detail-empty-lines">No line items found.</p>
+            }
+            else
+            {
+                <div class="scan-table-wrap">
+                    <table class="scan-lines-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Item code</th>
+                                <th>Description</th>
+                                <th class="num">Qty</th>
+                                <th class="num">Unit price</th>
+                                <th class="num">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @{ var n = 0; }
+                            @foreach (var line in Model.Lines)
+                            {
+                                n++;
+                                <tr>
+                                    <td class="scan-line-num">@n</td>
+                                    <td class="scan-line-code">@line.ItemCode</td>
+                                    <td>@line.Description</td>
+                                    <td class="num">@((line.Sqty != 0 ? line.Sqty : line.Qty).ToString("N2"))</td>
+                                    <td class="num">@line.UnitPrice.ToString("N2")</td>
+                                    <td class="num">@line.LineAmount.ToString("N2")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            <a asp-page="/ScanPO" class="scan-detail-back-btn">&#8592; Back to list</a>
+        }
+    </div>
+</main>
+
+<div id="qrOverlay" class="qr-overlay">
+    <div class="qr-box">
+        <video id="qrVideo" class="qr-video" autoplay muted playsinline></video>
+        <canvas id="qrCanvas" class="qr-canvas"></canvas>
+        <div class="qr-guide"></div>
+        <div class="qr-guide-b"></div>
+        <div class="qr-scan-line"></div>
+    </div>
+    <div id="qrPhotoPanel" class="qr-photo-panel" hidden>
+        <p class="qr-photo-hint">Using HTTP — take a photo of the QR code (live scan needs HTTPS).</p>
+        <button type="button" id="qrPhotoBtn" class="qr-photo-btn">Take photo</button>
+        <input type="file" id="qrPhotoInput" accept="image/*" capture="environment" hidden />
+    </div>
+    <p id="qrStatus" class="qr-status">Point camera at a QR code…</p>
+    <button id="qrCloseBtn" class="qr-close-btn" type="button">Cancel</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="~/js/scan-qr-scanner.js" asp-append-version="true"></script>
+<script src="~/js/scan-po-detail.js" asp-append-version="true"></script>
+<script>
+    (function () {
+        var btn = document.getElementById('scanMenuBtn');
+        var panel = document.getElementById('scanMenuPanel');
+        if (!btn || !panel) return;
+        btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var open = !panel.hidden;
+            panel.hidden = open;
+            btn.setAttribute('aria-expanded', String(!open));
+        });
+        document.addEventListener('click', function () { panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); });
+    })();
+</script>

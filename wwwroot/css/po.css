@@ -110,6 +110,31 @@ body {
   color: var(--po-text);
 }
 
+/* Module switcher button in the PO header */
+.po-module-switch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #16a34a;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 999px;
+  padding: 4px 12px 4px 9px;
+  text-decoration: none;
+  letter-spacing: 0.01em;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  width: fit-content;
+}
+
+.po-module-switch-btn:hover {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #15803d;
+}
+
 .po-header__subtitle {
   margin: var(--po-space-1) 0 0;
   font-size: 0.8125rem;
