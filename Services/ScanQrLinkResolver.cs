@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace ApprovalPO.Services;
 
@@ -25,9 +26,10 @@ public sealed class ScanQrResolveResult
     public IReadOnlyList<string> SearchedCodes { get; init; } = [];
 }
 
-public sealed class ScanQrLinkResolver(IHttpClientFactory httpClientFactory) : IScanQrLinkResolver
+public sealed class ScanQrLinkResolver(IHttpClientFactory httpClientFactory, IMemoryCache cache) : IScanQrLinkResolver
 {
     private const int MaxPreviewChars = 3500;
+    private static readonly TimeSpan ResolveCacheTtl = TimeSpan.FromMinutes(15);
 
     private static readonly string[] QueryKeys =
     [
@@ -56,18 +58,21 @@ public sealed class ScanQrLinkResolver(IHttpClientFactory httpClientFactory) : I
             return new ScanQrResolveResult { Scanned = raw, Error = "Empty scan." };
 
         var hints = NormalizeKnownCodes(knownItemCodes);
+        var cacheKey = BuildCacheKey(raw, hints);
+        if (cache.TryGetValue(cacheKey, out ScanQrResolveResult? cached) && cached is not null)
+            return cached;
 
         if (!Uri.TryCreate(raw, UriKind.Absolute, out var uri) ||
             (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
         {
             var direct = MatchKnownCode(raw, hints) ?? raw;
-            return new ScanQrResolveResult
+            return Remember(cacheKey, new ScanQrResolveResult
             {
                 Scanned = raw,
                 ItemCode = direct,
                 Source = MatchKnownCode(raw, hints) is not null ? "text-match" : "raw",
                 SearchedCodes = hints
-            };
+            });
         }
 
         // PO detail scan: always open the link and read page text (code is inside the page).
@@ -76,41 +81,53 @@ public sealed class ScanQrLinkResolver(IHttpClientFactory httpClientFactory) : I
             try
             {
                 var page = await FetchPageAsync(uri, hints, cancellationToken).ConfigureAwait(false);
-                return FromPage(raw, page, hints);
+                return Remember(cacheKey, FromPage(raw, page, hints));
             }
             catch (Exception ex)
             {
-                return new ScanQrResolveResult
+                return Remember(cacheKey, new ScanQrResolveResult
                 {
                     Scanned = raw,
                     Error = $"Could not read link: {ex.Message}",
                     SearchedCodes = hints
-                };
+                });
             }
         }
 
         var fromQuery = TryQuery(uri);
         if (!string.IsNullOrEmpty(fromQuery))
-            return Ok(raw, fromQuery, "url-query", hints);
+            return Remember(cacheKey, Ok(raw, fromQuery, "url-query", hints));
 
         var fromPath = TryPath(uri);
         if (!string.IsNullOrEmpty(fromPath))
-            return Ok(raw, fromPath, "url-path", hints);
+            return Remember(cacheKey, Ok(raw, fromPath, "url-path", hints));
 
         try
         {
             var page = await FetchPageAsync(uri, hints, cancellationToken).ConfigureAwait(false);
-            return FromPage(raw, page, hints);
+            return Remember(cacheKey, FromPage(raw, page, hints));
         }
         catch (Exception ex)
         {
-            return new ScanQrResolveResult
+            return Remember(cacheKey, new ScanQrResolveResult
             {
                 Scanned = raw,
                 Error = $"Could not read link: {ex.Message}",
                 SearchedCodes = hints
-            };
+            });
         }
+    }
+
+    private ScanQrResolveResult Remember(string cacheKey, ScanQrResolveResult result)
+    {
+        cache.Set(cacheKey, result, ResolveCacheTtl);
+        return result;
+    }
+
+    private static string BuildCacheKey(string scanned, List<string> hints)
+    {
+        var codes = hints.Count > 0 ? string.Join("|", hints.OrderBy(c => c, StringComparer.OrdinalIgnoreCase)) : "";
+        return $"scan-resolve:{scanned.Trim().ToLowerInvariant()}:{codes}";
     }
 
     private static ScanQrResolveResult FromPage(string scanned, PageFetchResult page, List<string> hints)

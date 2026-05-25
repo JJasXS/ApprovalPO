@@ -1,6 +1,9 @@
 @page "/ScanPODetail"
 @model ApprovalPO.Pages.ScanPODetailModel
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@inject ApprovalPO.Services.IScanPoSubmitStore ScanSubmits
 @{
+    var csrf = Antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
     ViewData["Title"] = Model.Order?.PoNumber ?? "PO detail";
     ViewData["AppName"] = "Approval PO";
     var userName = User.Identity?.Name ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "User";
@@ -51,6 +54,8 @@
         else
         {
             var o = Model.Order;
+            var scanSubmitted = Model.DocKey > 0
+                && ScanSubmits.GetSubmittedDocKeysAsync().ConfigureAwait(false).GetAwaiter().GetResult().Contains(Model.DocKey);
             var today = DateTime.Today.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture);
             <div class="scan-detail-meta">
                 <div class="scan-detail-field">
@@ -69,30 +74,72 @@
                     <label>Today's date</label>
                     <span>@today</span>
                 </div>
-                <div class="scan-detail-field scan-detail-field--desc">
-                    <label>Description</label>
-                    <span>@(string.IsNullOrWhiteSpace(o.Description) ? "—" : o.Description)</span>
+                <div class="scan-detail-meta-row scan-detail-meta-row--desc-scan">
+                    <div class="scan-detail-field scan-detail-field--desc">
+                        <label>Description</label>
+                        <span>@(string.IsNullOrWhiteSpace(o.Description) ? "—" : o.Description)</span>
+                    </div>
+                    <div class="scan-detail-field scan-detail-field--scan-only">
+                        <label>Scan QR</label>
+                        @if (scanSubmitted)
+                        {
+                            <button type="button" class="scan-detail-scan-btn" id="scanDetailScanBtn" disabled>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <rect x="3" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/>
+                                    <path d="M21 16h-3a2 2 0 0 0-2 2v3"/><line x1="21" y1="21" x2="21" y2="21.01"/>
+                                </svg>
+                                <span>Scan</span>
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="button" class="scan-detail-scan-btn" id="scanDetailScanBtn">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <rect x="3" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/>
+                                    <path d="M21 16h-3a2 2 0 0 0-2 2v3"/><line x1="21" y1="21" x2="21" y2="21.01"/>
+                                </svg>
+                                <span>Scan</span>
+                            </button>
+                        }
+                    </div>
                 </div>
-                <div class="scan-detail-field scan-detail-field--scan">
-                    <button type="button" class="scan-detail-scan-btn" id="scanDetailScanBtn">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <rect x="3" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/>
-                            <path d="M21 16h-3a2 2 0 0 0-2 2v3"/><line x1="21" y1="21" x2="21" y2="21.01"/>
-                        </svg>
-                        <span>Scan</span>
-                    </button>
+                <div class="scan-detail-field scan-detail-field--manual">
+                    <label>Item code</label>
+                    <div class="scan-manual-row">
+                        @if (scanSubmitted)
+                        {
+                            <input type="text" id="scanManualCode" class="scan-manual-input" placeholder="Type item code" autocomplete="off" enterkeyhint="go" disabled />
+                            <button type="button" class="scan-manual-btn" id="scanManualBtn" disabled>Go</button>
+                        }
+                        else
+                        {
+                            <input type="text" id="scanManualCode" class="scan-manual-input" placeholder="Type item code" autocomplete="off" enterkeyhint="go" />
+                            <button type="button" class="scan-manual-btn" id="scanManualBtn">Go</button>
+                        }
+                    </div>
                 </div>
             </div>
 
             <div id="scanDetailConfig" hidden
                  data-doc-key="@Model.DocKey"
-                 data-resolve-scan-url="@Url.Page("/ScanPODetail", null, new { handler = "ResolveScan" })"></div>
+                 data-po-number="@(o.PoNumber)"
+                 data-is-submitted="@(scanSubmitted ? "true" : "false")"
+                 data-require-all-lines="true"
+                 data-resolve-scan-url="@Url.Page("/ScanPODetail", null, new { handler = "ResolveScan" })"
+                 data-scan-state-url="@Url.Page("/ScanPODetail", null, new { handler = "ScanState" })"
+                 data-save-draft-url="@Url.Page("/ScanPODetail", null, new { handler = "SaveDraft" })"
+                 data-csrf-token="@csrf"
+                 data-submit-form-id="scanDetailSubmitForm"
+                 data-scan-counts-input-id="scanCountsJson"></div>
+
+            <div id="scanToastRoot" class="scan-toast-root" aria-live="polite"></div>
 
             <div class="scan-lines-head">
                 <p class="scan-lines-title">Line items (@Model.Lines.Count)</p>
                 <p id="scanSessionSummary" class="scan-session-summary">
-                    Scanned this session: <strong id="scanSessionTotal">0</strong>
-                    <span class="scan-session-hint">(on this phone only — not saved to database)</span>
+                    <span id="scanLinesProgress">0 of @Model.Lines.Count lines scanned</span>
+                    · Total scans: <strong id="scanSessionTotal">0</strong>
+                    <span class="scan-session-hint">Draft saves to server; submit marks PO complete.</span>
                 </p>
             </div>
             @if (Model.Lines.Count == 0)
@@ -111,6 +158,7 @@
                                 <th class="num">Qty</th>
                                 <th class="num">Unit price</th>
                                 <th class="num">Amount</th>
+                                <th class="scan-th-status">Status</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -125,6 +173,7 @@
                                     <td class="num">@((line.Sqty != 0 ? line.Sqty : line.Qty).ToString("N2"))</td>
                                     <td class="num">@line.UnitPrice.ToString("N2")</td>
                                     <td class="num">@line.LineAmount.ToString("N2")</td>
+                                    <td class="scan-line-status"><span class="scan-line-tick" aria-label="Not scanned"></span></td>
                                 </tr>
                             }
                         </tbody>
@@ -132,7 +181,24 @@
                 </div>
             }
 
-            <a asp-page="/ScanPO" class="scan-detail-back-btn">&#8592; Back to list</a>
+            <div class="scan-detail-actions">
+                <a asp-page="/ScanPO" class="scan-detail-back-btn">&#8592; Back to list</a>
+                @if (!scanSubmitted)
+                {
+                    <form method="post" asp-page="/ScanPODetail" asp-page-handler="Submit" class="scan-detail-submit-form" id="scanDetailSubmitForm">
+                        <input type="hidden" name="docKey" value="@Model.DocKey" />
+                        <input type="hidden" name="scanCountsJson" id="scanCountsJson" value="" />
+                        <button type="submit" class="scan-detail-submit-btn" id="scanDetailSubmitBtn">Submit</button>
+                    </form>
+                }
+                else
+                {
+                    <form method="post" asp-page="/ScanPODetail" asp-page-handler="Reopen" class="scan-detail-reopen-form" id="scanDetailReopenForm">
+                        <input type="hidden" name="docKey" value="@Model.DocKey" />
+                        <button type="submit" class="scan-detail-reopen-btn">Reopen for scanning</button>
+                    </form>
+                }
+            </div>
         }
     </div>
 </main>
@@ -145,8 +211,42 @@
         <div class="qr-guide-b"></div>
         <div class="qr-scan-line"></div>
     </div>
+    <div id="qrCameraHelp" class="qr-camera-help" hidden>
+        <p class="qr-camera-help-title">Camera blocked</p>
+        <p class="qr-camera-help-lead"><strong>This app cannot reset camera permission.</strong> Only your browser or phone settings can. Use <strong>Take photo</strong> below, or change permission manually.</p>
+        <div class="qr-camera-help-actions">
+            <button type="button" id="qrUsePhotoBtn" class="qr-retry-camera-btn">Take photo of QR</button>
+            <button type="button" id="qrRetryCameraBtn" class="qr-use-photo-btn" hidden>Try live camera again</button>
+        </div>
+        <p id="qrCameraPermState" class="qr-camera-perm-state" hidden></p>
+        <p class="qr-camera-help-sub">Reset in browser (pick yours):</p>
+        <details class="qr-camera-help-details" open>
+            <summary>Phone — Chrome / Edge</summary>
+            <ol class="qr-camera-help-steps">
+                <li>Tap <strong>⋮</strong> (menu) → <strong>Settings</strong> → <strong>Site settings</strong> → <strong>Camera</strong> → remove block for this site, or set <strong>Ask</strong>.</li>
+                <li>Or: <strong>⋮</strong> → <strong>Info</strong> / lock icon on the page → <strong>Permissions</strong> → <strong>Camera</strong> → <strong>Allow</strong>.</li>
+                <li>Close this tab, open the scan page again, tap <strong>Scan</strong>.</li>
+            </ol>
+        </details>
+        <details class="qr-camera-help-details">
+            <summary>iPhone — Safari</summary>
+            <ol class="qr-camera-help-steps">
+                <li><strong>Settings</strong> → <strong>Safari</strong> → <strong>Camera</strong> → <strong>Ask</strong> or <strong>Allow</strong>.</li>
+                <li>Or on the page: <strong>aA</strong> in the address bar → <strong>Website Settings</strong> → <strong>Camera</strong> → <strong>Allow</strong>.</li>
+                <li>Reload the page, then tap <strong>Scan</strong>.</li>
+            </ol>
+        </details>
+        <details class="qr-camera-help-details">
+            <summary>PC — Chrome / Edge</summary>
+            <ol class="qr-camera-help-steps">
+                <li>Click the <strong>lock</strong> left of the address → <strong>Site settings</strong>.</li>
+                <li>Find <strong>Camera</strong> → <strong>Allow</strong> (or <strong>Reset permission</strong>, then reload).</li>
+                <li>Reload, then tap <strong>Scan</strong>. Use <strong>https://…:5058</strong> for live camera.</li>
+            </ol>
+        </details>
+    </div>
     <div id="qrPhotoPanel" class="qr-photo-panel" hidden>
-        <p class="qr-photo-hint">Using HTTP — take a photo of the QR code (live scan needs HTTPS).</p>
+        <p class="qr-photo-hint" id="qrPhotoHint">Using HTTP — live camera needs HTTPS. Take a photo of the QR, or open <strong id="qrHttpsLink"></strong></p>
         <button type="button" id="qrPhotoBtn" class="qr-photo-btn">Take photo</button>
         <input type="file" id="qrPhotoInput" accept="image/*" capture="environment" hidden />
     </div>
@@ -160,6 +260,13 @@
 <script src="~/js/scan-po-detail.js" asp-append-version="true"></script>
 <script>
     (function () {
+        var link = document.getElementById('qrHttpsLink');
+        if (link && !window.isSecureContext) {
+            var host = location.hostname || 'localhost';
+            var url = 'https://' + host + ':5058' + location.pathname + location.search;
+            link.textContent = url;
+            link.style.wordBreak = 'break-all';
+        }
         var btn = document.getElementById('scanMenuBtn');
         var panel = document.getElementById('scanMenuPanel');
         if (!btn || !panel) return;

@@ -31,6 +31,7 @@
   function create(opts) {
     const onDetected = opts.onDetected;
     const debounceMs = opts.debounceMs ?? 1200;
+    const closeOnDetect = opts.closeOnDetect !== false;
 
     const overlay = document.getElementById(opts.overlayId || 'qrOverlay');
     const video = document.getElementById(opts.videoId || 'qrVideo');
@@ -40,6 +41,10 @@
     const photoPanel = document.getElementById(opts.photoPanelId || 'qrPhotoPanel');
     const photoBtn = document.getElementById(opts.photoBtnId || 'qrPhotoBtn');
     const photoInput = document.getElementById(opts.photoInputId || 'qrPhotoInput');
+    const cameraHelp = document.getElementById(opts.cameraHelpId || 'qrCameraHelp');
+    const retryCameraBtn = document.getElementById(opts.retryCameraBtnId || 'qrRetryCameraBtn');
+    const usePhotoBtn = document.getElementById(opts.usePhotoBtnId || 'qrUsePhotoBtn');
+    const cameraPermState = document.getElementById(opts.cameraPermStateId || 'qrCameraPermState');
     const liveBox = document.querySelector('.qr-box');
 
     let mode = null;
@@ -60,10 +65,86 @@
       statusEl.className = 'qr-status' + (tone ? ` ${tone}` : '');
     };
 
+    const isCameraDenied = (err) => {
+      const name = String(err?.name || '');
+      const msg = String(err?.message || err || '').toLowerCase();
+      return (
+        name === 'NotAllowedError' ||
+        name === 'PermissionDeniedError' ||
+        name === 'SecurityError' ||
+        msg.includes('permission') ||
+        msg.includes('denied') ||
+        msg.includes('not allowed') ||
+        msg.includes('notallowed')
+      );
+    };
+
     const setPhotoMode = (photo) => {
       overlay?.classList.toggle('qr-overlay--photo', photo);
       if (liveBox) liveBox.hidden = photo;
       if (photoPanel) photoPanel.hidden = !photo;
+    };
+
+    const updateCameraPermState = async () => {
+      if (retryCameraBtn) retryCameraBtn.hidden = true;
+      if (!cameraPermState) return;
+      try {
+        if (!navigator.permissions?.query) {
+          cameraPermState.hidden = false;
+          cameraPermState.textContent =
+            'The browser does not report camera status. Use Take photo, or reset Camera in site settings (see steps below).';
+          return;
+        }
+        const status = await navigator.permissions.query({ name: 'camera' });
+        cameraPermState.hidden = false;
+        if (status.state === 'granted') {
+          cameraPermState.textContent = 'Camera is allowed. Tap Try live camera again.';
+          if (retryCameraBtn) retryCameraBtn.hidden = false;
+        } else if (status.state === 'prompt') {
+          cameraPermState.textContent =
+            'Camera is not set yet. Tap Try live camera again — the browser should ask Allow / Block.';
+          if (retryCameraBtn) retryCameraBtn.hidden = false;
+        } else {
+          cameraPermState.textContent =
+            'Camera is blocked (denied). This app cannot undo that — change it in browser settings below, or use Take photo of QR.';
+          if (retryCameraBtn) retryCameraBtn.hidden = true;
+        }
+        status.onchange = () => void updateCameraPermState();
+      } catch (_) {
+        cameraPermState.hidden = false;
+        cameraPermState.textContent =
+          'Reset Camera in your browser site settings (steps below), or use Take photo of QR.';
+      }
+    };
+
+    const showCameraDeniedHelp = () => {
+      overlay?.classList.add('qr-overlay--camera-denied');
+      setPhotoMode(true);
+      if (cameraHelp) cameraHelp.hidden = false;
+      if (photoPanel) photoPanel.hidden = true;
+      if (liveBox) liveBox.hidden = true;
+      setStatus('Use Take photo, or reset Camera in browser settings.', 'is-error');
+      void updateCameraPermState();
+    };
+
+    const hideCameraDeniedHelp = () => {
+      overlay?.classList.remove('qr-overlay--camera-denied');
+      if (cameraHelp) cameraHelp.hidden = true;
+      if (cameraPermState) cameraPermState.hidden = true;
+      if (liveBox) liveBox.hidden = false;
+    };
+
+    const openPhotoFallback = () => {
+      hideCameraDeniedHelp();
+      if (typeof global.jsQR !== 'function') {
+        setStatus('QR scanner library not loaded.', 'is-error');
+        return;
+      }
+      locked = false;
+      setPhotoMode(true);
+      overlay?.classList.add('is-open');
+      document.body.style.overflow = 'hidden';
+      setStatus('Tap Take photo, then point at the QR code.');
     };
 
     const stopLoop = () => {
@@ -89,9 +170,20 @@
       stopStream();
       locked = false;
       setPhotoMode(false);
+      hideCameraDeniedHelp();
       overlay?.classList.remove('is-open');
       document.body.style.overflow = '';
       if (photoInput) photoInput.value = '';
+    };
+
+    const unlockAfterDetect = () => {
+      if (closeOnDetect) return;
+      setTimeout(() => {
+        locked = false;
+        if (mode && overlay?.classList.contains('is-open')) {
+          setStatus('Point camera at next QR code…');
+        }
+      }, Math.min(debounceMs, 900));
     };
 
     const emitDetected = (raw) => {
@@ -101,13 +193,17 @@
       if (locked || now - lastDetectedAt < debounceMs) return;
       locked = true;
       lastDetectedAt = now;
-      stopStream();
-      setStatus(`QR found: ${text}`, 'is-found');
+      if (closeOnDetect) {
+        stopStream();
+      }
+      setStatus(closeOnDetect ? `QR found: ${text}` : 'Scanned — scan next…', 'is-found');
       try {
-        onDetected(text);
+        onDetected(text, { keepOpen: !closeOnDetect });
       } catch (e) {
         console.error(e);
         locked = false;
+      } finally {
+        unlockAfterDetect();
       }
     };
 
@@ -159,6 +255,7 @@
         return;
       }
       locked = false;
+      hideCameraDeniedHelp();
       setPhotoMode(true);
       overlay?.classList.add('is-open');
       document.body.style.overflow = 'hidden';
@@ -231,6 +328,19 @@
       await video.play();
     };
 
+    const requestCameraWithFallback = async () => {
+      try {
+        return await requestCamera(PREFER_REAR);
+      } catch (e1) {
+        try {
+          return await requestCamera(ANY_CAM);
+        } catch (e2) {
+          if (isCameraDenied(e2) || isCameraDenied(e1)) throw e2;
+          throw e1;
+        }
+      }
+    };
+
     const tryNative = async () => {
       if (!('BarcodeDetector' in global)) return false;
       let formats;
@@ -251,13 +361,10 @@
 
       let mediaStream;
       try {
-        mediaStream = await requestCamera(PREFER_REAR);
-      } catch (_) {
-        try {
-          mediaStream = await requestCamera(ANY_CAM);
-        } catch (_) {
-          return false;
-        }
+        mediaStream = await requestCameraWithFallback();
+      } catch (err) {
+        if (isCameraDenied(err)) throw err;
+        return false;
       }
 
       try {
@@ -274,18 +381,14 @@
     };
 
     const startJsQr = async () => {
-      let mediaStream;
-      try {
-        mediaStream = await requestCamera(PREFER_REAR);
-      } catch (_) {
-        mediaStream = await requestCamera(ANY_CAM);
-      }
+      const mediaStream = await requestCameraWithFallback();
       await attachStream(mediaStream);
       mode = 'jsqr';
       rafId = requestAnimationFrame(loopJsQr);
     };
 
     const openLiveCamera = async () => {
+      hideCameraDeniedHelp();
       setPhotoMode(false);
       setStatus('Point camera at a QR code…');
       overlay?.classList.add('is-open');
@@ -300,7 +403,11 @@
         }
         await startJsQr();
       } catch (err) {
-        setStatus(`Camera error: ${err.message}`, 'is-error');
+        if (isCameraDenied(err)) {
+          showCameraDeniedHelp();
+          return;
+        }
+        setStatus(`Camera error: ${err.message || err}`, 'is-error');
       }
     };
 
@@ -323,6 +430,15 @@
     if (photoBtn && photoInput) {
       photoBtn.addEventListener('click', () => photoInput.click());
       photoInput.addEventListener('change', () => void onPhotoSelected());
+    }
+    if (retryCameraBtn) {
+      retryCameraBtn.addEventListener('click', () => {
+        locked = false;
+        void openLiveCamera();
+      });
+    }
+    if (usePhotoBtn) {
+      usePhotoBtn.addEventListener('click', () => openPhotoFallback());
     }
 
     return {

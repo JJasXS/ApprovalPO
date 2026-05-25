@@ -112,7 +112,9 @@ builder.Services.AddHttpClient(nameof(ScanQrLinkResolver), client =>
     client.Timeout = TimeSpan.FromSeconds(15);
     client.DefaultRequestHeaders.UserAgent.ParseAdd("ApprovalPO-ScanResolver/1.0");
 });
+builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IScanQrLinkResolver, ScanQrLinkResolver>();
+builder.Services.AddSingleton<IScanPoSubmitStore, ScanPoSubmitFileStore>();
 builder.Services.AddScoped<IPurchaseOrderCatalog, PurchaseOrderCatalogService>();
 builder.Services.AddScoped<ISalesOrderCatalog, SalesOrderCatalogService>();
 

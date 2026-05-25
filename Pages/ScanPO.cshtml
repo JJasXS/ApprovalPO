@@ -40,31 +40,51 @@
 
 <main class="scan-main">
     <div class="scan-main-inner">
+        @if (TempData["ScanSubmitMessage"] is string submitMsg && !string.IsNullOrWhiteSpace(submitMsg))
+        {
+            <p class="scan-flash scan-flash--ok" role="status">@submitMsg</p>
+        }
+
+        <p id="scanHttpsBanner" class="scan-https-banner" hidden role="note">
+            For live QR camera, use HTTPS:
+            <a id="scanHttpsBannerLink" href="#">open Scan PO on port 5058</a>
+            (or take a photo of the QR on HTTP).
+        </p>
+
         <div class="scan-search-bar">
             <input id="scanSearch" class="scan-search-input" type="search" placeholder="Search PO #…" autocomplete="off" />
             <span id="scanResultCount" class="scan-result-count"></span>
         </div>
 
-        <div class="scan-list-hint">Approved purchase orders only — tap a row to open details.</div>
+        <p id="scanListHint" class="scan-list-hint">ERP-approved POs to scan — tap a row to open lines.</p>
 
         <div class="scan-table-wrap">
+            <div class="scan-tabs-wrap scan-tabs-wrap--table">
+                <div class="scan-tabs" role="tablist" aria-label="Scan PO status">
+                    <button type="button" id="scanTabToScan" class="scan-tab-btn is-active" role="tab" aria-selected="true" data-scan-tab="toScan">
+                        To scan (<span id="scanCountToScan">0</span>)
+                    </button>
+                    <button type="button" id="scanTabSubmitted" class="scan-tab-btn" role="tab" aria-selected="false" data-scan-tab="submitted">
+                        Submitted (<span id="scanCountSubmitted">0</span>)
+                    </button>
+                </div>
+            </div>
             <table class="scan-table scan-table--list">
                 <thead>
                     <tr>
                         <th>PO #</th>
                         <th>Date</th>
                         <th class="num">Amount</th>
-                        <th class="scan-th-chev" aria-hidden="true"></th>
                     </tr>
                 </thead>
                 <tbody id="scanTableBody">
                     <tr id="scanLoadingRow" class="scan-loading-row">
-                        <td colspan="4">Loading…</td>
+                        <td colspan="3">Loading…</td>
                     </tr>
                 </tbody>
             </table>
             <div id="scanEmpty" class="scan-empty" hidden>
-                No approved purchase orders found.
+                No purchase orders in this tab.
             </div>
         </div>
         <div class="scan-list-footer">
@@ -74,3 +94,16 @@
 </main>
 
 <script src="~/js/scan-po.js" asp-append-version="true"></script>
+<script>
+    (function () {
+        if (window.isSecureContext) return;
+        var banner = document.getElementById('scanHttpsBanner');
+        var a = document.getElementById('scanHttpsBannerLink');
+        if (!banner || !a) return;
+        var host = location.hostname || 'localhost';
+        var url = 'https://' + host + ':5058/ScanPO';
+        a.href = url;
+        a.textContent = url;
+        banner.hidden = false;
+    })();
+</script>

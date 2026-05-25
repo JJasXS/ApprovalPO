@@ -1,8 +1,44 @@
-/* scan-resolve.js — resolve scanned URL to item code via server (fetches page body) */
+/* scan-resolve.js — resolve scanned URL to item code via server (cached) */
 (function (global) {
   'use strict';
 
+  const CACHE_PREFIX = 'approvalpo-resolve-cache:';
+  const CACHE_TTL_MS = 15 * 60 * 1000;
+
   const isUrl = (s) => /^https?:\/\//i.test(String(s || '').trim());
+
+  function cacheKey(url, knownCodes) {
+    const codes = (knownCodes || [])
+      .map((c) => String(c || '').trim().toLowerCase())
+      .filter(Boolean)
+      .sort()
+      .join('|');
+    return CACHE_PREFIX + String(url || '').trim().toLowerCase() + ':' + codes;
+  }
+
+  function getCached(url, knownCodes) {
+    try {
+      const raw = sessionStorage.getItem(cacheKey(url, knownCodes));
+      if (!raw) return null;
+      const entry = JSON.parse(raw);
+      if (!entry?.at || Date.now() - entry.at > CACHE_TTL_MS) {
+        sessionStorage.removeItem(cacheKey(url, knownCodes));
+        return null;
+      }
+      return entry.result;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function setCached(url, knownCodes, result) {
+    try {
+      sessionStorage.setItem(
+        cacheKey(url, knownCodes),
+        JSON.stringify({ at: Date.now(), result })
+      );
+    } catch (_) { /* ignore */ }
+  }
 
   async function resolve(resolveUrl, scanned, knownCodes) {
     const raw = String(scanned ?? '').trim();
@@ -10,6 +46,9 @@
     if (!isUrl(raw)) {
       return { scanned: raw, itemCode: raw, source: 'raw', error: null };
     }
+
+    const cached = getCached(raw, knownCodes);
+    if (cached) return { ...cached, fromCache: true };
 
     const params = new URLSearchParams();
     params.set('url', raw);
@@ -23,7 +62,9 @@
     if (!res.ok) {
       return { scanned: raw, itemCode: null, source: '', error: `Resolve failed (${res.status}).` };
     }
-    return res.json();
+    const result = await res.json();
+    setCached(raw, knownCodes, result);
+    return result;
   }
 
   function codesEqual(a, b) {
@@ -48,9 +89,10 @@
       'url-query': 'from URL parameter',
       'url-path': 'from URL path',
       raw: 'scanned text',
+      'text-match': 'matched text',
     };
     return map[source] || source || '';
   };
 
-  global.ScanResolve = { isUrl, resolve, codesEqual, codesMatch, sourceLabel };
+  global.ScanResolve = { isUrl, resolve, codesEqual, codesMatch, sourceLabel, getCached, setCached };
 })(window);

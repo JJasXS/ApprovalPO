@@ -14,6 +14,8 @@
   let allOrders = [];
   let searchTerm = '';
   let visibleCount = 0;
+  /** @type {'toScan' | 'submitted'} */
+  let activeTab = 'toScan';
 
   const tbody = document.getElementById('scanTableBody');
   const emptyState = document.getElementById('scanEmpty');
@@ -21,6 +23,11 @@
   const searchInput = document.getElementById('scanSearch');
   const loadMoreBtn = document.getElementById('scanLoadMoreBtn');
   const listFooter = document.querySelector('.scan-list-footer');
+  const listHint = document.getElementById('scanListHint');
+  const tabToScan = document.getElementById('scanTabToScan');
+  const tabSubmitted = document.getElementById('scanTabSubmitted');
+  const countToScan = document.getElementById('scanCountToScan');
+  const countSubmitted = document.getElementById('scanCountSubmitted');
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -38,27 +45,62 @@
 
   const detailHref = (docKey) => `${detailPageUrl}?docKey=${encodeURIComponent(docKey)}`;
 
+  const wantsSubmitted = () => activeTab === 'submitted';
+
+  const matchesTab = (o) => Boolean(o.scanSubmitted) === wantsSubmitted();
+
   const getFiltered = () => {
     const term = searchTerm.toLowerCase().trim();
+    const tabbed = allOrders.filter(matchesTab);
     return term
-      ? allOrders.filter((o) => (o.poNumber || '').toLowerCase().includes(term))
-      : allOrders;
+      ? tabbed.filter((o) => (o.poNumber || '').toLowerCase().includes(term))
+      : tabbed;
+  };
+
+  const updateTabCounts = () => {
+    const toScanN = allOrders.filter((o) => !o.scanSubmitted).length;
+    const submittedN = allOrders.filter((o) => o.scanSubmitted).length;
+    if (countToScan) countToScan.textContent = String(toScanN);
+    if (countSubmitted) countSubmitted.textContent = String(submittedN);
+  };
+
+  const normalizeTab = (tab) => {
+    const t = String(tab || '').toLowerCase();
+    if (t === 'submitted' || t === 'approved') return 'submitted';
+    return 'toScan';
+  };
+
+  const setActiveTab = (tab) => {
+    activeTab = normalizeTab(tab);
+    const toScanOn = activeTab === 'toScan';
+    if (tabToScan) {
+      tabToScan.classList.toggle('is-active', toScanOn);
+      tabToScan.setAttribute('aria-selected', toScanOn ? 'true' : 'false');
+    }
+    if (tabSubmitted) {
+      tabSubmitted.classList.toggle('is-active', !toScanOn);
+      tabSubmitted.setAttribute('aria-selected', !toScanOn ? 'true' : 'false');
+    }
+    if (listHint) {
+      listHint.textContent = toScanOn
+        ? 'ERP-approved POs to scan — tap a row to open lines.'
+        : 'Submitted POs — tap to view or reopen for scanning.';
+    }
+    if (emptyState) {
+      emptyState.textContent = toScanOn
+        ? 'No POs waiting to scan.'
+        : 'No submitted POs yet.';
+    }
+    setInitialVisible(getFiltered());
   };
 
   const rowHtml = (o) => {
     const href = detailHref(o.docKey);
     return `
-      <tr class="scan-row scan-row--link">
-        <td colspan="4" class="scan-row-anchor-cell">
-          <a href="${esc(href)}" class="scan-row-anchor">
-            <span class="scan-po-num">${esc(o.poNumber || '—')}</span>
-            <span class="scan-date">${fmtDate(o.orderDate)}</span>
-            <span class="num scan-amount">${fmtAmt(o.amount)}</span>
-            <span class="scan-row-chev" aria-hidden="true">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-            </span>
-          </a>
-        </td>
+      <tr class="scan-row scan-row--link" data-href="${esc(href)}" role="link" tabindex="0">
+        <td class="scan-col-po">${esc(o.poNumber || '—')}</td>
+        <td class="scan-col-date">${fmtDate(o.orderDate)}</td>
+        <td class="scan-col-amount num">${fmtAmt(o.amount)}</td>
       </tr>`;
   };
 
@@ -122,15 +164,16 @@
 
   const updateResultCount = (shown, total) => {
     if (!resultCount) return;
+    const label = activeTab === 'submitted' ? 'submitted' : 'to scan';
     if (total === 0) {
-      resultCount.textContent = '0 approved POs';
+      resultCount.textContent = `0 ${label}`;
       return;
     }
     if (shown < total) {
-      resultCount.textContent = `Showing ${shown} of ${total}`;
+      resultCount.textContent = `Showing ${shown} of ${total} ${label}`;
       return;
     }
-    resultCount.textContent = `${total} approved PO${total !== 1 ? 's' : ''}`;
+    resultCount.textContent = `${total} ${label}`;
   };
 
   const renderSlice = (filtered, count) => {
@@ -196,15 +239,28 @@
     }, 200);
   });
 
+  const initTabFromUrl = () => {
+    const tab = new URLSearchParams(location.search).get('tab');
+    if (tab) setActiveTab(tab);
+  };
+
+  if (tabToScan) {
+    tabToScan.addEventListener('click', () => setActiveTab('toScan'));
+  }
+  if (tabSubmitted) {
+    tabSubmitted.addEventListener('click', () => setActiveTab('submitted'));
+  }
+
   const loadOrders = async () => {
     try {
       const res = await fetch(ordersUrl);
       const data = await res.json();
       allOrders = Array.isArray(data) ? data : [];
+      updateTabCounts();
       setInitialVisible(getFiltered());
     } catch (e) {
       if (tbody) {
-        tbody.innerHTML = `<tr><td colspan="4" class="scan-empty">Failed to load orders: ${esc(e.message)}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="3" class="scan-empty">Failed to load orders: ${esc(e.message)}</td></tr>`;
       }
       if (loadMoreBtn) loadMoreBtn.hidden = true;
     }
@@ -214,6 +270,22 @@
     searchInput.addEventListener('input', () => {
       searchTerm = searchInput.value;
       setInitialVisible(getFiltered());
+    });
+  }
+
+  if (tbody) {
+    tbody.addEventListener('click', (e) => {
+      const row = e.target.closest('tr.scan-row--link');
+      const href = row?.dataset?.href;
+      if (href) window.location.href = href;
+    });
+    tbody.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const row = e.target.closest('tr.scan-row--link');
+      const href = row?.dataset?.href;
+      if (!href) return;
+      e.preventDefault();
+      window.location.href = href;
     });
   }
 
@@ -232,5 +304,6 @@
     });
   }
 
+  initTabFromUrl();
   loadOrders();
 })();
