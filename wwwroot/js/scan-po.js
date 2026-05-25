@@ -1,4 +1,4 @@
-/* scan-po.js — approved PO list; row links open /ScanPODetail?docKey= */
+/* scan-po.js — approved PO list with screen-fit paging + More */
 (function () {
   'use strict';
 
@@ -6,46 +6,20 @@
   if (!cfg) return;
 
   const ordersUrl = cfg.dataset.ordersJsonUrl || '';
-  const resolveUrl = cfg.dataset.resolveScanUrl || '';
   const detailPageUrl = (cfg.dataset.detailPageUrl || '/ScanPODetail').replace(/\/$/, '');
 
   let allOrders = [];
   let searchTerm = '';
+  const MORE_STEP = 10;
+  let visibleCount = 0;
+  let initialBatchSize = 8;
+  let rowHeightPx = 52;
 
   const tbody = document.getElementById('scanTableBody');
   const emptyState = document.getElementById('scanEmpty');
   const resultCount = document.getElementById('scanResultCount');
   const searchInput = document.getElementById('scanSearch');
-  const resultBox = document.getElementById('scanLastResult');
-  const resultText = document.getElementById('scanLastResultText');
-  const resultCode = document.getElementById('scanLastResultCode');
-  const resultMatch = document.getElementById('scanLastResultMatch');
-
-  const showScanResult = (raw, code, matchMsg, warn) => {
-    if (!resultBox || !resultText) return;
-    resultBox.hidden = false;
-    resultBox.classList.toggle('is-warn', !!warn);
-    resultText.textContent = raw;
-    if (resultCode) {
-      if (code && code !== raw) {
-        resultCode.hidden = false;
-        resultCode.textContent = `Resolved: ${code}`;
-      } else {
-        resultCode.hidden = true;
-        resultCode.textContent = '';
-      }
-    }
-    if (resultMatch) {
-      if (matchMsg) {
-        resultMatch.textContent = matchMsg;
-        resultMatch.hidden = false;
-      } else {
-        resultMatch.hidden = true;
-        resultMatch.textContent = '';
-      }
-    }
-    resultBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  };
+  const loadMoreBtn = document.getElementById('scanLoadMoreBtn');
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -63,28 +37,44 @@
 
   const detailHref = (docKey) => `${detailPageUrl}?docKey=${encodeURIComponent(docKey)}`;
 
-  const renderTable = (orders) => {
-    const term = searchTerm.toLowerCase().trim();
-    const filtered = term
-      ? orders.filter((o) => (o.poNumber || '').toLowerCase().includes(term))
-      : orders;
-
-    if (resultCount) {
-      resultCount.textContent = `${filtered.length} approved PO${filtered.length !== 1 ? 's' : ''}`;
-    }
-
-    if (!tbody) return;
-    if (filtered.length === 0) {
-      tbody.innerHTML = '';
-      if (emptyState) emptyState.hidden = false;
+  const measureRowHeight = () => {
+    const sample = tbody?.querySelector('tr.scan-row');
+    if (sample?.offsetHeight > 0) {
+      rowHeightPx = sample.offsetHeight;
       return;
     }
-    if (emptyState) emptyState.hidden = true;
+    rowHeightPx = window.innerWidth < 480 ? 58 : 52;
+  };
 
-    tbody.innerHTML = filtered
-      .map((o) => {
-        const href = detailHref(o.docKey);
-        return `
+  const recalcPageSize = () => {
+    const header = document.querySelector('.scan-header');
+    const searchBar = document.querySelector('.scan-search-bar');
+    const hint = document.querySelector('.scan-list-hint');
+    const thead = document.querySelector('.scan-table thead');
+    const footer = document.querySelector('.scan-list-footer');
+    const mainPad = 100;
+
+    let used = mainPad;
+    if (header) used += header.getBoundingClientRect().height;
+    if (searchBar) used += searchBar.offsetHeight;
+    if (hint) used += hint.offsetHeight + 12;
+    if (footer) used += footer.offsetHeight + 8;
+
+    const theadH = thead?.offsetHeight ?? 40;
+    const available = window.innerHeight - used - theadH;
+    initialBatchSize = Math.max(3, Math.floor(available / rowHeightPx));
+  };
+
+  const getFiltered = () => {
+    const term = searchTerm.toLowerCase().trim();
+    return term
+      ? allOrders.filter((o) => (o.poNumber || '').toLowerCase().includes(term))
+      : allOrders;
+  };
+
+  const rowHtml = (o) => {
+    const href = detailHref(o.docKey);
+    return `
       <tr class="scan-row scan-row--link">
         <td colspan="4" class="scan-row-anchor-cell">
           <a href="${esc(href)}" class="scan-row-anchor">
@@ -97,26 +87,101 @@
           </a>
         </td>
       </tr>`;
-      })
-      .join('');
   };
+
+  const updateLoadMore = (shown, total) => {
+    if (!loadMoreBtn) return;
+    const remaining = total - shown;
+    if (remaining <= 0) {
+      loadMoreBtn.hidden = true;
+      return;
+    }
+    loadMoreBtn.hidden = false;
+    loadMoreBtn.textContent = 'More';
+    loadMoreBtn.setAttribute('aria-label', `Show ${Math.min(MORE_STEP, remaining)} more purchase orders (${remaining} remaining)`);
+  };
+
+  const updateResultCount = (shown, total) => {
+    if (!resultCount) return;
+    if (total === 0) {
+      resultCount.textContent = '0 approved POs';
+      return;
+    }
+    if (shown < total) {
+      resultCount.textContent = `Showing ${shown} of ${total}`;
+      return;
+    }
+    resultCount.textContent = `${total} approved PO${total !== 1 ? 's' : ''}`;
+  };
+
+  const renderTable = (orders) => {
+    const filtered = getFiltered();
+
+    if (!tbody) return;
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = '';
+      if (emptyState) emptyState.hidden = false;
+      updateLoadMore(0, 0);
+      updateResultCount(0, 0);
+      return;
+    }
+    if (emptyState) emptyState.hidden = true;
+
+    const shown = Math.min(visibleCount, filtered.length);
+    tbody.innerHTML = filtered.slice(0, shown).map(rowHtml).join('');
+    measureRowHeight();
+
+    updateLoadMore(shown, filtered.length);
+    updateResultCount(shown, filtered.length);
+  };
+
+  const loadMore = () => {
+    const filtered = getFiltered();
+    const prev = visibleCount;
+    visibleCount = Math.min(filtered.length, visibleCount + MORE_STEP);
+    if (visibleCount === prev || !tbody) return;
+
+    const chunk = filtered.slice(prev, visibleCount);
+    tbody.insertAdjacentHTML('beforeend', chunk.map(rowHtml).join(''));
+    measureRowHeight();
+
+    updateLoadMore(visibleCount, filtered.length);
+    updateResultCount(visibleCount, filtered.length);
+  };
+
+  if (loadMoreBtn) {
+    loadMoreBtn.addEventListener('click', loadMore);
+  }
+
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => recalcPageSize(), 200);
+  });
 
   const loadOrders = async () => {
     try {
       const res = await fetch(ordersUrl);
       const data = await res.json();
       allOrders = Array.isArray(data) ? data : [];
+      recalcPageSize();
+      visibleCount = Math.min(allOrders.length, initialBatchSize);
       renderTable(allOrders);
     } catch (e) {
       if (tbody) {
         tbody.innerHTML = `<tr><td colspan="4" class="scan-empty">Failed to load orders: ${esc(e.message)}</td></tr>`;
       }
+      if (loadMoreBtn) loadMoreBtn.hidden = true;
     }
   };
 
   if (searchInput) {
     searchInput.addEventListener('input', () => {
       searchTerm = searchInput.value;
+      recalcPageSize();
+      const filtered = getFiltered();
+      visibleCount = Math.min(filtered.length, initialBatchSize);
       renderTable(allOrders);
     });
   }
@@ -134,46 +199,6 @@
       menuPanel.hidden = true;
       menuBtn.setAttribute('aria-expanded', 'false');
     });
-  }
-
-  const findPoMatch = (code) => {
-    const key = String(code || '').trim().toLowerCase();
-    if (!key) return null;
-    return allOrders.find((o) => {
-      const po = (o.poNumber || '').trim().toLowerCase();
-      return po === key || po.includes(key) || key.includes(po);
-    });
-  };
-
-  if (typeof ScanQrScanner !== 'undefined') {
-    const qr = ScanQrScanner.create({
-      onDetected(text) {
-        const t = (text || '').trim();
-        setTimeout(async () => {
-          qr.close();
-          let code = t;
-          if (typeof ScanResolve !== 'undefined' && resolveUrl && ScanResolve.isUrl(t)) {
-            if (resultMatch) resultMatch.textContent = 'Resolving link…';
-            try {
-              const resolved = await ScanResolve.resolve(resolveUrl, t);
-              if (resolved.itemCode) code = resolved.itemCode;
-            } catch (_) { /* use raw */ }
-          }
-
-          const match = findPoMatch(code) || findPoMatch(t);
-          if (match) {
-            showScanResult(t, code, `Opening PO ${match.poNumber || match.docKey}…`, false);
-            window.location.href = detailHref(match.docKey);
-            return;
-          }
-          searchTerm = code;
-          if (searchInput) searchInput.value = code;
-          renderTable(allOrders);
-          showScanResult(t, code, 'No matching approved PO # for this scan.', true);
-        }, 400);
-      },
-    });
-    qr.bindButton(document.getElementById('scanQrBtn'));
   }
 
   loadOrders();

@@ -110,7 +110,7 @@ body {
   color: var(--po-text);
 }
 
-/* Module switcher button in the PO header */
+/* Module switcher button in the PO / SO header */
 .po-module-switch-btn {
   display: inline-flex;
   align-items: center;
@@ -118,9 +118,9 @@ body {
   margin-top: 8px;
   font-size: 12px;
   font-weight: 600;
-  color: #16a34a;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
+  color: var(--po-text-muted);
+  background: #f8fafc;
+  border: 1px solid var(--po-border);
   border-radius: 999px;
   padding: 4px 12px 4px 9px;
   text-decoration: none;
@@ -130,9 +130,9 @@ body {
 }
 
 .po-module-switch-btn:hover {
-  background: #dcfce7;
-  border-color: #86efac;
-  color: #15803d;
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: var(--po-text);
 }
 
 .po-header__subtitle {

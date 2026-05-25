@@ -137,6 +137,35 @@ body { margin: 0; background: var(--scan-bg); color: var(--scan-text); -webkit-f
 .scan-result-count { font-size: 13px; color: var(--scan-muted); margin-left: auto; }
 
 /* ─── Table ──────────────────────────────────────────────── */
+.scan-list-footer {
+  display: flex;
+  justify-content: center;
+  padding: 14px 0 8px;
+}
+.scan-load-more-btn {
+  min-width: 120px;
+  padding: 11px 28px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--scan-violet);
+  background: #fff;
+  border: 1.5px solid #c4b5fd;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+.scan-load-more-btn:hover {
+  background: var(--scan-violet-soft);
+  border-color: var(--scan-violet);
+}
+.scan-load-more-btn:active { transform: scale(0.97); }
+.scan-loading-row td {
+  padding: 24px 14px;
+  text-align: center;
+  color: var(--scan-muted);
+  font-size: 14px;
+}
+
 .scan-table-wrap { overflow-x: auto; border-radius: 14px; border: 1px solid var(--scan-border); background: #fff; }
 .scan-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .scan-table thead th {
