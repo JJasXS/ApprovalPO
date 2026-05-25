@@ -9,7 +9,7 @@
 html, body {
   height: 100%;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background-color: #f9fafb;
+  background: linear-gradient(165deg, #f5fbff 0%, #eef7fc 45%, #e8f4fa 100%);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -18,10 +18,11 @@ html, body {
 
 .login-container {
   position: relative;
-  background-color: #ffffff;
+  background: linear-gradient(145deg, #ffffff 0%, #f8fcff 100%);
   padding: 36px 32px;
   border-radius: 12px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+  border: 1px solid #c5dff0;
+  box-shadow: 0 8px 24px rgba(14, 116, 183, 0.1);
   width: 100%;
   max-width: 400px;
   text-align: left;

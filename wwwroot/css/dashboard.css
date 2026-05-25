@@ -3,7 +3,7 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #f4f6fb;
+  background: #eef7fc;
   font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
@@ -13,9 +13,9 @@
   top: 0;
   z-index: 120;
   padding: 12px 24px 20px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 72%, #f1f5f9 100%);
-  color: #0f172a;
-  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fcff 72%, #eef7fc 100%);
+  color: #1a3a52;
+  border-bottom: 1px solid #c5dff0;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
 }
 

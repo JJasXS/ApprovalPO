@@ -53,32 +53,27 @@
             var o = Model.Order;
             var today = DateTime.Today.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture);
             <div class="scan-detail-meta">
-                <div class="scan-detail-meta-main">
-                    <div class="scan-detail-field">
-                        <label>PO #</label>
-                        <span>@o.PoNumber</span>
-                    </div>
-                    <div class="scan-detail-field">
-                        <label>PO date</label>
-                        <span>@o.OrderDate.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</span>
-                    </div>
-                    <div class="scan-detail-field">
-                        <label>Amount</label>
-                        <span>@o.Amount.ToString("N2")</span>
-                    </div>
-                    @if (!string.IsNullOrWhiteSpace(o.Description))
-                    {
-                        <div class="scan-detail-field scan-detail-field--full">
-                            <label>Description</label>
-                            <span>@o.Description</span>
-                        </div>
-                    }
+                <div class="scan-detail-field">
+                    <label>PO #</label>
+                    <span>@o.PoNumber</span>
                 </div>
-                <div class="scan-detail-aside">
-                    <div class="scan-detail-sysdate">
-                        <span class="scan-detail-sysdate-label">Today</span>
-                        <span class="scan-detail-sysdate-value">@today</span>
-                    </div>
+                <div class="scan-detail-field">
+                    <label>PO date</label>
+                    <span>@o.OrderDate.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</span>
+                </div>
+                <div class="scan-detail-field">
+                    <label>Amount</label>
+                    <span>@o.Amount.ToString("N2")</span>
+                </div>
+                <div class="scan-detail-field">
+                    <label>Today's date</label>
+                    <span>@today</span>
+                </div>
+                <div class="scan-detail-field scan-detail-field--desc">
+                    <label>Description</label>
+                    <span>@(string.IsNullOrWhiteSpace(o.Description) ? "—" : o.Description)</span>
+                </div>
+                <div class="scan-detail-field scan-detail-field--scan">
                     <button type="button" class="scan-detail-scan-btn" id="scanDetailScanBtn">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <rect x="3" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/>
@@ -89,21 +84,17 @@
                 </div>
             </div>
 
-            <div id="scanDetailConfig" hidden data-resolve-scan-url="@Url.Page("/ScanPODetail", null, new { handler = "ResolveScan" })"></div>
+            <div id="scanDetailConfig" hidden
+                 data-doc-key="@Model.DocKey"
+                 data-resolve-scan-url="@Url.Page("/ScanPODetail", null, new { handler = "ResolveScan" })"></div>
 
-            <div id="scanLastResult" class="scan-last-result" hidden>
-                <p class="scan-last-result-label">Last scan</p>
-                <p id="scanLastResultText" class="scan-last-result-value"></p>
-                <p id="scanLastResultCode" class="scan-last-result-code" hidden></p>
-                <p id="scanLastResultMatch" class="scan-last-result-match"></p>
-                <p id="scanLastResultMeta" class="scan-last-result-meta" hidden></p>
-                <details id="scanLastResultPreviewWrap" class="scan-last-result-preview-wrap" hidden>
-                    <summary>What we read from the link</summary>
-                    <pre id="scanLastResultPreview" class="scan-last-result-preview"></pre>
-                </details>
+            <div class="scan-lines-head">
+                <p class="scan-lines-title">Line items (@Model.Lines.Count)</p>
+                <p id="scanSessionSummary" class="scan-session-summary">
+                    Scanned this session: <strong id="scanSessionTotal">0</strong>
+                    <span class="scan-session-hint">(on this phone only — not saved to database)</span>
+                </p>
             </div>
-
-            <p class="scan-lines-title">Line items (@Model.Lines.Count)</p>
             @if (Model.Lines.Count == 0)
             {
                 <p class="scan-detail-empty-lines">No line items found.</p>
