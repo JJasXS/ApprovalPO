@@ -18,6 +18,8 @@ public sealed class ScanQrResolveResult
     public string? ItemCode { get; init; }
     public string Source { get; init; } = "";
     public string? Error { get; init; }
+    /// <summary>Stable code for UI: <c>empty_scan</c>, <c>resolve_failed</c>, <c>no_code_on_page</c>.</summary>
+    public string? ErrorCode { get; init; }
     public string? FinalUrl { get; init; }
     public int? HttpStatus { get; init; }
     public string? ContentType { get; init; }
@@ -55,7 +57,7 @@ public sealed class ScanQrLinkResolver(IHttpClientFactory httpClientFactory, IMe
     {
         var raw = (scanned ?? "").Trim();
         if (string.IsNullOrEmpty(raw))
-            return new ScanQrResolveResult { Scanned = raw, Error = "Empty scan." };
+            return new ScanQrResolveResult { Scanned = raw, Error = "Empty scan.", ErrorCode = "empty_scan" };
 
         var hints = NormalizeKnownCodes(knownItemCodes);
         var cacheKey = BuildCacheKey(raw, hints);
@@ -89,6 +91,7 @@ public sealed class ScanQrLinkResolver(IHttpClientFactory httpClientFactory, IMe
                 {
                     Scanned = raw,
                     Error = $"Could not read link: {ex.Message}",
+                    ErrorCode = "resolve_failed",
                     SearchedCodes = hints
                 });
             }
@@ -113,6 +116,7 @@ public sealed class ScanQrLinkResolver(IHttpClientFactory httpClientFactory, IMe
             {
                 Scanned = raw,
                 Error = $"Could not read link: {ex.Message}",
+                ErrorCode = "resolve_failed",
                 SearchedCodes = hints
             });
         }
@@ -153,6 +157,7 @@ public sealed class ScanQrLinkResolver(IHttpClientFactory httpClientFactory, IMe
             Error = hints.Count > 0
                 ? "Opened the link but none of this PO's item codes appear in the text below."
                 : "Opened the link but no item code was detected in the text below.",
+            ErrorCode = "no_code_on_page",
             FinalUrl = page.FinalUrl,
             HttpStatus = page.HttpStatus,
             ContentType = page.ContentType,

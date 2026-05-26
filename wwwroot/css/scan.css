@@ -571,6 +571,44 @@ body {
   background: #22c55e;
 }
 
+.scan-line-tick.is-actionable {
+  cursor: pointer;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.35);
+}
+
+.scan-line-tick.is-actionable:hover {
+  background: #16a34a;
+}
+
+.scan-line-tick.is-actionable:focus-visible {
+  outline: 2px solid #0369a1;
+  outline-offset: 2px;
+}
+
+.scan-undo-btn {
+  display: block;
+  margin-top: 10px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  color: #334155;
+  background: #fff;
+  border: 1px solid var(--scan-border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.scan-undo-btn:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.scan-undo-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .scan-detail-scan-btn {
   display: inline-flex;
   align-items: center;

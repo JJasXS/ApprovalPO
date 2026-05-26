@@ -60,7 +60,13 @@
     const sep = resolveUrl.includes('?') ? '&' : '?';
     const res = await fetch(`${resolveUrl}${sep}${params}`, { credentials: 'same-origin' });
     if (!res.ok) {
-      return { scanned: raw, itemCode: null, source: '', error: `Resolve failed (${res.status}).` };
+      return {
+        scanned: raw,
+        itemCode: null,
+        source: '',
+        error: `Resolve failed (${res.status}).`,
+        errorCode: 'resolve_failed',
+      };
     }
     const result = await res.json();
     setCached(raw, knownCodes, result);

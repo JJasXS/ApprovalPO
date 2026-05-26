@@ -5,6 +5,7 @@
   const scanBtn = document.getElementById('scanDetailScanBtn');
   const manualInput = document.getElementById('scanManualCode');
   const manualBtn = document.getElementById('scanManualBtn');
+  const undoBtn = document.getElementById('scanUndoLastBtn');
   const cfg = document.getElementById('scanDetailConfig');
   if (!cfg || typeof ScanResolve === 'undefined') return;
 
@@ -26,9 +27,12 @@
   const submitBtn = document.getElementById('scanDetailSubmitBtn');
   const reopenForm = document.getElementById('scanDetailReopenForm');
   const toastRoot = document.getElementById('scanToastRoot');
+  const linesTableBody = document.querySelector('.scan-lines-table tbody');
 
   /** @type {Record<string, number>} */
   let scanCounts = {};
+  /** @type {{ code: string }[]} */
+  let scanHistory = [];
   let draftTimer = null;
   let readOnly = isSubmitted;
 
@@ -86,16 +90,17 @@
     const hint = document.querySelector('.scan-session-hint');
     if (!hint) return;
     const who = formatActor(state.draftUpdatedByName, state.draftUpdatedByEmail);
+    const undoTip = ' Tap ✓ on a line to remove one scan.';
     if (!who || who === 'Unknown user') {
-      hint.textContent = 'Draft saves to server; submit marks PO complete.';
+      hint.textContent = `Draft saves to server; submit marks PO complete.${undoTip}`;
       return;
     }
     const when = state.draftUpdatedAtUtc
       ? new Date(state.draftUpdatedAtUtc).toLocaleString()
       : '';
     hint.textContent = when
-      ? `Draft on server · last saved ${when} by ${who}.`
-      : `Draft on server · last saved by ${who}.`;
+      ? `Draft on server · last saved ${when} by ${who}.${undoTip}`
+      : `Draft on server · last saved by ${who}.${undoTip}`;
   };
 
   const showToast = (message, tone = 'info') => {
@@ -107,6 +112,36 @@
     toastRoot.appendChild(el);
     setTimeout(() => el.classList.add('is-out'), 3200);
     setTimeout(() => el.remove(), 3600);
+  };
+
+  const messageForScanError = (code, detail) => {
+    const d = String(detail || '').trim();
+    switch (code) {
+      case 'offline_queued':
+        return 'You are offline. Scan was queued and will run when connection returns.';
+      case 'resolve_failed':
+        return d
+          ? `Could not read QR or link: ${d}`
+          : 'Could not read QR or link. Check connection and try again.';
+      case 'no_code_on_page':
+        return d && d.length < 120
+          ? d
+          : 'QR/link opened, but no item code was found on that page.';
+      case 'not_on_po':
+        return d
+          ? `Item code ${d} is not on this purchase order.`
+          : 'That item code is not on this purchase order.';
+      case 'empty_scan':
+        return 'Empty scan — try again.';
+      case 'already_submitted':
+        return 'This PO is already submitted. Reopen to scan again.';
+      default:
+        return d || 'Scan could not be processed.';
+    }
+  };
+
+  const showScanError = (code, detail) => {
+    showToast(messageForScanError(code, detail), 'error');
   };
 
   const playMatchFeedback = () => {
@@ -152,6 +187,13 @@
     } catch (_) { /* ignore */ }
   };
 
+  const updateUndoButton = () => {
+    if (!undoBtn || readOnly) return;
+    const canUndo = scanHistory.length > 0 && totalScans() > 0;
+    undoBtn.hidden = !canUndo;
+    undoBtn.disabled = !canUndo;
+  };
+
   const scheduleDraftSave = () => {
     if (readOnly || !saveDraftUrl || !docKey) return;
     clearTimeout(draftTimer);
@@ -187,9 +229,11 @@
       if (state.isSubmitted) {
         readOnly = true;
         scanCounts = {};
+        scanHistory = [];
         mergeCounts(state.scanCounts);
         setReadOnlyUi(state);
         renderAuditTrail(state.auditTrail);
+        updateUndoButton();
         return;
       }
       if (state.scanCounts && Object.keys(state.scanCounts).length > 0) {
@@ -205,6 +249,7 @@
     scanBtn?.setAttribute('disabled', 'disabled');
     manualInput?.setAttribute('disabled', 'disabled');
     manualBtn?.setAttribute('disabled', 'disabled');
+    undoBtn?.setAttribute('hidden', 'hidden');
     submitBtn?.setAttribute('hidden', 'hidden');
     if (reopenForm) reopenForm.hidden = false;
     const hint = document.querySelector('.scan-session-hint');
@@ -217,6 +262,7 @@
         ? `Submitted ${when} by ${who} — reopen below to scan again.`
         : `Submitted by ${who} — reopen below to scan again.`;
     }
+    lineRows().forEach((row) => syncRowVisuals(row));
   };
 
   const updateProgress = () => {
@@ -228,6 +274,7 @@
       linesProgressEl.textContent =
         total > 0 ? `${withScan} of ${total} lines scanned` : '';
     }
+    updateUndoButton();
   };
 
   const syncRowVisuals = (row) => {
@@ -236,8 +283,18 @@
     const tick = row.querySelector('.scan-line-tick');
     row.classList.toggle('scan-line-scanned', count > 0);
     if (tick) {
-      tick.textContent = count > 0 ? '✓' : '';
+      tick.textContent = count > 1 ? String(count) : count > 0 ? '✓' : '';
       tick.classList.toggle('is-done', count > 0);
+      tick.classList.toggle('is-actionable', count > 0 && !readOnly);
+      if (count > 0 && !readOnly) {
+        tick.setAttribute('title', `Remove one scan (${count} on this line)`);
+        tick.setAttribute('role', 'button');
+        tick.setAttribute('tabindex', '0');
+      } else {
+        tick.removeAttribute('title');
+        tick.removeAttribute('role');
+        tick.removeAttribute('tabindex');
+      }
     }
   };
 
@@ -246,11 +303,35 @@
     updateProgress();
   };
 
+  const unscanLine = (row, opts = {}) => {
+    if (readOnly) return false;
+    const code = (row.dataset.itemCode || '').trim();
+    const n = scanCounts[code] || 0;
+    if (n <= 0) return false;
+
+    if (n === 1) delete scanCounts[code];
+    else scanCounts[code] = n - 1;
+
+    saveLocalSession();
+    scheduleDraftSave();
+    syncRowVisuals(row);
+    updateProgress();
+
+    if (!opts.quiet) {
+      showToast(
+        n === 1 ? `Removed scan for ${code}.` : `Removed one scan for ${code} (${n - 1} left).`,
+        'info'
+      );
+    }
+    return true;
+  };
+
   const recordScan = (row, opts = {}) => {
     if (readOnly) return;
     const code = (row.dataset.itemCode || '').trim();
     if (!code) return;
     scanCounts[code] = (scanCounts[code] || 0) + 1;
+    if (!opts.skipHistory) scanHistory.push({ code });
     saveLocalSession();
     scheduleDraftSave();
     syncRowVisuals(row);
@@ -264,6 +345,26 @@
 
     if (!opts.noFeedback) playMatchFeedback();
     updateProgress();
+  };
+
+  const undoLastScan = () => {
+    if (readOnly) return;
+    while (scanHistory.length > 0) {
+      const entry = scanHistory.pop();
+      const code = entry?.code;
+      if (!code) continue;
+      const row = lineRows().find((r) =>
+        ScanResolve.codesMatch(code, r.dataset.itemCode)
+      );
+      if (row && (scanCounts[(row.dataset.itemCode || '').trim()] || 0) > 0) {
+        unscanLine(row, { quiet: true });
+        showToast(`Undid last scan (${code}).`, 'info');
+        updateUndoButton();
+        return;
+      }
+    }
+    showToast('Nothing to undo.', 'warn');
+    updateUndoButton();
   };
 
   const getOfflineQueue = () => {
@@ -288,7 +389,7 @@
     const q = getOfflineQueue();
     q.push({ raw: String(raw || '').trim(), at: Date.now() });
     setOfflineQueue(q);
-    showToast('Offline — scan queued until connection returns.', 'warn');
+    showToast(messageForScanError('offline_queued'), 'warn');
   };
 
   const flushOfflineQueue = async () => {
@@ -296,21 +397,43 @@
     const q = getOfflineQueue();
     if (!q.length) return;
     const remaining = [];
+    let processed = 0;
     for (const item of q) {
       const ok = await processScan(item.raw, { fromQueue: true, silent: true });
       if (!ok) remaining.push(item);
+      else processed += 1;
     }
     setOfflineQueue(remaining);
-    if (q.length > remaining.length) {
-      showToast('Queued scans processed.', 'ok');
+    if (processed > 0) {
+      showToast(
+        processed === 1 ? 'Queued scan processed.' : `${processed} queued scans processed.`,
+        'ok'
+      );
     }
+    if (remaining.length > 0) {
+      showToast(
+        `${remaining.length} queued scan(s) still waiting (could not resolve yet).`,
+        'warn'
+      );
+    }
+  };
+
+  const classifyResolveError = (resolved) => {
+    const code = (resolved.errorCode || resolved.ErrorCode || '').trim();
+    if (code) return code;
+    const err = String(resolved.error || resolved.Error || '').trim();
+    if (!err) return 'no_code_on_page';
+    if (/empty scan/i.test(err)) return 'empty_scan';
+    if (/could not read link|resolve failed/i.test(err)) return 'resolve_failed';
+    if (/no item code|none of this po/i.test(err)) return 'no_code_on_page';
+    return 'resolve_failed';
   };
 
   const processScan = async (raw, opts = {}) => {
     const trimmed = String(raw || '').trim();
     if (!trimmed) return false;
     if (readOnly) {
-      showToast('This PO is already submitted. Reopen to scan again.', 'warn');
+      if (!opts.silent) showScanError('already_submitted');
       return false;
     }
 
@@ -323,7 +446,9 @@
         enqueueOffline(trimmed);
         return false;
       }
-      if (!opts.silent) showToast(e.message || 'Could not resolve scan.', 'error');
+      if (!opts.silent) {
+        showScanError('resolve_failed', e.message || 'Network error');
+      }
       return false;
     }
 
@@ -332,18 +457,13 @@
 
     if (err && !code) {
       if (!opts.silent) {
-        showToast(
-          err === 'Could not read link: Empty scan.'
-            ? 'Could not read QR page.'
-            : String(err),
-          'error'
-        );
+        showScanError(classifyResolveError(resolved), err);
       }
       return false;
     }
 
     if (!code) {
-      if (!opts.silent) showToast('No item code found on that QR/link.', 'error');
+      if (!opts.silent) showScanError('no_code_on_page');
       return false;
     }
 
@@ -356,7 +476,7 @@
       return true;
     }
 
-    if (!opts.silent) showToast(`No matching line for code ${code}`, 'error');
+    if (!opts.silent) showScanError('not_on_po', code);
     return false;
   };
 
@@ -392,6 +512,25 @@
       runManual();
     }
   });
+
+  undoBtn?.addEventListener('click', () => undoLastScan());
+
+  if (linesTableBody) {
+    linesTableBody.addEventListener('click', (e) => {
+      const tick = e.target.closest('.scan-line-tick.is-actionable');
+      if (!tick || readOnly) return;
+      const row = tick.closest('tr[data-item-code]');
+      if (row) unscanLine(row);
+    });
+    linesTableBody.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const tick = e.target.closest('.scan-line-tick.is-actionable');
+      if (!tick || readOnly) return;
+      e.preventDefault();
+      const row = tick.closest('tr[data-item-code]');
+      if (row) unscanLine(row);
+    });
+  }
 
   if (submitForm && scanCountsInput) {
     submitForm.addEventListener('submit', (e) => {

@@ -136,8 +136,12 @@
                 <p id="scanSessionSummary" class="scan-session-summary">
                     <span id="scanLinesProgress">0 of @Model.Lines.Count lines scanned</span>
                     · Total scans: <strong id="scanSessionTotal">0</strong>
-                    <span class="scan-session-hint">Draft saves to server; submit marks PO complete.</span>
+                    <span class="scan-session-hint">Draft saves to server; submit marks PO complete. Tap ✓ on a line to remove one scan.</span>
                 </p>
+                @if (!scanSubmitted)
+                {
+                    <button type="button" id="scanUndoLastBtn" class="scan-undo-btn" hidden>Undo last scan</button>
+                }
             </div>
 
             <details class="scan-audit-panel" id="scanAuditPanel" hidden>

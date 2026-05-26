@@ -49,9 +49,21 @@
 
   const matchesTab = (o) => Boolean(o.scanSubmitted) === wantsSubmitted();
 
+  const sortForTab = (list) => {
+    if (activeTab !== 'submitted') return list;
+    return list.slice().sort((a, b) => {
+      const ta = a.submittedAtUtc ? new Date(a.submittedAtUtc).getTime() : 0;
+      const tb = b.submittedAtUtc ? new Date(b.submittedAtUtc).getTime() : 0;
+      if (tb !== ta) return tb - ta;
+      return String(a.poNumber || '').localeCompare(String(b.poNumber || ''), undefined, {
+        sensitivity: 'base',
+      });
+    });
+  };
+
   const getFiltered = () => {
     const term = searchTerm.toLowerCase().trim();
-    const tabbed = allOrders.filter(matchesTab);
+    const tabbed = sortForTab(allOrders.filter(matchesTab));
     return term
       ? tabbed.filter((o) => (o.poNumber || '').toLowerCase().includes(term))
       : tabbed;
@@ -81,10 +93,13 @@
       tabSubmitted.classList.toggle('is-active', !toScanOn);
       tabSubmitted.setAttribute('aria-selected', !toScanOn ? 'true' : 'false');
     }
+    if (listDateHeader) {
+      listDateHeader.textContent = toScanOn ? 'Date' : 'Submitted';
+    }
     if (listHint) {
       listHint.textContent = toScanOn
         ? 'ERP-approved POs to scan — tap a row to open lines.'
-        : 'Submitted POs — tap to view or reopen for scanning.';
+        : 'Submitted POs (newest first) — tap to view or reopen for scanning.';
     }
     if (emptyState) {
       emptyState.textContent = toScanOn
@@ -94,23 +109,32 @@
     setInitialVisible(getFiltered());
   };
 
+  const listDateHeader = document.getElementById('scanListDateHeader');
+
   const submittedMetaHtml = (o) => {
     if (activeTab !== 'submitted' || !o.scanSubmitted) return '';
     const who = (o.submittedByName || '').trim();
-    const when = o.submittedAtUtc ? fmtDate(o.submittedAtUtc) : '';
-    if (!who && !when) return '';
-    const parts = [];
-    if (when) parts.push(when);
-    if (who) parts.push(esc(who));
-    return `<span class="scan-row-meta">${parts.join(' · ')}</span>`;
+    if (!who) return '';
+    return `<span class="scan-row-meta">${esc(who)}</span>`;
+  };
+
+  const rowListDate = (o) => {
+    if (activeTab === 'submitted' && o.submittedAtUtc) {
+      return fmtDate(o.submittedAtUtc);
+    }
+    return fmtDate(o.orderDate);
   };
 
   const rowHtml = (o) => {
     const href = detailHref(o.docKey);
+    const submittedTitle =
+      activeTab === 'submitted' && o.submittedAtUtc
+        ? ` title="Submitted ${fmtDate(o.submittedAtUtc)}"`
+        : '';
     return `
       <tr class="scan-row scan-row--link" data-href="${esc(href)}" role="link" tabindex="0">
         <td class="scan-col-po">${esc(o.poNumber || '—')}${submittedMetaHtml(o)}</td>
-        <td class="scan-col-date">${fmtDate(o.orderDate)}</td>
+        <td class="scan-col-date"${submittedTitle}>${rowListDate(o)}</td>
         <td class="scan-col-amount num">${fmtAmt(o.amount)}</td>
       </tr>`;
   };

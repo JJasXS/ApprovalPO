@@ -12,6 +12,9 @@
 | 10 | Resolver resilience (server memory cache + client sessionStorage cache, 15 min) | ✓ |
 | 11 | Offline queue (localStorage queue, flush when online, sync on submit clear) | ✓ |
 | — | Line table **Status** column with ✓ when line scanned | ✓ |
+| 6 | Undo last scan / tap ✓ to remove one scan per line | ✓ |
+| 7 | Clearer scan errors (not on PO, no code on page, offline vs resolve fail) | ✓ |
+| 9 | Submitted tab sorted newest first; **Submitted** date column | ✓ |
 
 ## Not in this batch (from earlier suggestions)
 
