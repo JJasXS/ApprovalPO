@@ -454,35 +454,39 @@ body {
 .scan-manual-row {
   display: flex;
   flex-wrap: nowrap;
-  align-items: stretch;
+  align-items: center;
   gap: 8px;
-  margin-top: 4px;
+  margin-top: 2px;
   min-width: 0;
 }
 
 .scan-manual-input {
   flex: 1 1 auto;
   min-width: 0;
-  min-height: 42px;
-  padding: 8px 12px;
+  height: 36px;
+  min-height: 0;
+  padding: 0 10px;
   font-size: 14px;
+  line-height: 1.25;
   font-family: inherit;
   border: 1px solid var(--scan-border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: #fff;
 }
 
 .scan-manual-btn {
   flex: 0 0 auto;
-  min-height: 42px;
-  padding: 8px 14px;
+  height: 36px;
+  min-height: 0;
+  padding: 0 14px;
   font-size: 14px;
   font-weight: 600;
+  line-height: 1;
   font-family: inherit;
   color: var(--scan-text);
   background: #fff;
   border: 1px solid var(--scan-border);
-  border-radius: 10px;
+  border-radius: 8px;
   cursor: pointer;
 }
 
@@ -660,12 +664,18 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
   margin-top: 24px;
 }
 
-.scan-detail-submit-form {
-  margin: 0;
+.scan-detail-back-btn {
+  margin-right: auto;
+}
+
+.scan-detail-submit-form,
+.scan-detail-reopen-form {
+  margin: 0 0 0 auto;
 }
 
 .scan-detail-back-btn {
@@ -698,17 +708,19 @@ body {
   font-size: 14px;
   font-weight: 700;
   font-family: inherit;
-  color: #fff;
-  background: linear-gradient(180deg, #38bdf8 0%, #0ea5e9 100%);
-  border: 1px solid #0284c7;
+  color: #0c4a6e;
+  background: linear-gradient(180deg, #e0f2fe 0%, #bae6fd 100%);
+  border: 1px solid #7dd3fc;
   border-radius: 10px;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.35);
-  transition: background 0.15s, transform 0.12s, box-shadow 0.15s;
+  box-shadow: 0 2px 6px rgba(14, 165, 233, 0.15);
+  transition: background 0.15s, transform 0.12s, box-shadow 0.15s, border-color 0.15s;
 }
 
 .scan-detail-submit-btn:hover {
-  background: linear-gradient(180deg, #7dd3fc 0%, #38bdf8 100%);
+  background: linear-gradient(180deg, #bae6fd 0%, #7dd3fc 100%);
+  border-color: #38bdf8;
+  box-shadow: 0 3px 10px rgba(14, 165, 233, 0.25);
 }
 
 .scan-detail-submit-btn:active {
