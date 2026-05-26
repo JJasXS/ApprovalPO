@@ -215,6 +215,11 @@
   color: #7c3aed;
 }
 
+.dash-card-icon-wrap--amber {
+  background: #fef3c7;
+  color: #b45309;
+}
+
 /* ─── Card body ───────────────────────────────────────────── */
 .dash-card-body {
   flex: 1;

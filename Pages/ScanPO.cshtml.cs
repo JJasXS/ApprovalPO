@@ -18,12 +18,18 @@ public class ScanPOModel : PageModel
     private readonly IPurchaseOrderCatalog _orders;
     private readonly IScanQrLinkResolver _scanResolver;
     private readonly IScanPoSubmitStore _scanSubmits;
+    private readonly IGoodsReceiptCatalog _receipts;
 
-    public ScanPOModel(IPurchaseOrderCatalog orders, IScanQrLinkResolver scanResolver, IScanPoSubmitStore scanSubmits)
+    public ScanPOModel(
+        IPurchaseOrderCatalog orders,
+        IScanQrLinkResolver scanResolver,
+        IScanPoSubmitStore scanSubmits,
+        IGoodsReceiptCatalog receipts)
     {
         _orders = orders;
         _scanResolver = scanResolver;
         _scanSubmits = scanSubmits;
+        _receipts = receipts;
     }
 
     public IReadOnlyList<PurchaseOrderRow> Orders { get; private set; } = Array.Empty<PurchaseOrderRow>();
@@ -43,6 +49,19 @@ public class ScanPOModel : PageModel
     {
         var result = await _scanResolver.ResolveAsync(url ?? "", codes, cancellationToken).ConfigureAwait(false);
         return new JsonResult(result);
+    }
+
+    public async Task<IActionResult> OnGetReceivedGoodsJsonAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var list = await _receipts.GetReceiptsAsync(cancellationToken).ConfigureAwait(false);
+            return new JsonResult(list, JsonCamel);
+        }
+        catch (Exception ex)
+        {
+            return new JsonResult(new { error = ex.Message }, JsonCamel) { StatusCode = 500 };
+        }
     }
 
     private async Task<IReadOnlyList<PurchaseOrderRow>> LoadApprovedOrdersAsync(CancellationToken cancellationToken)

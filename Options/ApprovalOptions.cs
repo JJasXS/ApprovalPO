@@ -47,6 +47,18 @@ public class ApprovalOptions
     public string? PurchaseRequestLinesSql { get; set; }
 
     /// <summary>
+    /// Optional SQL for goods receipt headers (<c>PH_GR</c>). Default is built from table metadata.
+    /// Expose DOCKEY, GRNUMBER, PONUMBER, VENDOR, AMOUNT, DESCRIPTION, GRDATE.
+    /// </summary>
+    public string? GoodsReceiptsSql { get; set; }
+
+    /// <summary>
+    /// Optional SQL for goods receipt lines (<c>PH_GRDTL</c>); parameter <c>@DocKey</c>.
+    /// Default includes RECEIVEQTY / RETURNQTY (or RECIEVEQTY when present).
+    /// </summary>
+    public string? GoodsReceiptLinesSql { get; set; }
+
+    /// <summary>
     /// When false (default), only emails present on <c>SY_USER.EMAIL</c> (active per <c>ISACTIVE</c>) may request an OTP.
     /// Set true for local development without Firebird.
     /// </summary>

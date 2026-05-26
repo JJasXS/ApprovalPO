@@ -15,6 +15,7 @@
 | 6 | Undo last scan / tap ✓ to remove one scan per line | ✓ |
 | 7 | Clearer scan errors (not on PO, no code on page, offline vs resolve fail) | ✓ |
 | 9 | Submitted tab sorted newest first; **Submitted** date column | ✓ |
+| — | **Received goods** tab (`PH_GR` / `PH_GRDTL`, receive & return qty) | ✓ |
 
 ## Not in this batch (from earlier suggestions)
 

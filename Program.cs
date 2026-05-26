@@ -117,6 +117,7 @@ builder.Services.AddScoped<IScanQrLinkResolver, ScanQrLinkResolver>();
 builder.Services.AddSingleton<IScanPoSubmitStore, ScanPoSubmitFileStore>();
 builder.Services.AddScoped<IPurchaseOrderCatalog, PurchaseOrderCatalogService>();
 builder.Services.AddScoped<ISalesOrderCatalog, SalesOrderCatalogService>();
+builder.Services.AddScoped<IGoodsReceiptCatalog, GoodsReceiptCatalogService>();
 
 builder.Services.Configure<Microsoft.AspNetCore.Antiforgery.AntiforgeryOptions>(options =>
 {
