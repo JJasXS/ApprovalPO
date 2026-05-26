@@ -7,26 +7,36 @@ public interface IScanPoSubmitStore
 {
     Task<IReadOnlySet<int>> GetSubmittedDocKeysAsync(CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<ScanPoSubmitSummary>> GetSubmitSummariesAsync(CancellationToken cancellationToken = default);
+
     Task<ScanPoSubmissionState> GetStateAsync(int docKey, CancellationToken cancellationToken = default);
 
     Task SaveDraftAsync(
         int docKey,
         string poNumber,
         IReadOnlyDictionary<string, int> scanCounts,
+        ScanPoAuditActor actor,
         CancellationToken cancellationToken = default);
 
     Task MarkSubmittedAsync(
         int docKey,
         string poNumber,
         IReadOnlyDictionary<string, int> scanCounts,
+        ScanPoAuditActor actor,
         CancellationToken cancellationToken = default);
 
-    Task ClearSubmissionAsync(int docKey, CancellationToken cancellationToken = default);
+    Task ClearSubmissionAsync(
+        int docKey,
+        string poNumber,
+        ScanPoAuditActor actor,
+        CancellationToken cancellationToken = default);
 }
 
-/// <summary>Persists scan drafts and submissions per tenant (JSON under <c>Data</c>).</summary>
+/// <summary>Persists scan drafts, submissions, and audit trail per tenant (JSON under <c>Data</c>).</summary>
 public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
 {
+    private const int MaxAuditEntries = 2000;
+
     private static readonly JsonSerializerOptions Json = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -56,12 +66,31 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
             .ToHashSet();
     }
 
+    public async Task<IReadOnlyList<ScanPoSubmitSummary>> GetSubmitSummariesAsync(CancellationToken cancellationToken = default)
+    {
+        var file = await ReadFileAsync(cancellationToken).ConfigureAwait(false);
+        return file.Submissions
+            .Where(s => s.DocKey > 0)
+            .OrderByDescending(s => s.SubmittedAtUtc)
+            .Select(s => new ScanPoSubmitSummary
+            {
+                DocKey = s.DocKey,
+                PoNumber = s.PoNumber,
+                SubmittedAtUtc = s.SubmittedAtUtc,
+                SubmittedByEmail = s.SubmittedByEmail,
+                SubmittedByName = s.SubmittedByName
+            })
+            .ToList();
+    }
+
     public async Task<ScanPoSubmissionState> GetStateAsync(int docKey, CancellationToken cancellationToken = default)
     {
         if (docKey <= 0)
             return new ScanPoSubmissionState { DocKey = docKey };
 
         var file = await ReadFileAsync(cancellationToken).ConfigureAwait(false);
+        var auditForDoc = AuditForDoc(file, docKey);
+
         var sub = file.Submissions.FirstOrDefault(s => s.DocKey == docKey);
         if (sub is not null)
         {
@@ -71,7 +100,10 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
                 IsSubmitted = true,
                 SubmittedAtUtc = sub.SubmittedAtUtc,
                 PoNumber = sub.PoNumber,
-                ScanCounts = NormalizeCounts(sub.ScanCounts)
+                ScanCounts = NormalizeCounts(sub.ScanCounts),
+                SubmittedByEmail = sub.SubmittedByEmail,
+                SubmittedByName = sub.SubmittedByName,
+                AuditTrail = auditForDoc
             };
         }
 
@@ -83,21 +115,33 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
                 DocKey = docKey,
                 IsSubmitted = false,
                 PoNumber = draft.PoNumber,
-                ScanCounts = NormalizeCounts(draft.ScanCounts)
+                ScanCounts = NormalizeCounts(draft.ScanCounts),
+                DraftUpdatedAtUtc = draft.UpdatedAtUtc,
+                DraftUpdatedByEmail = draft.UpdatedByEmail,
+                DraftUpdatedByName = draft.UpdatedByName,
+                AuditTrail = auditForDoc
             };
         }
 
-        return new ScanPoSubmissionState { DocKey = docKey };
+        return new ScanPoSubmissionState
+        {
+            DocKey = docKey,
+            AuditTrail = auditForDoc
+        };
     }
 
     public async Task SaveDraftAsync(
         int docKey,
         string poNumber,
         IReadOnlyDictionary<string, int> scanCounts,
+        ScanPoAuditActor actor,
         CancellationToken cancellationToken = default)
     {
         if (docKey <= 0)
             return;
+
+        var counts = NormalizeCounts(scanCounts);
+        var po = poNumber?.Trim() ?? "";
 
         await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -110,11 +154,14 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
             file.Drafts.Add(new ScanPoDraftRecord
             {
                 DocKey = docKey,
-                PoNumber = poNumber?.Trim() ?? "",
+                PoNumber = po,
                 UpdatedAtUtc = DateTime.UtcNow,
-                ScanCounts = NormalizeCounts(scanCounts)
+                ScanCounts = counts,
+                UpdatedByEmail = actor.Email,
+                UpdatedByName = actor.DisplayName
             });
 
+            AppendAudit(file, docKey, po, "draft_saved", actor, TotalScans(counts));
             await WriteFileUnlockedAsync(file, cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -127,10 +174,14 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
         int docKey,
         string poNumber,
         IReadOnlyDictionary<string, int> scanCounts,
+        ScanPoAuditActor actor,
         CancellationToken cancellationToken = default)
     {
         if (docKey <= 0)
             return;
+
+        var counts = NormalizeCounts(scanCounts);
+        var po = poNumber?.Trim() ?? "";
 
         await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -141,11 +192,14 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
             file.Submissions.Add(new ScanPoSubmitRecord
             {
                 DocKey = docKey,
-                PoNumber = poNumber?.Trim() ?? "",
+                PoNumber = po,
                 SubmittedAtUtc = DateTime.UtcNow,
-                ScanCounts = NormalizeCounts(scanCounts)
+                ScanCounts = counts,
+                SubmittedByEmail = actor.Email,
+                SubmittedByName = actor.DisplayName
             });
 
+            AppendAudit(file, docKey, po, "submitted", actor, TotalScans(counts));
             await WriteFileUnlockedAsync(file, cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -154,16 +208,27 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
         }
     }
 
-    public async Task ClearSubmissionAsync(int docKey, CancellationToken cancellationToken = default)
+    public async Task ClearSubmissionAsync(
+        int docKey,
+        string poNumber,
+        ScanPoAuditActor actor,
+        CancellationToken cancellationToken = default)
     {
         if (docKey <= 0)
             return;
+
+        var po = poNumber?.Trim() ?? "";
 
         await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var file = await ReadFileUnlockedAsync(cancellationToken).ConfigureAwait(false);
+            var sub = file.Submissions.FirstOrDefault(s => s.DocKey == docKey);
+            if (string.IsNullOrEmpty(po) && sub is not null)
+                po = sub.PoNumber;
+
             file.Submissions.RemoveAll(s => s.DocKey == docKey);
+            AppendAudit(file, docKey, po, "reopened", actor, sub is null ? null : TotalScans(sub.ScanCounts));
             await WriteFileUnlockedAsync(file, cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -171,6 +236,39 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
             _lock.Release();
         }
     }
+
+    private static List<ScanPoAuditEntry> AuditForDoc(ScanPoSubmitFile file, int docKey) =>
+        file.AuditTrail
+            .Where(e => e.DocKey == docKey)
+            .OrderByDescending(e => e.AtUtc)
+            .Take(50)
+            .ToList();
+
+    private static void AppendAudit(
+        ScanPoSubmitFile file,
+        int docKey,
+        string poNumber,
+        string action,
+        ScanPoAuditActor actor,
+        int? totalScans)
+    {
+        file.AuditTrail.Add(new ScanPoAuditEntry
+        {
+            DocKey = docKey,
+            PoNumber = poNumber,
+            Action = action,
+            AtUtc = DateTime.UtcNow,
+            UserEmail = actor.Email,
+            UserDisplayName = actor.DisplayName,
+            TotalScans = totalScans
+        });
+
+        if (file.AuditTrail.Count > MaxAuditEntries)
+            file.AuditTrail.RemoveRange(0, file.AuditTrail.Count - MaxAuditEntries);
+    }
+
+    private static int TotalScans(IReadOnlyDictionary<string, int> counts) =>
+        counts.Values.Sum();
 
     private static Dictionary<string, int> NormalizeCounts(IReadOnlyDictionary<string, int>? counts)
     {
@@ -230,6 +328,7 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
     {
         public List<ScanPoSubmitRecord> Submissions { get; set; } = new();
         public List<ScanPoDraftRecord> Drafts { get; set; } = new();
+        public List<ScanPoAuditEntry> AuditTrail { get; set; } = new();
     }
 
     private sealed class ScanPoSubmitRecord
@@ -238,6 +337,8 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
         public string PoNumber { get; set; } = "";
         public DateTime SubmittedAtUtc { get; set; }
         public Dictionary<string, int> ScanCounts { get; set; } = new();
+        public string SubmittedByEmail { get; set; } = "";
+        public string SubmittedByName { get; set; } = "";
     }
 
     private sealed class ScanPoDraftRecord
@@ -246,5 +347,7 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
         public string PoNumber { get; set; } = "";
         public DateTime UpdatedAtUtc { get; set; }
         public Dictionary<string, int> ScanCounts { get; set; } = new();
+        public string UpdatedByEmail { get; set; } = "";
+        public string UpdatedByName { get; set; } = "";
     }
 }

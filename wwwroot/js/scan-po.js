@@ -94,11 +94,22 @@
     setInitialVisible(getFiltered());
   };
 
+  const submittedMetaHtml = (o) => {
+    if (activeTab !== 'submitted' || !o.scanSubmitted) return '';
+    const who = (o.submittedByName || '').trim();
+    const when = o.submittedAtUtc ? fmtDate(o.submittedAtUtc) : '';
+    if (!who && !when) return '';
+    const parts = [];
+    if (when) parts.push(when);
+    if (who) parts.push(esc(who));
+    return `<span class="scan-row-meta">${parts.join(' · ')}</span>`;
+  };
+
   const rowHtml = (o) => {
     const href = detailHref(o.docKey);
     return `
       <tr class="scan-row scan-row--link" data-href="${esc(href)}" role="link" tabindex="0">
-        <td class="scan-col-po">${esc(o.poNumber || '—')}</td>
+        <td class="scan-col-po">${esc(o.poNumber || '—')}${submittedMetaHtml(o)}</td>
         <td class="scan-col-date">${fmtDate(o.orderDate)}</td>
         <td class="scan-col-amount num">${fmtAmt(o.amount)}</td>
       </tr>`;

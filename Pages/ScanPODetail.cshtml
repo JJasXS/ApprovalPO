@@ -74,34 +74,31 @@
                     <label>Today's date</label>
                     <span>@today</span>
                 </div>
-                <div class="scan-detail-meta-row scan-detail-meta-row--desc-scan">
-                    <div class="scan-detail-field scan-detail-field--desc">
-                        <label>Description</label>
-                        <span>@(string.IsNullOrWhiteSpace(o.Description) ? "—" : o.Description)</span>
-                    </div>
-                    <div class="scan-detail-field scan-detail-field--scan-only">
-                        <label>Scan QR</label>
-                        @if (scanSubmitted)
-                        {
-                            <button type="button" class="scan-detail-scan-btn" id="scanDetailScanBtn" disabled>
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                    <rect x="3" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/>
-                                    <path d="M21 16h-3a2 2 0 0 0-2 2v3"/><line x1="21" y1="21" x2="21" y2="21.01"/>
-                                </svg>
-                                <span>Scan</span>
-                            </button>
-                        }
-                        else
-                        {
-                            <button type="button" class="scan-detail-scan-btn" id="scanDetailScanBtn">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                    <rect x="3" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/>
-                                    <path d="M21 16h-3a2 2 0 0 0-2 2v3"/><line x1="21" y1="21" x2="21" y2="21.01"/>
-                                </svg>
-                                <span>Scan</span>
-                            </button>
-                        }
-                    </div>
+                <div class="scan-detail-field scan-detail-field--desc">
+                    <label>Description</label>
+                    <span>@(string.IsNullOrWhiteSpace(o.Description) ? "—" : o.Description)</span>
+                </div>
+                <div class="scan-detail-field scan-detail-field--scan-only">
+                    @if (scanSubmitted)
+                    {
+                        <button type="button" class="scan-detail-scan-btn" id="scanDetailScanBtn" disabled>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <rect x="3" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/>
+                                <path d="M21 16h-3a2 2 0 0 0-2 2v3"/><line x1="21" y1="21" x2="21" y2="21.01"/>
+                            </svg>
+                            <span>Scan</span>
+                        </button>
+                    }
+                    else
+                    {
+                        <button type="button" class="scan-detail-scan-btn" id="scanDetailScanBtn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <rect x="3" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/>
+                                <path d="M21 16h-3a2 2 0 0 0-2 2v3"/><line x1="21" y1="21" x2="21" y2="21.01"/>
+                            </svg>
+                            <span>Scan</span>
+                        </button>
+                    }
                 </div>
                 <div class="scan-detail-field scan-detail-field--manual">
                     <label>Item code</label>
@@ -142,6 +139,11 @@
                     <span class="scan-session-hint">Draft saves to server; submit marks PO complete.</span>
                 </p>
             </div>
+
+            <details class="scan-audit-panel" id="scanAuditPanel" hidden>
+                <summary>Activity log</summary>
+                <ul class="scan-audit-list" id="scanAuditList"></ul>
+            </details>
             @if (Model.Lines.Count == 0)
             {
                 <p class="scan-detail-empty-lines">No line items found.</p>

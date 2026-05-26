@@ -8,11 +8,9 @@
 
 <div class="login-container">
     <input type="hidden" id="returnUrlField" name="ReturnUrl" value="@(Model.ReturnUrl ?? "")" />
-    <div class="top-row">
-        <span class="muted">Purchase Order Approval</span>
-    </div>
+    
 
-    <center><h2>Sign in with OTP</h2></center>
+    <h2>Sign in with OTP</h2>
     
     <div id="idGroup">
         <div class="hp-field" aria-hidden="true">
@@ -48,6 +46,11 @@
             <span class="install-icon" aria-hidden="true">?</span>
             Install app
         </button>
+    </div>
+
+    <div class="login-footer-credit">
+        <p>Powered by ProAcc System Intelligent Tool</p>
+        <p>V 1.0</p>
     </div>
 </div>
 

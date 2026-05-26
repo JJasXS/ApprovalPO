@@ -1,5 +1,16 @@
 /* Aligned with ProAccScanner login styling */
 
+:root {
+  --login-accent: #2563eb;
+  --login-accent-hover: #1d4ed8;
+  --login-text: #0f172a;
+  --login-muted: #64748b;
+  --login-border: #e2e8f0;
+  --login-surface: #ffffff;
+  --login-radius: 16px;
+  --login-radius-sm: 10px;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -8,24 +19,67 @@
 
 html, body {
   height: 100%;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: linear-gradient(165deg, #f5fbff 0%, #eef7fc 45%, #e8f4fa 100%);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(37, 99, 235, 0.08), transparent),
+    linear-gradient(165deg, #f8fafc 0%, #eef6fc 50%, #e8f2f8 100%);
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 16px;
+  padding: 20px;
+  -webkit-font-smoothing: antialiased;
 }
 
 .login-container {
   position: relative;
-  background: linear-gradient(145deg, #ffffff 0%, #f8fcff 100%);
-  padding: 36px 32px;
-  border-radius: 12px;
-  border: 1px solid #c5dff0;
-  box-shadow: 0 8px 24px rgba(14, 116, 183, 0.1);
+  background: var(--login-surface);
+  padding: 32px 28px 26px;
+  border-radius: var(--login-radius);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 12px 40px rgba(14, 116, 183, 0.12);
   width: 100%;
-  max-width: 400px;
+  max-width: 380px;
   text-align: left;
+}
+
+.login-footer-credit {
+  margin-top: 22px;
+  padding-top: 18px;
+  text-align: center;
+}
+
+.login-footer-credit::before {
+  content: '';
+  display: block;
+  width: 56px;
+  height: 1px;
+  margin: 0 auto 14px;
+  background: linear-gradient(90deg, transparent, #cbd5e1 20%, #cbd5e1 80%, transparent);
+}
+
+.login-footer-credit p {
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  font-weight: 500;
+  color: #94a3b8;
+  letter-spacing: 0.01em;
+}
+
+.login-footer-credit p + p {
+  margin-top: 8px;
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #64748b;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
 }
 
 /* Honeypot: off-screen for humans; naive bots often fill "website" fields */
@@ -43,10 +97,12 @@ html, body {
 }
 
 .login-container h2 {
-  font-size: 24px;
-  font-weight: 600;
-  color: #111827;
-  margin-bottom: 8px;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--login-text);
+  text-align: center;
+  letter-spacing: -0.025em;
+  margin-bottom: 22px;
 }
 
 .login-container .sub {
@@ -66,34 +122,43 @@ html, body {
 .login-container input[type="text"],
 .login-container input[type="email"] {
   width: 100%;
-  padding: 12px 14px;
-  margin-bottom: 16px;
-  border-radius: 8px;
-  border: 1px solid #d1d5db;
-  font-size: 14px;
-  color: #111827;
-  background-color: #f9fafb;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  padding: 13px 14px;
+  margin-bottom: 14px;
+  border-radius: var(--login-radius-sm);
+  border: 1px solid var(--login-border);
+  font-size: 0.9375rem;
+  color: var(--login-text);
+  background-color: #f8fafc;
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+}
+
+.login-container input[type="text"]::placeholder,
+.login-container input[type="email"]::placeholder {
+  color: #94a3b8;
 }
 
 .login-container input[type="text"]:focus,
 .login-container input[type="email"]:focus {
-  border-color: #2563eb;
-  box-shadow: 0 0 4px rgba(37, 99, 235, 0.3);
+  border-color: var(--login-accent);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
   outline: none;
-  background-color: #ffffff;
+  background-color: var(--login-surface);
 }
 
 .login-container button {
   width: 100%;
-  padding: 12px;
-  font-size: 15px;
+  padding: 13px 16px;
+  font-size: 0.9375rem;
   font-weight: 600;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--login-radius-sm);
   cursor: pointer;
-  transition: background-color 0.3s, box-shadow 0.2s;
-  margin-bottom: 8px;
+  transition: background-color 0.2s, box-shadow 0.2s, transform 0.15s;
+  margin-bottom: 6px;
+}
+
+.login-container button:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .login-container button:disabled {
@@ -102,13 +167,14 @@ html, body {
 }
 
 .login-container button#sendBtn {
-  background-color: #2563eb;
-  color: white;
+  background: linear-gradient(180deg, #3b82f6 0%, var(--login-accent) 100%);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
 }
 
 .login-container button#sendBtn:hover:not(:disabled) {
-  background-color: #1d4ed8;
-  box-shadow: 0 4px 8px rgba(37, 99, 235, 0.3);
+  background: linear-gradient(180deg, var(--login-accent) 0%, var(--login-accent-hover) 100%);
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
 }
 
 .login-container button#verifyBtn {
@@ -169,7 +235,8 @@ html, body {
 
 /* Install app (same pattern as ProAccScanner landing / mobile PWA hints) */
 .install-cta {
-  margin-top: 16px;
+  margin-top: 10px;
+  padding-top: 4px;
   text-align: center;
 }
 
@@ -177,34 +244,43 @@ html, body {
   width: auto;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   margin-bottom: 0;
-  padding: 7px 12px;
-  font-size: 13px;
+  padding: 5px 11px;
+  font-size: 0.75rem;
   font-weight: 600;
   border-radius: 999px;
-  background: #f8fafc;
-  border: 1px solid #d1d5db;
-  color: #334155;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--login-muted);
   cursor: pointer;
   transition: color 0.2s, background 0.2s, border-color 0.2s;
 }
 
 .login-container button.install-link:hover {
-  color: #0f172a;
-  background: #eef2ff;
-  border-color: #c7d2fe;
+  color: var(--login-accent);
+  background: #eff6ff;
+  border-color: #bfdbfe;
 }
 
 .install-icon {
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
-  border: 1px solid #d1d5db;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-weight: 600;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #64748b;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.login-container button.install-link:hover .install-icon {
+  border-color: #93c5fd;
+  color: var(--login-accent);
 }
 
 .install-modal {
@@ -316,11 +392,18 @@ body.modal-open {
 
 @media (max-width: 500px) {
   .login-container {
-    padding: 28px 24px;
+    padding: 28px 22px 22px;
+    border-radius: 14px;
   }
 
   .login-container h2 {
-    font-size: 20px;
+    font-size: 1.2rem;
+    margin-bottom: 18px;
+  }
+
+  .login-footer-credit {
+    margin-top: 18px;
+    padding-top: 14px;
   }
 
   .otp-boxes input.otp {

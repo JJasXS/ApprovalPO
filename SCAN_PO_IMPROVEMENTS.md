@@ -18,7 +18,7 @@
 | Improvement | Done |
 |-------------|:----:|
 | Persist submit in Firebird / ERP database | |
-| Audit trail (user, timestamp on submit) | |
+| Audit trail (user, timestamp on submit / reopen / draft) | ✓ |
 | Qty validation (over/under vs PO line qty) | |
 | PWA / Add to Home Screen | |
 
@@ -27,6 +27,7 @@
 - **Draft**: Scan counts auto-save to `Data/scan-po-submits-{tenant}.json` (draft section) and `sessionStorage` on the device.
 - **Submit**: Moves PO to **Submitted** tab; counts stored in submissions section.
 - **Reopen**: Removes submission so PO returns to **To scan**.
+- **Audit**: Logged-in user (OTP email + display name) recorded on draft save, submit, and reopen; **Activity log** on detail page; **Submitted** tab shows who/when under PO #.
 - **Offline**: Failed resolves while offline are queued in `localStorage` and retried when online.
 
 ## Phone URL (live camera)

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ApprovalPO.Helpers;
 using ApprovalPO.Models;
 using ApprovalPO.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -85,7 +86,8 @@ public class ScanPODetailModel : PageModel
             return new JsonResult(new { ok = false, error = "PO not found." }, JsonCamel);
 
         var counts = TryParseScanCounts(scanCountsJson);
-        await _scanSubmits.SaveDraftAsync(docKey, order.PoNumber, counts, cancellationToken).ConfigureAwait(false);
+        var actor = ScanPoAuditHelper.FromUser(User);
+        await _scanSubmits.SaveDraftAsync(docKey, order.PoNumber, counts, actor, cancellationToken).ConfigureAwait(false);
         return new JsonResult(new { ok = true }, JsonCamel);
     }
 
@@ -103,9 +105,13 @@ public class ScanPODetailModel : PageModel
             return RedirectToPage("/ScanPO");
 
         var counts = TryParseScanCounts(scanCountsJson);
-        await _scanSubmits.MarkSubmittedAsync(docKey, order.PoNumber, counts, cancellationToken).ConfigureAwait(false);
+        var actor = ScanPoAuditHelper.FromUser(User);
+        await _scanSubmits.MarkSubmittedAsync(docKey, order.PoNumber, counts, actor, cancellationToken).ConfigureAwait(false);
 
-        TempData["ScanSubmitMessage"] = $"Scan submitted for {order.PoNumber}.";
+        var by = string.IsNullOrWhiteSpace(actor.DisplayName) ? actor.Email : actor.DisplayName;
+        TempData["ScanSubmitMessage"] = string.IsNullOrWhiteSpace(by)
+            ? $"Scan submitted for {order.PoNumber}."
+            : $"Scan submitted for {order.PoNumber} by {by}.";
         return RedirectToPage("/ScanPO", new { tab = "submitted" });
     }
 
@@ -114,8 +120,17 @@ public class ScanPODetailModel : PageModel
         if (docKey <= 0)
             return RedirectToPage("/ScanPO");
 
-        await _scanSubmits.ClearSubmissionAsync(docKey, cancellationToken).ConfigureAwait(false);
-        TempData["ScanSubmitMessage"] = "PO reopened for scanning.";
+        var all = await _orders.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
+        var order = all.FirstOrDefault(o => o.DocKey == docKey);
+        var poNumber = order?.PoNumber ?? "";
+
+        var actor = ScanPoAuditHelper.FromUser(User);
+        await _scanSubmits.ClearSubmissionAsync(docKey, poNumber, actor, cancellationToken).ConfigureAwait(false);
+
+        var by = string.IsNullOrWhiteSpace(actor.DisplayName) ? actor.Email : actor.DisplayName;
+        TempData["ScanSubmitMessage"] = string.IsNullOrWhiteSpace(by)
+            ? "PO reopened for scanning."
+            : $"PO reopened for scanning by {by}.";
         return RedirectToPage("/ScanPODetail", new { docKey });
     }
 

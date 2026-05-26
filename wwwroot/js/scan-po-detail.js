@@ -48,6 +48,56 @@
   const totalScans = () =>
     Object.values(scanCounts).reduce((sum, n) => sum + (Number(n) || 0), 0);
 
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  const formatActor = (name, email) => {
+    const n = String(name || '').trim();
+    const e = String(email || '').trim();
+    if (n && e && n.toLowerCase() !== e.toLowerCase()) return `${n} (${e})`;
+    return n || e || 'Unknown user';
+  };
+
+  const actionLabel = (action) =>
+    ({ submitted: 'Submitted', reopened: 'Reopened', draft_saved: 'Draft saved' }[action] || action);
+
+  const renderAuditTrail = (entries) => {
+    const panel = document.getElementById('scanAuditPanel');
+    const list = document.getElementById('scanAuditList');
+    if (!panel || !list) return;
+    const items = Array.isArray(entries) ? entries : [];
+    if (!items.length) {
+      panel.hidden = true;
+      return;
+    }
+    panel.hidden = false;
+    list.innerHTML = items
+      .map((e) => {
+        const when = e.atUtc ? new Date(e.atUtc).toLocaleString() : '';
+        const who = formatActor(e.userDisplayName, e.userEmail);
+        const scans = e.totalScans != null ? ` · ${e.totalScans} scan(s)` : '';
+        return `<li><span class="scan-audit-action">${esc(actionLabel(e.action))}</span> ${esc(when)} · ${esc(who)}${esc(scans)}</li>`;
+      })
+      .join('');
+  };
+
+  const updateDraftHint = (state) => {
+    if (readOnly || !state) return;
+    const hint = document.querySelector('.scan-session-hint');
+    if (!hint) return;
+    const who = formatActor(state.draftUpdatedByName, state.draftUpdatedByEmail);
+    if (!who || who === 'Unknown user') {
+      hint.textContent = 'Draft saves to server; submit marks PO complete.';
+      return;
+    }
+    const when = state.draftUpdatedAtUtc
+      ? new Date(state.draftUpdatedAtUtc).toLocaleString()
+      : '';
+    hint.textContent = when
+      ? `Draft on server · last saved ${when} by ${who}.`
+      : `Draft on server · last saved by ${who}.`;
+  };
+
   const showToast = (message, tone = 'info') => {
     if (!toastRoot || !message) return;
     const el = document.createElement('p');
@@ -138,16 +188,19 @@
         readOnly = true;
         scanCounts = {};
         mergeCounts(state.scanCounts);
-        setReadOnlyUi(state.submittedAtUtc);
+        setReadOnlyUi(state);
+        renderAuditTrail(state.auditTrail);
         return;
       }
       if (state.scanCounts && Object.keys(state.scanCounts).length > 0) {
         mergeCounts(state.scanCounts);
       }
+      updateDraftHint(state);
+      renderAuditTrail(state.auditTrail);
     } catch (_) { /* ignore */ }
   };
 
-  const setReadOnlyUi = (submittedAtUtc) => {
+  const setReadOnlyUi = (state) => {
     readOnly = true;
     scanBtn?.setAttribute('disabled', 'disabled');
     manualInput?.setAttribute('disabled', 'disabled');
@@ -156,10 +209,13 @@
     if (reopenForm) reopenForm.hidden = false;
     const hint = document.querySelector('.scan-session-hint');
     if (hint) {
-      const when = submittedAtUtc ? new Date(submittedAtUtc).toLocaleString() : '';
+      const when = state?.submittedAtUtc
+        ? new Date(state.submittedAtUtc).toLocaleString()
+        : '';
+      const who = formatActor(state?.submittedByName, state?.submittedByEmail);
       hint.textContent = when
-        ? `Submitted ${when} — reopen below to scan again.`
-        : 'Submitted — reopen below to scan again.';
+        ? `Submitted ${when} by ${who} — reopen below to scan again.`
+        : `Submitted by ${who} — reopen below to scan again.`;
     }
   };
 

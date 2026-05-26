@@ -9,4 +9,6 @@ public sealed class ScanPoOrderListItem
     public decimal Amount { get; set; }
     /// <summary>True after user taps Submit on the scan detail page.</summary>
     public bool ScanSubmitted { get; set; }
+    public DateTime? SubmittedAtUtc { get; set; }
+    public string? SubmittedByName { get; set; }
 }

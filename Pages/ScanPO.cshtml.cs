@@ -58,16 +58,25 @@ public class ScanPOModel : PageModel
     private async Task<IReadOnlyList<ScanPoOrderListItem>> LoadScanListItemsAsync(CancellationToken cancellationToken)
     {
         var orders = await LoadApprovedOrdersAsync(cancellationToken).ConfigureAwait(false);
-        var submitted = await _scanSubmits.GetSubmittedDocKeysAsync(cancellationToken).ConfigureAwait(false);
+        var submitSummaries = await _scanSubmits.GetSubmitSummariesAsync(cancellationToken).ConfigureAwait(false);
+        var submitByDoc = submitSummaries.ToDictionary(s => s.DocKey);
 
         return orders
-            .Select(o => new ScanPoOrderListItem
+            .Select(o =>
             {
-                DocKey = o.DocKey,
-                PoNumber = o.PoNumber,
-                OrderDate = o.OrderDate,
-                Amount = o.Amount,
-                ScanSubmitted = submitted.Contains(o.DocKey)
+                submitByDoc.TryGetValue(o.DocKey, out var sub);
+                return new ScanPoOrderListItem
+                {
+                    DocKey = o.DocKey,
+                    PoNumber = o.PoNumber,
+                    OrderDate = o.OrderDate,
+                    Amount = o.Amount,
+                    ScanSubmitted = sub is not null,
+                    SubmittedAtUtc = sub?.SubmittedAtUtc,
+                    SubmittedByName = string.IsNullOrWhiteSpace(sub?.SubmittedByName)
+                        ? sub?.SubmittedByEmail
+                        : sub?.SubmittedByName
+                };
             })
             .ToList();
     }
