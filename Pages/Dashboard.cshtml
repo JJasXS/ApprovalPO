@@ -35,6 +35,8 @@
         <div class="dash-cards">
 
             <!-- Purchase Approval -->
+            @if (Model.ShowPurchaseApproval)
+            {
             <a href="/PurchaseOrders" class="dash-card dash-card--active">
                 <div class="dash-card-icon-wrap dash-card-icon-wrap--blue">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
@@ -54,8 +56,11 @@
                     </svg>
                 </div>
             </a>
+            }
 
             <!-- Sales Approval -->
+            @if (Model.ShowSalesApproval)
+            {
             <a href="/SalesOrders" class="dash-card dash-card--active">
                 <div class="dash-card-icon-wrap dash-card-icon-wrap--green">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
@@ -74,8 +79,11 @@
                     </svg>
                 </div>
             </a>
+            }
 
             <!-- Scanning PO -->
+            @if (Model.ShowScanPo)
+            {
             <a asp-page="/ScanPO" class="dash-card dash-card--active">
                 <div class="dash-card-icon-wrap dash-card-icon-wrap--violet">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
@@ -93,8 +101,11 @@
                     </svg>
                 </div>
             </a>
+            }
 
             <!-- Received goods -->
+            @if (Model.ShowReceivedGoods)
+            {
             <a asp-page="/ScanPO" asp-route-tab="received" class="dash-card dash-card--active">
                 <div class="dash-card-icon-wrap dash-card-icon-wrap--amber">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
@@ -113,6 +124,17 @@
                     </svg>
                 </div>
             </a>
+            }
+
+            @if (!Model.HasAnyModule)
+            {
+                <div class="dash-card" style="pointer-events:none;opacity:.82;">
+                    <div class="dash-card-body">
+                        <h2 class="dash-card-title">No modules enabled</h2>
+                        <p class="dash-card-desc">Please enable at least one dashboard module in the environment configuration.</p>
+                    </div>
+                </div>
+            }
 
         </div>
     </main>

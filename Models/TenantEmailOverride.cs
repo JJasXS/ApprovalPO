@@ -20,4 +20,17 @@ public sealed class TenantResolvedPayload
 {
     public required string ConnectionString { get; init; }
     public TenantEmailOverride? Email { get; init; }
+    public TenantDashboardModules? DashboardModules { get; init; }
+}
+
+/// <summary>
+/// Optional per-tenant dashboard module visibility flags.
+/// Null means "not specified" (caller should use defaults).
+/// </summary>
+public sealed class TenantDashboardModules
+{
+    public bool? PurchaseApproval { get; init; }
+    public bool? SalesApproval { get; init; }
+    public bool? ScanPo { get; init; }
+    public bool? ReceivedGoods { get; init; }
 }

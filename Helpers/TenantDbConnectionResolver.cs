@@ -102,7 +102,13 @@ public sealed class TenantDbConnectionResolver
             };
             var conn = csb.ConnectionString;
             var email = TryParseTenantEmailFromRoot(root);
-            _cache[tenantCode] = new TenantResolvedPayload { ConnectionString = conn, Email = email };
+            var dashboardModules = TryParseDashboardModulesFromRoot(root);
+            _cache[tenantCode] = new TenantResolvedPayload
+            {
+                ConnectionString = conn,
+                Email = email,
+                DashboardModules = dashboardModules
+            };
             return conn;
         }
         finally
@@ -123,6 +129,20 @@ public sealed class TenantDbConnectionResolver
 
         await GetConnectionStringForTenantAsync(tenantCode, cancellationToken).ConfigureAwait(false);
         return _cache.TryGetValue(tenantCode, out var hit2) ? hit2.Email : null;
+    }
+
+    /// <summary>Dashboard module visibility flags from tenant payload, if present.</summary>
+    public async Task<TenantDashboardModules?> GetTenantDashboardModulesAsync(string tenantCode, CancellationToken cancellationToken = default)
+    {
+        tenantCode = (tenantCode ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(tenantCode))
+            return null;
+
+        if (_cache.TryGetValue(tenantCode, out var hit))
+            return hit.DashboardModules;
+
+        await GetConnectionStringForTenantAsync(tenantCode, cancellationToken).ConfigureAwait(false);
+        return _cache.TryGetValue(tenantCode, out var hit2) ? hit2.DashboardModules : null;
     }
 
     /// <summary>
@@ -279,6 +299,73 @@ public sealed class TenantDbConnectionResolver
             o.OtpEnabled = otpText.Trim().Equals("true", StringComparison.OrdinalIgnoreCase) || otpText.Trim() == "1";
 
         return o;
+    }
+
+    private static TenantDashboardModules? TryParseDashboardModulesFromRoot(JsonElement root)
+    {
+        // 1) Preferred clean JSON: dashboardModules.{...}
+        if (TryFindSectionRecursive(root, "dashboardModules", depth: 0, maxDepth: 8, out var directAttr))
+        {
+            var parsedDirect = ParseDashboardModulesMap(UnwrapDynamoMap(directAttr));
+            if (parsedDirect is not null)
+                return parsedDirect;
+        }
+
+        // 2) Nested under features: features.dashboardModules.{...}
+        if (TryFindSectionRecursive(root, "features", depth: 0, maxDepth: 8, out var featuresAttr))
+        {
+            var featuresMap = UnwrapDynamoMap(featuresAttr);
+            if (TryGetJsonPropertyIgnoreCase(featuresMap, "dashboardModules", out var nestedAttr))
+            {
+                var parsedNested = ParseDashboardModulesMap(UnwrapDynamoMap(nestedAttr));
+                if (parsedNested is not null)
+                    return parsedNested;
+            }
+        }
+
+        return null;
+    }
+
+    private static TenantDashboardModules? ParseDashboardModulesMap(JsonElement map)
+    {
+        if (map.ValueKind != JsonValueKind.Object)
+            return null;
+
+        bool? ReadBool(params string[] keys)
+        {
+            foreach (var key in keys)
+            {
+                if (!TryGetJsonPropertyIgnoreCase(map, key, out var el))
+                    continue;
+                if (!TryCoerceDynamoScalar(el, out var raw))
+                    continue;
+                var t = (raw ?? "").Trim();
+                if (t.Length == 0)
+                    continue;
+                if (bool.TryParse(t, out var b))
+                    return b;
+                if (t is "1" or "yes" or "YES" or "on" or "ON")
+                    return true;
+                if (t is "0" or "no" or "NO" or "off" or "OFF")
+                    return false;
+            }
+            return null;
+        }
+
+        var modules = new TenantDashboardModules
+        {
+            PurchaseApproval = ReadBool("purchaseApproval", "approvalPO", "approvalPo"),
+            SalesApproval = ReadBool("salesApproval", "approvalSO", "approvalSo"),
+            ScanPo = ReadBool("scanPO", "scanPo", "scanner"),
+            ReceivedGoods = ReadBool("receivedGoods", "receivedGood"),
+        };
+
+        return modules.PurchaseApproval is null
+               && modules.SalesApproval is null
+               && modules.ScanPo is null
+               && modules.ReceivedGoods is null
+            ? null
+            : modules;
     }
 
     private static bool TryFindSectionRecursive(JsonElement e, string sectionName, int depth, int maxDepth, out JsonElement sectionAttr)
