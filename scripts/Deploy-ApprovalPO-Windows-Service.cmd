@@ -69,10 +69,10 @@ echo.
 echo === 7) Verify ===
 sc query %SERVICE_NAME%
 tasklist | findstr /I ApprovalPO
-netstat -ano | findstr :5288
+netstat -ano | findstr :2095
 
 echo.
-echo Done. Default HTTP URL: http://0.0.0.0:5288 (see appsettings.Production.json).
+echo Done. Default HTTP URL: http://0.0.0.0:2095 (see appsettings.json Approval:PublicHttpPort).
 echo Adjust Kestrel URLs or TLS in publish folder as needed.
 goto :eof
 

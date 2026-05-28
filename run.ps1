@@ -24,7 +24,7 @@ if ($needBuild) {
 }
 
 $env:ASPNETCORE_ENVIRONMENT = 'Development'
-$env:ASPNETCORE_URLS = 'https://localhost:5058;http://localhost:5057'
+$env:ASPNETCORE_URLS = 'https://localhost:2096;http://localhost:2095'
 
 Write-Host 'Starting ApprovalPO...' -ForegroundColor DarkGray
 dotnet exec $dll @args

@@ -59,7 +59,7 @@
 
         <p id="scanHttpsBanner" class="scan-https-banner" hidden role="note">
             For live QR camera, use HTTPS:
-            <a id="scanHttpsBannerLink" href="#">open Scan PO on port 5058</a>
+            <a id="scanHttpsBannerLink" href="#">open Scan PO on HTTPS</a>
             (or take a photo of the QR on HTTP).
         </p>
 
@@ -116,7 +116,9 @@
         var a = document.getElementById('scanHttpsBannerLink');
         if (!banner || !a) return;
         var host = location.hostname || 'localhost';
-        var url = 'https://' + host + ':5058/ScanPO';
+        var httpsMeta = document.querySelector('meta[name="approval-https-port"]');
+        var httpsPort = (httpsMeta && httpsMeta.content) ? httpsMeta.content : '2096';
+        var url = 'https://' + host + ':' + httpsPort + '/ScanPO';
         a.href = url;
         a.textContent = url;
         banner.hidden = false;

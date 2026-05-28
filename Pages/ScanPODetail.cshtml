@@ -247,7 +247,7 @@
             <ol class="qr-camera-help-steps">
                 <li>Click the <strong>lock</strong> left of the address → <strong>Site settings</strong>.</li>
                 <li>Find <strong>Camera</strong> → <strong>Allow</strong> (or <strong>Reset permission</strong>, then reload).</li>
-                <li>Reload, then tap <strong>Scan</strong>. Use <strong>https://…:5058</strong> for live camera.</li>
+                <li>Reload, then tap <strong>Scan</strong>. Use <strong>https://…</strong> (HTTPS port) for live camera.</li>
             </ol>
         </details>
     </div>
@@ -269,7 +269,9 @@
         var link = document.getElementById('qrHttpsLink');
         if (link && !window.isSecureContext) {
             var host = location.hostname || 'localhost';
-            var url = 'https://' + host + ':5058' + location.pathname + location.search;
+            var httpsMeta = document.querySelector('meta[name="approval-https-port"]');
+            var httpsPort = (httpsMeta && httpsMeta.content) ? httpsMeta.content : '2096';
+            var url = 'https://' + host + ':' + httpsPort + location.pathname + location.search;
             link.textContent = url;
             link.style.wordBreak = 'break-all';
         }

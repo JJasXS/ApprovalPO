@@ -36,7 +36,7 @@ if "%NEED_BUILD%"=="1" (
 
 set ASPNETCORE_ENVIRONMENT=Development
 
-set ASPNETCORE_URLS=https://localhost:5058;http://localhost:5057
+set ASPNETCORE_URLS=https://localhost:2096;http://localhost:2095
 
 echo Starting ApprovalPO...
 

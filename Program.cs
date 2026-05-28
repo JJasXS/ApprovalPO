@@ -48,10 +48,12 @@ if (builder.Environment.IsDevelopment()
     var lanPem = (Environment.GetEnvironmentVariable("APPROVALPO_TLS_PEM") ?? Path.Combine(lanRoot, ".certs", "dev.pem")).Trim();
     var lanKey = (Environment.GetEnvironmentVariable("APPROVALPO_TLS_KEY") ?? Path.Combine(lanRoot, ".certs", "dev.key")).Trim();
 
+    var lanHttp = ApprovalKestrelPorts.Http(builder.Configuration);
+    var lanHttps = ApprovalKestrelPorts.Https(builder.Configuration);
     builder.WebHost.ConfigureKestrel(options =>
     {
-        options.ListenAnyIP(5057);
-        options.ListenAnyIP(5058, listen =>
+        options.ListenAnyIP(lanHttp);
+        options.ListenAnyIP(lanHttps, listen =>
         {
             if (File.Exists(lanPem) && File.Exists(lanKey))
                 listen.UseHttps(X509Certificate2.CreateFromPemFile(lanPem, lanKey));
@@ -61,7 +63,7 @@ if (builder.Environment.IsDevelopment()
     });
     builder.WebHost.UseSetting(WebHostDefaults.ServerUrlsKey, string.Empty);
     builder.WebHost.PreferHostingUrls(false);
-    Console.WriteLine("[LAN] Listening on all interfaces: http://*:5057  https://*:5058 (use https on your phone for camera).");
+    Console.WriteLine($"[LAN] Listening on all interfaces: http://*:{lanHttp}  https://*:{lanHttps} (use https on your phone for camera).");
 }
 
 // Development: optional "trusted" HTTPS for LAN IPs — place mkcert PEM here or set APPROVALPO_TLS_PEM / APPROVALPO_TLS_KEY.
@@ -179,14 +181,16 @@ app.Use(async (context, next) =>
     await next();
 });
 
-// Development: phone camera needs HTTPS — redirect LAN http://*:5057 → https://*:5058 (same path).
+// Development: phone camera needs HTTPS — redirect LAN http → https (same path).
 if (app.Environment.IsDevelopment())
 {
+    var redirectHttpPort = ApprovalKestrelPorts.Http(app.Configuration);
+    var redirectHttpsPort = ApprovalKestrelPorts.Https(app.Configuration);
     app.Use(async (ctx, next) =>
     {
         if (HttpMethods.IsGet(ctx.Request.Method)
             && string.Equals(ctx.Request.Scheme, "http", StringComparison.OrdinalIgnoreCase)
-            && ctx.Request.Host.Port == 5057)
+            && ctx.Request.Host.Port == redirectHttpPort)
         {
             var host = ctx.Request.Host.Host;
             if (host is not "localhost"
@@ -195,7 +199,7 @@ if (app.Environment.IsDevelopment())
             {
                 var path = ctx.Request.Path.Value ?? "/";
                 var qs = ctx.Request.QueryString.Value ?? "";
-                ctx.Response.Redirect($"https://{host}:5058{path}{qs}");
+                ctx.Response.Redirect($"https://{host}:{redirectHttpsPort}{path}{qs}");
                 return;
             }
         }

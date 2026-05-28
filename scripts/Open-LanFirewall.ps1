@@ -8,7 +8,17 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
     Write-Error 'Run this script in an elevated (Administrator) PowerShell window.'
 }
 
-foreach ($port in 5057, 5058) {
+$ports = @(2095, 2096)
+$settingsPath = Join-Path $PSScriptRoot '..\appsettings.json'
+if (Test-Path $settingsPath) {
+    try {
+        $cfg = Get-Content $settingsPath -Raw | ConvertFrom-Json
+        if ($cfg.Approval.PublicHttpPort) { $ports[0] = [int]$cfg.Approval.PublicHttpPort }
+        if ($cfg.Approval.PublicHttpsPort) { $ports[1] = [int]$cfg.Approval.PublicHttpsPort }
+    } catch { }
+}
+
+foreach ($port in $ports) {
     $name = "ApprovalPO LAN TCP $port"
     $existing = Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue
     if ($existing) {

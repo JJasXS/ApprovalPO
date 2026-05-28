@@ -3,7 +3,7 @@
 Set-Location $PSScriptRoot
 
 # Stop a previous run so dotnet build can copy ApprovalPO.dll
-. (Join-Path $PSScriptRoot 'scripts\Stop-ApprovalPO.ps1')
+powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'scripts\Stop-ApprovalPO.ps1')
 
 $dll = Join-Path $PSScriptRoot 'bin\Debug\net8.0\ApprovalPO.dll'
 $needBuild = -not (Test-Path $dll)
@@ -33,11 +33,22 @@ $env:ASPNETCORE_ENVIRONMENT = 'Development'
 $env:APPROVALPO_LISTEN_LAN = 'true'
 Remove-Item Env:ASPNETCORE_URLS -ErrorAction SilentlyContinue
 
-Write-Host 'LAN mode: HTTP *:5057, HTTPS *:5058' -ForegroundColor Cyan
+$httpPort = 2095
+$httpsPort = 2096
+$settingsPath = Join-Path $PSScriptRoot 'appsettings.json'
+if (Test-Path $settingsPath) {
+    try {
+        $cfg = Get-Content $settingsPath -Raw | ConvertFrom-Json
+        if ($cfg.Approval.PublicHttpPort) { $httpPort = [int]$cfg.Approval.PublicHttpPort }
+        if ($cfg.Approval.PublicHttpsPort) { $httpsPort = [int]$cfg.Approval.PublicHttpsPort }
+    } catch { }
+}
+
+Write-Host "LAN mode: HTTP *:$httpPort, HTTPS *:$httpsPort" -ForegroundColor Cyan
 if ($ip) {
     Write-Host "On your phone (same Wi-Fi):" -ForegroundColor Green
-    Write-Host "  http://${ip}:5057/ScanPO   (Scan QR -> Take photo)"
-    Write-Host "  https://${ip}:5058/ScanPO  (live camera; optional)"
+    Write-Host "  http://${ip}:$httpPort/ScanPO   (Scan QR -> Take photo)"
+    Write-Host "  https://${ip}:$httpsPort/ScanPO  (live camera; optional)"
 }
 Write-Host ''
 

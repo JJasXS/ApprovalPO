@@ -5,6 +5,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0f172a" />
+    <meta name="approval-http-port" content="@(Configuration["Approval:PublicHttpPort"] ?? "2095")" />
+    <meta name="approval-https-port" content="@(Configuration["Approval:PublicHttpsPort"] ?? "2096")" />
     <link rel="manifest" href="~/manifest.webmanifest" asp-append-version="true" />
     <title>@ViewData["Title"] - @(ViewData["AppName"] ?? "Approval PO")</title>
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />

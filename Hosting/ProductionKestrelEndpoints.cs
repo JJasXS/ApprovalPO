@@ -15,8 +15,8 @@ internal static class ProductionKestrelEndpoints
         if (builder.Environment.IsDevelopment())
             return;
 
-        var httpPort = builder.Configuration.GetValue("Approval:PublicHttpPort", 5288);
-        var httpsPort = builder.Configuration.GetValue("Approval:PublicHttpsPort", 7298);
+        var httpPort = ApprovalKestrelPorts.Http(builder.Configuration);
+        var httpsPort = ApprovalKestrelPorts.Https(builder.Configuration);
         var loopbackOnly = builder.Configuration.GetValue("Approval:BindLoopbackOnly", false);
         var where = loopbackOnly ? "localhost (loopback only)" : "all interfaces (LAN)";
 
