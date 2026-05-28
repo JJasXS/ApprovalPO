@@ -1,5 +1,7 @@
+using ApprovalPO.Authorization;
 using ApprovalPO.Configuration;
 using ApprovalPO.Hosting;
+using ApprovalPO.Models;
 using ApprovalPO.Options;
 using ApprovalPO.Services;
 using ApprovalPO.Helpers;
@@ -120,6 +122,9 @@ builder.Services.AddSingleton<IScanPoSubmitStore, ScanPoSubmitFileStore>();
 builder.Services.AddScoped<IPurchaseOrderCatalog, PurchaseOrderCatalogService>();
 builder.Services.AddScoped<ISalesOrderCatalog, SalesOrderCatalogService>();
 builder.Services.AddScoped<IGoodsReceiptCatalog, GoodsReceiptCatalogService>();
+builder.Services.AddScoped<ApprovalPO.Services.MaintenanceScanner.IMaintenanceScannerService, ApprovalPO.Services.MaintenanceScanner.MaintenanceScannerService>();
+builder.Services.AddScoped<IUserRoleResolver, UserRoleResolver>();
+builder.Services.AddScoped<IModuleAccessService, ModuleAccessService>();
 
 builder.Services.Configure<Microsoft.AspNetCore.Antiforgery.AntiforgeryOptions>(options =>
 {
@@ -148,6 +153,10 @@ var razorPages = builder.Services.AddRazorPages(options =>
     options.Conventions.AllowAnonymousToPage("/Login");
     options.Conventions.AllowAnonymousToPage("/Logout");
     options.Conventions.AllowAnonymousToPage("/Error");
+
+    // Module access is enforced dynamically from tenant dashboard-module flags
+    // (adminDashboardModules / maintenanceDashboardModules) in middleware.
+    options.Conventions.AuthorizePage("/MaintenanceScanner/Index", PolicyNames.MaintenanceAccess);
 });
 if (builder.Environment.IsDevelopment())
     razorPages.AddRazorRuntimeCompilation();
@@ -167,7 +176,16 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    // Admin gets access to all business pages.
+    options.AddPolicy(PolicyNames.AdminOnly, p =>
+        p.RequireAuthenticatedUser().RequireRole(ApprovalRoles.Admin));
+
+    // Admin OR Maintenance can use the Maintenance Scanner.
+    options.AddPolicy(PolicyNames.MaintenanceAccess, p =>
+        p.RequireAuthenticatedUser().RequireRole(ApprovalRoles.Admin, ApprovalRoles.Maintenance));
+});
 
 var app = builder.Build();
 
@@ -220,6 +238,22 @@ if (!app.Environment.IsDevelopment())
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
+
+app.Use(async (ctx, next) =>
+{
+    if (ctx.User.Identity?.IsAuthenticated == true)
+    {
+        var access = ctx.RequestServices.GetRequiredService<IModuleAccessService>();
+        var allowed = await access.IsAllowedAsync(ctx.User, ctx.Request.Path, ctx.RequestAborted).ConfigureAwait(false);
+        if (!allowed)
+        {
+            ctx.Response.Redirect("/Dashboard");
+            return;
+        }
+    }
+    await next();
+});
+
 app.UseAuthorization();
 app.MapRazorPages();
 // Legacy bookmark / old JS: /ScanPO/Detail?docKey= → /ScanPODetail?docKey=

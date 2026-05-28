@@ -9,6 +9,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Standalone smoke-test projects live under tests/ and have their own csproj. -->
+    <Compile Remove="tests\**\*.cs" />
+    <Content Remove="tests\**\*" />
+    <None Remove="tests\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="AWSSDK.SecretsManager" Version="3.7.400.59" />
     <PackageReference Include="MailKit" Version="4.16.0" />
     <PackageReference Include="DotNetEnv" Version="3.1.1" />

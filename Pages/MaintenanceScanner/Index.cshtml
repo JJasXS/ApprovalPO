@@ -1,0 +1,134 @@
+@page "/MaintenanceScanner"
+@model ApprovalPO.Pages.MaintenanceScanner.IndexModel
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@{
+    ViewData["Title"] = "Maintenance Scanner";
+    var validateUrl = Url.Page("/MaintenanceScanner/Index", "Validate")!;
+    var locationsUrl = Url.Page("/MaintenanceScanner/Index", "Locations")!;
+    var insertUrl = Url.Page("/MaintenanceScanner/Index", "InsertDetail")!;
+    var csrfToken = Antiforgery.GetAndStoreTokens(HttpContext).RequestToken ?? "";
+    var userDisplay = User.Identity?.Name
+        ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+        ?? "User";
+}
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="~/css/maintenance-scanner.css" asp-append-version="true" />
+
+<input type="hidden" name="__RequestVerificationToken" value="@csrfToken" />
+
+<div id="ms-config"
+     data-validate-url="@validateUrl"
+     data-locations-url="@locationsUrl"
+     data-insert-url="@insertUrl"
+     hidden></div>
+
+<div class="ms-shell">
+    <header class="ms-header">
+        <div class="ms-header-inner">
+            <div class="ms-header-titles">
+                <a asp-page="/Dashboard" class="ms-back-link" title="Back to home" aria-label="Back to home">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 18 9 12 15 6"/>
+                    </svg>
+                </a>
+                <h1 class="ms-title">Maintenance Scanner</h1>
+            </div>
+            <div class="ms-user">@userDisplay</div>
+        </div>
+    </header>
+
+    <main class="ms-main">
+        <p id="msHttpsBanner" class="ms-https-banner" hidden role="note">
+            For live barcode camera on your phone, use HTTPS:
+            <a id="msHttpsBannerLink" href="#">open Maintenance Scanner on HTTPS</a>
+            (or type the code manually below on HTTP).
+        </p>
+        <div class="ms-grid">
+            <section class="ms-card">
+                <div id="ms-video-wrap" class="ms-video-wrap">
+                    <div class="ms-video-hint">Point camera at barcode</div>
+                </div>
+
+                <div class="ms-scan-top" role="toolbar" aria-label="Scanner controls">
+                    <button id="ms-start" class="ms-btn ms-btn--primary ms-scan-top__primary" type="button">Start Scanner</button>
+                    <button type="button" id="ms-flash" class="ms-btn ms-btn--outline ms-scan-top__flash" disabled>Flash off</button>
+                    @* Orientation toggle intentionally hidden: scanner is locked to horizontal preview. *@
+                    <button type="button" id="ms-orientation" class="ms-btn ms-btn--outline" hidden aria-hidden="true">Horizontal view</button>
+                </div>
+
+                <p id="ms-scan-result" class="ms-scan-result"></p>
+
+                <div class="ms-manual-entry">
+                    <input id="ms-manual-code" class="ms-input" type="text" placeholder="Type code manually" autocomplete="off" />
+                    <button id="ms-manual-code-btn" type="button" class="ms-btn ms-btn--outline">Check</button>
+                </div>
+            </section>
+
+            <section class="ms-card">
+                <div class="ms-section">
+                    <label class="ms-label" for="ms-location">Scanned Location</label>
+                    <input id="ms-location" class="ms-input" type="text" readonly />
+                </div>
+
+                <div class="ms-confirm-box">
+                    <p>Is this location correct?</p>
+                    <div class="ms-confirm-actions">
+                        <button type="button" id="ms-yes" class="ms-btn ms-btn--outline">Yes</button>
+                        <button type="button" id="ms-no" class="ms-btn ms-btn--outline">No</button>
+                    </div>
+                </div>
+
+                <div id="ms-manual-location-container" class="ms-section" style="display:none;">
+                    <label class="ms-label" for="ms-manual-location">Select Correct Location</label>
+                    <select id="ms-manual-location" class="ms-select"></select>
+                </div>
+
+                <div class="ms-section">
+                    <label class="ms-label" for="ms-project">Project</label>
+                    <input id="ms-project" class="ms-input" type="text" readonly placeholder="Department" />
+                </div>
+
+                <div class="ms-section">
+                    <label class="ms-label" for="ms-last-scanned">Last Scanned Date</label>
+                    <input id="ms-last-scanned" class="ms-input" type="text" readonly placeholder="Last Scanned Date" />
+                </div>
+
+                <div class="ms-section">
+                    <label class="ms-label">Remarks</label>
+                    <input id="ms-remark1" class="ms-input" type="text" placeholder="Remark 1" style="margin-bottom:8px;" />
+                    <input id="ms-remark2" class="ms-input" type="text" placeholder="Remark 2" style="margin-bottom:8px;" />
+                    <input id="ms-remark3" class="ms-input" type="text" placeholder="Remark 3" />
+                </div>
+
+                <button id="ms-update" class="ms-btn ms-btn--success" type="button" disabled>Update</button>
+            </section>
+        </div>
+    </main>
+</div>
+
+<partial name="_MaintenanceScannerOperatorPrompt" />
+
+@section Scripts
+{
+    <script src="~/js/scan-lan-https.js" asp-append-version="true"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+    <script src="~/js/maintenance-scanner.js" asp-append-version="true"></script>
+    <script>
+        (function () {
+            if (window.isSecureContext) return;
+            var banner = document.getElementById('msHttpsBanner');
+            var a = document.getElementById('msHttpsBannerLink');
+            if (!banner || !a) return;
+            var host = location.hostname || 'localhost';
+            var httpsMeta = document.querySelector('meta[name="approval-https-port"]');
+            var httpsPort = (httpsMeta && httpsMeta.content) ? httpsMeta.content : '2096';
+            var url = 'https://' + host + ':' + httpsPort + '/MaintenanceScanner';
+            a.href = url;
+            a.textContent = url;
+            banner.hidden = false;
+        })();
+    </script>
+}

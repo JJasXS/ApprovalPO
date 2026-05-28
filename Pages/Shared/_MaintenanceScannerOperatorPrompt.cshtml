@@ -1,0 +1,144 @@
+@using System.Security.Claims
+@* Ported from ProAccScanner: ask for scanner display name once per browser; stored in localStorage (per email). *@
+@if (Context.User?.Identity?.IsAuthenticated == true)
+{
+    var loginEmail = (User.FindFirst(ClaimTypes.Email)?.Value ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "").Trim();
+    <style>
+        body.ms-operator-popup-open { overflow: hidden; touch-action: none; }
+        .ms-operator-backdrop {
+            position: fixed; inset: 0; z-index: 2147483000;
+            background: rgba(15, 23, 42, 0.62);
+            backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+            opacity: 0; visibility: hidden; pointer-events: none;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+        }
+        .ms-operator-backdrop.is-visible { opacity: 1; visibility: visible; pointer-events: auto; }
+        .ms-operator-shell {
+            position: fixed; inset: 0; z-index: 2147483001;
+            display: flex; align-items: center; justify-content: center;
+            padding: 16px;
+            opacity: 0; visibility: hidden; pointer-events: none;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+        }
+        .ms-operator-shell.is-visible { opacity: 1; visibility: visible; pointer-events: auto; }
+        .ms-operator-card {
+            width: min(440px, calc(100% - 32px));
+            background: #fff; border-radius: 12px;
+            padding: 20px 18px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
+        }
+        .ms-operator-title { margin: 0 0 10px 0; font-size: 1.2rem; font-weight: 800; color: #111827; }
+        .ms-operator-desc { margin: 0 0 10px 0; color: #374151; font-size: 0.95rem; line-height: 1.45; }
+        .ms-operator-hint { margin: 0 0 12px 0; font-size: 0.85rem; color: #6b7280; }
+        .ms-operator-label { display: block; font-size: 0.85rem; font-weight: 600; color: #374151; margin-bottom: 6px; }
+        .ms-operator-input {
+            width: 100%; box-sizing: border-box; padding: 10px 12px;
+            border: 1px solid #d1d5db; border-radius: 8px; font-size: 1rem;
+        }
+        .ms-operator-err { margin: 8px 0 0 0; color: #b91c1c; font-size: 0.9rem; }
+        .ms-operator-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+        .ms-operator-btn {
+            width: 100%; padding: 11px 14px; border-radius: 8px; font-size: 0.95rem;
+            font-weight: 600; cursor: pointer; border: none;
+        }
+        .ms-operator-btn--primary { background: #2563eb; color: #fff; }
+        .ms-operator-btn--primary:hover { background: #1d4ed8; }
+        .ms-operator-btn--outline { background: #fff; color: #1f2937; border: 1px solid #d1d5db; }
+        .ms-operator-btn--outline:hover { background: #f9fafb; }
+    </style>
+    <input type="hidden" id="ms-operator-email" value="@loginEmail" />
+    <div id="ms-operator-overlay" class="ms-operator-backdrop" role="presentation"></div>
+    <div id="ms-operator-dialog" class="ms-operator-shell" role="dialog" aria-modal="true" aria-labelledby="ms-operator-title" aria-hidden="true">
+        <div class="ms-operator-card">
+            <h3 id="ms-operator-title" class="ms-operator-title">Your name for scans</h3>
+            <p class="ms-operator-desc">This device remembers it per login email. It is sent with each scan so you can tell who scanned, even when the login email is shared.</p>
+            <p id="ms-operator-hint" class="ms-operator-hint">Skip the name to use the SQL account name for this login.</p>
+            <label class="ms-operator-label" for="ms-operator-input">Name to show on scans</label>
+            <input id="ms-operator-input" class="ms-operator-input" type="text" maxlength="120" autocomplete="name" placeholder="e.g. Ahmad" />
+            <p id="ms-operator-err" class="ms-operator-err" style="display:none;"></p>
+            <div class="ms-operator-actions">
+                <button type="button" id="ms-operator-save" class="ms-operator-btn ms-operator-btn--primary">Save and continue</button>
+                <button type="button" id="ms-operator-syuser" class="ms-operator-btn ms-operator-btn--outline">Use system account name only</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        (function () {
+            function storageKey() {
+                var el = document.getElementById("ms-operator-email");
+                var email = (el && el.value) ? String(el.value).trim().toLowerCase() : "";
+                return "approvalpo_ms_operator_v1::" + email;
+            }
+            var SY_SENTINEL = "__USE_SY_USER__";
+            function readStored() {
+                try {
+                    var raw = localStorage.getItem(storageKey());
+                    if (raw == null) return "";
+                    var v = String(raw).trim();
+                    if (v === SY_SENTINEL) return "";
+                    return v;
+                } catch (e) { return ""; }
+            }
+            function hasStoredChoice() {
+                try { return localStorage.getItem(storageKey()) != null; } catch (e) { return false; }
+            }
+            function writeStored(name) {
+                try {
+                    var v = (name || "").trim();
+                    if (!v) { localStorage.removeItem(storageKey()); return; }
+                    if (v.length > 120) v = v.slice(0, 120);
+                    localStorage.setItem(storageKey(), v);
+                } catch (e) { /* private mode etc. */ }
+            }
+            function writeUseSyUserOnly() {
+                try { localStorage.setItem(storageKey(), SY_SENTINEL); } catch (e) { /* ignore */ }
+            }
+            window.MaintenanceScannerOperator = {
+                storageKey: storageKey,
+                read: readStored,
+                write: writeStored
+            };
+
+            window.__msOperatorPromptPromise = new Promise(function (resolve) {
+                function finish() {
+                    document.body.classList.remove("ms-operator-popup-open");
+                    resolve();
+                }
+                var backdrop = document.getElementById("ms-operator-overlay");
+                var dialog = document.getElementById("ms-operator-dialog");
+                if (!backdrop || !dialog) { finish(); return; }
+                if (hasStoredChoice()) { finish(); return; }
+                var input = document.getElementById("ms-operator-input");
+                var err = document.getElementById("ms-operator-err");
+                document.body.classList.add("ms-operator-popup-open");
+                backdrop.classList.add("is-visible");
+                dialog.classList.add("is-visible");
+                dialog.setAttribute("aria-hidden", "false");
+                if (input) setTimeout(function () { input.focus(); }, 50);
+
+                document.getElementById("ms-operator-save").onclick = function () {
+                    if (err) { err.style.display = "none"; err.textContent = ""; }
+                    var name = (input && input.value) ? input.value.trim() : "";
+                    if (!name) {
+                        if (err) {
+                            err.textContent = "Please enter a name, or choose \u201CUse system account name only\u201D.";
+                            err.style.display = "block";
+                        }
+                        return;
+                    }
+                    writeStored(name);
+                    backdrop.classList.remove("is-visible");
+                    dialog.classList.remove("is-visible");
+                    dialog.setAttribute("aria-hidden", "true");
+                    finish();
+                };
+                document.getElementById("ms-operator-syuser").onclick = function () {
+                    writeUseSyUserOnly();
+                    backdrop.classList.remove("is-visible");
+                    dialog.classList.remove("is-visible");
+                    dialog.setAttribute("aria-hidden", "true");
+                    finish();
+                };
+            });
+        })();
+    </script>
+}

@@ -103,6 +103,32 @@
             </a>
             }
 
+            <!-- Maintenance Scanner -->
+            @if (Model.ShowMaintenanceScanner)
+            {
+            <a asp-page="/MaintenanceScanner/Index" class="dash-card dash-card--active">
+                <div class="dash-card-icon-wrap dash-card-icon-wrap--teal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="6" width="18" height="12" rx="1"/>
+                        <line x1="6" y1="9" x2="6" y2="15"/>
+                        <line x1="9" y1="9" x2="9" y2="15"/>
+                        <line x1="12" y1="9" x2="12" y2="15"/>
+                        <line x1="15" y1="9" x2="15" y2="15"/>
+                        <line x1="18" y1="9" x2="18" y2="15"/>
+                    </svg>
+                </div>
+                <div class="dash-card-body">
+                    <h2 class="dash-card-title">Maintenance Scanner</h2>
+                    <p class="dash-card-desc">Scan stock item barcodes, confirm location, and log maintenance activity.</p>
+                </div>
+                <div class="dash-card-arrow">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+                    </svg>
+                </div>
+            </a>
+            }
+
             <!-- Received goods -->
             @if (Model.ShowReceivedGoods)
             {

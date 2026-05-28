@@ -103,11 +103,17 @@ public sealed class TenantDbConnectionResolver
             var conn = csb.ConnectionString;
             var email = TryParseTenantEmailFromRoot(root);
             var dashboardModules = TryParseDashboardModulesFromRoot(root);
+            var adminDashboardModules = TryParseNamedDashboardModulesFromRoot(root, "adminDashboardModules");
+            var maintenanceDashboardModules = TryParseNamedDashboardModulesFromRoot(root, "maintenanceDashboardModules");
+            var userRoles = TryParseUserRolesFromRoot(root);
             _cache[tenantCode] = new TenantResolvedPayload
             {
                 ConnectionString = conn,
                 Email = email,
-                DashboardModules = dashboardModules
+                DashboardModules = dashboardModules,
+                AdminDashboardModules = adminDashboardModules,
+                MaintenanceDashboardModules = maintenanceDashboardModules,
+                UserRoles = userRoles
             };
             return conn;
         }
@@ -143,6 +149,52 @@ public sealed class TenantDbConnectionResolver
 
         await GetConnectionStringForTenantAsync(tenantCode, cancellationToken).ConfigureAwait(false);
         return _cache.TryGetValue(tenantCode, out var hit2) ? hit2.DashboardModules : null;
+    }
+
+    /// <summary>
+    /// Returns role-specific dashboard module flags when present:
+    /// - maintenance -> <c>maintenanceDashboardModules</c> fallback to <c>dashboardModules</c>
+    /// - admin/other -> <c>adminDashboardModules</c> fallback to <c>dashboardModules</c>
+    /// </summary>
+    public async Task<TenantDashboardModules?> GetTenantDashboardModulesForRoleAsync(
+        string tenantCode,
+        bool isMaintenance,
+        CancellationToken cancellationToken = default)
+    {
+        tenantCode = (tenantCode ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(tenantCode))
+            return null;
+
+        if (!_cache.TryGetValue(tenantCode, out var hit))
+        {
+            await GetConnectionStringForTenantAsync(tenantCode, cancellationToken).ConfigureAwait(false);
+            _cache.TryGetValue(tenantCode, out hit);
+        }
+
+        if (hit is null)
+            return null;
+
+        if (isMaintenance)
+            return hit.MaintenanceDashboardModules ?? hit.DashboardModules;
+
+        return hit.AdminDashboardModules ?? hit.DashboardModules;
+    }
+
+    /// <summary>
+    /// Per-tenant role allowlists. Returns null when the tenant payload has no <c>userRoles</c>
+    /// block at all (i.e. legacy mode: caller should treat every signed-in user as Admin).
+    /// </summary>
+    public async Task<TenantUserRoles?> GetTenantUserRolesAsync(string tenantCode, CancellationToken cancellationToken = default)
+    {
+        tenantCode = (tenantCode ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(tenantCode))
+            return null;
+
+        if (_cache.TryGetValue(tenantCode, out var hit))
+            return hit.UserRoles;
+
+        await GetConnectionStringForTenantAsync(tenantCode, cancellationToken).ConfigureAwait(false);
+        return _cache.TryGetValue(tenantCode, out var hit2) ? hit2.UserRoles : null;
     }
 
     /// <summary>
@@ -303,27 +355,153 @@ public sealed class TenantDbConnectionResolver
 
     private static TenantDashboardModules? TryParseDashboardModulesFromRoot(JsonElement root)
     {
+        TenantDashboardModules? parsed = null;
+
         // 1) Preferred clean JSON: dashboardModules.{...}
         if (TryFindSectionRecursive(root, "dashboardModules", depth: 0, maxDepth: 8, out var directAttr))
         {
-            var parsedDirect = ParseDashboardModulesMap(UnwrapDynamoMap(directAttr));
-            if (parsedDirect is not null)
-                return parsedDirect;
+            parsed = ParseDashboardModulesMap(UnwrapDynamoMap(directAttr));
         }
 
         // 2) Nested under features: features.dashboardModules.{...}
-        if (TryFindSectionRecursive(root, "features", depth: 0, maxDepth: 8, out var featuresAttr))
+        if (parsed is null && TryFindSectionRecursive(root, "features", depth: 0, maxDepth: 8, out var featuresAttrForNested))
         {
-            var featuresMap = UnwrapDynamoMap(featuresAttr);
+            var featuresMap = UnwrapDynamoMap(featuresAttrForNested);
             if (TryGetJsonPropertyIgnoreCase(featuresMap, "dashboardModules", out var nestedAttr))
             {
-                var parsedNested = ParseDashboardModulesMap(UnwrapDynamoMap(nestedAttr));
-                if (parsedNested is not null)
-                    return parsedNested;
+                parsed = ParseDashboardModulesMap(UnwrapDynamoMap(nestedAttr));
             }
         }
 
+        // 3) Fallback for MaintenanceScanner only: tenant features.enableScanner (legacy ProAccScanner flag).
+        if ((parsed is null || parsed.MaintenanceScanner is null)
+            && TryFindSectionRecursive(root, "features", depth: 0, maxDepth: 8, out var featuresAttrForLegacy))
+        {
+            var featuresMap = UnwrapDynamoMap(featuresAttrForLegacy);
+            if (TryGetJsonPropertyIgnoreCase(featuresMap, "enableScanner", out var enableScannerEl)
+                && TryCoerceDynamoScalar(enableScannerEl, out var rawEnable))
+            {
+                var enable = ParseBoolOrNull(rawEnable);
+                if (enable is not null)
+                {
+                    parsed = new TenantDashboardModules
+                    {
+                        PurchaseApproval = parsed?.PurchaseApproval,
+                        SalesApproval = parsed?.SalesApproval,
+                        ScanPo = parsed?.ScanPo,
+                        ReceivedGoods = parsed?.ReceivedGoods,
+                        MaintenanceScanner = enable,
+                    };
+                }
+            }
+        }
+
+        return parsed;
+    }
+
+    private static TenantDashboardModules? TryParseNamedDashboardModulesFromRoot(JsonElement root, string sectionName)
+    {
+        if (TryFindSectionRecursive(root, sectionName, depth: 0, maxDepth: 8, out var directAttr))
+            return ParseDashboardModulesMap(UnwrapDynamoMap(directAttr));
+
+        if (TryFindSectionRecursive(root, "features", depth: 0, maxDepth: 8, out var featuresAttr))
+        {
+            var featuresMap = UnwrapDynamoMap(featuresAttr);
+            if (TryGetJsonPropertyIgnoreCase(featuresMap, sectionName, out var nestedAttr))
+                return ParseDashboardModulesMap(UnwrapDynamoMap(nestedAttr));
+        }
         return null;
+    }
+
+    private static bool? ParseBoolOrNull(string? raw)
+    {
+        var t = (raw ?? "").Trim();
+        if (t.Length == 0) return null;
+        if (bool.TryParse(t, out var b)) return b;
+        if (t is "1" or "yes" or "YES" or "on" or "ON") return true;
+        if (t is "0" or "no" or "NO" or "off" or "OFF") return false;
+        return null;
+    }
+
+    /// <summary>
+    /// Reads optional <c>userRoles.admin / userRoles.maintenance</c> allowlists from the tenant JSON.
+    /// Accepts plain JSON arrays of strings, DynamoDB <c>L/S</c> lists, or comma-separated strings.
+    /// Returns <c>null</c> when the tenant payload has no <c>userRoles</c> block at all (legacy mode).
+    /// </summary>
+    private static TenantUserRoles? TryParseUserRolesFromRoot(JsonElement root)
+    {
+        if (!TryFindSectionRecursive(root, "userRoles", depth: 0, maxDepth: 8, out var userRolesAttr))
+            return null;
+
+        var map = UnwrapDynamoMap(userRolesAttr);
+        if (map.ValueKind != JsonValueKind.Object)
+            return null;
+
+        var admins = ParseEmailListFromUserRoles(map, "admin", "admins", "administrator", "administrators");
+        var maint = ParseEmailListFromUserRoles(map, "maintenance", "maintenanceTeam", "maintenance_team", "scanner", "scanners");
+
+        return new TenantUserRoles
+        {
+            Admin = admins,
+            Maintenance = maint,
+        };
+    }
+
+    private static IReadOnlyList<string> ParseEmailListFromUserRoles(JsonElement userRolesMap, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (!TryGetJsonPropertyIgnoreCase(userRolesMap, key, out var attr))
+                continue;
+
+            var unwrapped = UnwrapDynamoMap(attr);
+
+            if (unwrapped.ValueKind == JsonValueKind.Array)
+                return ReadStringArray(unwrapped);
+
+            // DynamoDB list form: { "L": [ { "S": "a@x.com" }, ... ] }
+            if (unwrapped.ValueKind == JsonValueKind.Object
+                && TryGetJsonPropertyIgnoreCase(unwrapped, "L", out var listAttr)
+                && listAttr.ValueKind == JsonValueKind.Array)
+                return ReadStringArray(listAttr);
+
+            // Comma-separated string fallback ("a@x.com, b@x.com").
+            if (TryCoerceDynamoScalar(unwrapped, out var csv) && !string.IsNullOrWhiteSpace(csv))
+                return SplitCommaSeparated(csv);
+        }
+        return Array.Empty<string>();
+    }
+
+    private static IReadOnlyList<string> ReadStringArray(JsonElement arr)
+    {
+        var list = new List<string>(arr.GetArrayLength());
+        foreach (var item in arr.EnumerateArray())
+        {
+            string? value = null;
+            if (item.ValueKind == JsonValueKind.String)
+                value = item.GetString();
+            else if (item.ValueKind == JsonValueKind.Object
+                     && TryCoerceDynamoScalar(item, out var raw))
+                value = raw;
+
+            value = (value ?? "").Trim();
+            if (value.Length > 0)
+                list.Add(value);
+        }
+        return list;
+    }
+
+    private static IReadOnlyList<string> SplitCommaSeparated(string csv)
+    {
+        var parts = csv.Split(new[] { ',', ';', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+        var list = new List<string>(parts.Length);
+        foreach (var p in parts)
+        {
+            var t = p.Trim();
+            if (t.Length > 0)
+                list.Add(t);
+        }
+        return list;
     }
 
     private static TenantDashboardModules? ParseDashboardModulesMap(JsonElement map)
@@ -356,14 +534,16 @@ public sealed class TenantDbConnectionResolver
         {
             PurchaseApproval = ReadBool("purchaseApproval", "approvalPO", "approvalPo"),
             SalesApproval = ReadBool("salesApproval", "approvalSO", "approvalSo"),
-            ScanPo = ReadBool("scanPO", "scanPo", "scanner"),
+            ScanPo = ReadBool("scanPO", "scanPo"),
             ReceivedGoods = ReadBool("receivedGoods", "receivedGood"),
+            MaintenanceScanner = ReadBool("maintenanceScanner", "stockScanner", "scanner"),
         };
 
         return modules.PurchaseApproval is null
                && modules.SalesApproval is null
                && modules.ScanPo is null
                && modules.ReceivedGoods is null
+               && modules.MaintenanceScanner is null
             ? null
             : modules;
     }

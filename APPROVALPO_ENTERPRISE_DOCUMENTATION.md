@@ -243,7 +243,9 @@ flowchart TD
 | / | Redirects user to Login or PurchaseOrders |
 | /Login | Login page and OTP handling |
 | /Logout | Signs the user out |
+| /Dashboard | Module selector after login (Purchase Approval, Sales Approval, Scan PO, Received Goods, Maintenance Scanner) |
 | /PurchaseOrders | Main purchase order approval screen |
+| /MaintenanceScanner | Stock-item maintenance scanner (ST_ITEM, ST_ITEM_TPL, ST_ITEM_TPLDTL). Ported from the standalone ProAccScanner project. |
 | /Error | Error display page |
 
 ## 5.2 Purchase Order Handlers
@@ -257,6 +259,55 @@ The PurchaseOrders Razor Page exposes handlers used by the browser.
 | PendingNotifySnapshot | Returns pending purchase order snapshot for notification polling |
 | SetTransferable | Updates header approval list status |
 | SetLineTransferable | Updates line transferable value |
+
+## 5.2b Maintenance Scanner Handlers
+
+The MaintenanceScanner Razor Page exposes JSON handlers for the scanning UI. Login is required (cookie auth, same as approval pages) and the antiforgery header `X-CSRF-TOKEN` is enforced on POSTs.
+
+| Handler | Purpose |
+|---|---|
+| POST /MaintenanceScanner?handler=Validate | Look up scanned code in ST_ITEM, auto-seed ST_ITEM_TPL if new, return latest ST_ITEM_TPLDTL location/project/last scanned. |
+| GET /MaintenanceScanner?handler=Locations | Returns distinct ST_LOCATION.DESCRIPTION list for the manual location dropdown. |
+| POST /MaintenanceScanner?handler=InsertDetail | Inserts a new ST_ITEM_TPLDTL row with the chosen location, remarks, and audit user. |
+
+The scanner reuses the existing OTP login and `TenantDbConnectionResolver` for Firebird access. Tenant visibility is controlled by `dashboardModules.maintenanceScanner` (preferred), `dashboardModules.stockScanner` / `dashboardModules.scanner` aliases, or the legacy `features.enableScanner` fallback from the tenant config API.
+
+## 5.2c Role-Based Access (Admin vs Maintenance)
+
+Per-user access is layered on top of the per-tenant `dashboardModules` flags. Two roles are recognised:
+
+| Role | Pages they can reach |
+|---|---|
+| `Admin` | Dashboard, PurchaseOrders, SalesOrders, ScanPO, ScanPODetail, ScanReceivedDetail, MaintenanceScanner |
+| `Maintenance` | Dashboard (Scanner card only), MaintenanceScanner |
+
+Roles are added to the session cookie as `ClaimTypes.Role` claims during OTP verify (`Pages/Login.cshtml.cs`). Enforcement happens in two places:
+
+1. **Routing** — `Program.cs` registers two policies via `AddAuthorization` and binds them to pages with `Conventions.AuthorizePage`:
+   * `AdminOnly` — required on `/PurchaseOrders`, `/SalesOrders`, `/ScanPO`, `/ScanPODetail`, `/ScanReceivedDetail`. Maintenance users that paste these URLs are bounced to `/Login` by the cookie scheme's `AccessDeniedPath`.
+   * `MaintenanceAccess` — required on `/MaintenanceScanner`; satisfied by either role.
+2. **Dashboard UI** — `Pages/Dashboard.cshtml.cs` hides every admin card for users without the `Admin` role, and hides the Maintenance Scanner card for users without either role.
+
+The role assignment lives in the **tenant configuration JSON** (same payload as `database`, `email`, `dashboardModules`). When the block is absent the system stays in **legacy mode** — every signed-in user gets `Admin`, so existing deployments do not lose access on first deploy.
+
+```json
+{
+  "database": { "...": "..." },
+  "dashboardModules": { "maintenanceScanner": true, "purchaseApproval": true, "salesApproval": true, "scanPO": true, "receivedGoods": true },
+  "userRoles": {
+    "admin":       ["boss@acme.com", "approver@acme.com"],
+    "maintenance": ["technician1@acme.com", "fitter@acme.com"]
+  }
+}
+```
+
+* Emails are matched case-insensitively after trim.
+* Each list also accepts a DynamoDB `L`/`S` shape (`{ "L": [ { "S": "a@x.com" } ] }`) and a comma-separated string (`"a@x.com, b@x.com"`).
+* An email in `maintenance` (and not in `admin`) is treated as **`isAdmin = false`** and sees only Maintenance Scanner.
+* `admin` or unlisted (`isAdmin = true` or null) sees all enabled modules.
+* If a user appears in both lists, `admin` wins.
+
+Roles are resolved by `Services/UserRoleResolver.cs` (DI: `IUserRoleResolver`). The unit-level smoke test for the parser + resolver lives at `tests/RolesParserSmoke/` — run it with `dotnet build tests\RolesParserSmoke\RolesParserSmoke.csproj && tests\RolesParserSmoke\bin\Debug\net8.0\ApprovalPO.Tests.RolesParser.exe`. The end-to-end HTTP regression for the role split is `scripts/Test-RoleSeparation.ps1`.
 
 ## 5.3 Web Push Endpoints
 
@@ -273,8 +324,10 @@ The PurchaseOrders Razor Page exposes handlers used by the browser.
 | wwwroot/js/po-list.js | Main purchase order list behavior |
 | wwwroot/js/po-notify.js | Pending purchase order notification behavior |
 | wwwroot/js/push-register.js | Browser push subscription logic |
+| wwwroot/js/maintenance-scanner.js | Maintenance Scanner camera capture, code validation, and detail insert client logic |
 | wwwroot/css/po.css | Purchase order page styling |
 | wwwroot/css/login.css | Login page styling |
+| wwwroot/css/maintenance-scanner.css | Maintenance Scanner page styling |
 | wwwroot/sw.js | Service worker for push notification support |
 
 # 6. Data And Database Overview
@@ -286,6 +339,10 @@ The PurchaseOrders Razor Page exposes handlers used by the browser.
 | PH_PO | Purchase order header table |
 | PH_PODTL | Purchase order line detail table |
 | SY_USER | User email validation and display name |
+| ST_ITEM | Stock item master used by Maintenance Scanner to validate scanned codes |
+| ST_ITEM_TPL | Stock item template (auto-seeded on first scan of a new code) |
+| ST_ITEM_TPLDTL | Scan history; each maintenance scan inserts one row with `UDF_USER` audit |
+| ST_LOCATION | Location master used to translate codes to descriptions in the scanner |
 
 ## 6.2 Purchase Order Header Data
 

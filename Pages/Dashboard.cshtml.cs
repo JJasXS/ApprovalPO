@@ -1,4 +1,5 @@
 using ApprovalPO.Helpers;
+using ApprovalPO.Models;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace ApprovalPO.Pages;
@@ -18,32 +19,38 @@ public class DashboardModel : PageModel
     public bool ShowSalesApproval { get; private set; } = true;
     public bool ShowScanPo { get; private set; } = true;
     public bool ShowReceivedGoods { get; private set; } = true;
+    public bool ShowMaintenanceScanner { get; private set; } = true;
 
     public bool HasAnyModule =>
-        ShowPurchaseApproval || ShowSalesApproval || ShowScanPo || ShowReceivedGoods;
+        ShowPurchaseApproval || ShowSalesApproval || ShowScanPo || ShowReceivedGoods || ShowMaintenanceScanner;
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
-        // Defaults are all true unless tenant config explicitly disables.
         ShowPurchaseApproval = true;
         ShowSalesApproval = true;
         ShowScanPo = true;
         ShowReceivedGoods = true;
+        ShowMaintenanceScanner = true;
 
         var tenantCode = (_configuration["TenantBootstrap:TenantCode"] ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(tenantCode))
-            return;
+        if (!string.IsNullOrWhiteSpace(tenantCode))
+        {
+            var isMaintenance = User.IsInRole(ApprovalRoles.Maintenance);
+            var modules = await _tenantResolver
+                .GetTenantDashboardModulesForRoleAsync(tenantCode, isMaintenance, cancellationToken)
+                .ConfigureAwait(false);
 
-        var modules = await _tenantResolver
-            .GetTenantDashboardModulesAsync(tenantCode, cancellationToken)
-            .ConfigureAwait(false);
+            if (modules is not null)
+            {
+                ShowPurchaseApproval = modules.PurchaseApproval ?? true;
+                ShowSalesApproval = modules.SalesApproval ?? true;
+                ShowScanPo = modules.ScanPo ?? true;
+                ShowReceivedGoods = modules.ReceivedGoods ?? true;
+                ShowMaintenanceScanner = modules.MaintenanceScanner ?? true;
+            }
+        }
 
-        if (modules is null)
-            return;
-
-        ShowPurchaseApproval = modules.PurchaseApproval ?? true;
-        ShowSalesApproval = modules.SalesApproval ?? true;
-        ShowScanPo = modules.ScanPo ?? true;
-        ShowReceivedGoods = modules.ReceivedGoods ?? true;
+        // Dashboard visibility now follows tenant role-specific module flags directly
+        // (adminDashboardModules / maintenanceDashboardModules, with fallback).
     }
 }

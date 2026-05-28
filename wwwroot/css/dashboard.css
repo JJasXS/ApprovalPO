@@ -220,6 +220,11 @@
   color: #b45309;
 }
 
+.dash-card-icon-wrap--teal {
+  background: #ccfbf1;
+  color: #0f766e;
+}
+
 /* ─── Card body ───────────────────────────────────────────── */
 .dash-card-body {
   flex: 1;
