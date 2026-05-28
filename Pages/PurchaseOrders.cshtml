@@ -116,6 +116,7 @@
                         <th class="th-check" scope="col"><span class="visually-hidden">Select</span></th>
                         <th class="th-status" scope="col">Status</th>
                         <th scope="col">PO #</th>
+                        <th scope="col">Supplier</th>
                         <th class="num po-th-date" scope="col">Date</th>
                         <th class="num" scope="col">Amount</th>
                         <th scope="col" class="actions">Actions</th>
@@ -136,6 +137,7 @@
                         data-amount="@row.Amount.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)"
                         data-transferable="@(row.Transferable == true ? "true" : row.Transferable == false ? "false" : "")"
                         data-status="@row.Status"
+                        data-vendor="@row.Vendor"
                         data-description="@row.Description"
                         data-order-date="@row.OrderDate.ToString("yyyy-MM-dd")">
                         <td class="td-check" data-label="">
@@ -153,6 +155,7 @@
                         <td class="po-num" data-label="PO #">
                             <span class="po-num-text">@row.PoNumber</span>
                         </td>
+                        <td class="po-vendor" data-label="Supplier">@(string.IsNullOrWhiteSpace(row.Vendor) ? "—" : row.Vendor)</td>
                         <td class="num po-date" data-label="Date">@row.OrderDate.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</td>
                         <td class="num po-amount" data-label="Amount">@row.Amount.ToString("N2")</td>
                         <td class="actions" data-label="">

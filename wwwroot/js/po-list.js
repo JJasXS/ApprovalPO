@@ -249,6 +249,7 @@
 
   const rowFromOrder = (o) => {
     const po = o.poNumber || '';
+    const vendor = o.vendor || '';
     const amount =
       typeof o.amount === 'number' ? o.amount.toFixed(2) : String(o.amount ?? '0');
     const status = normalizeOrderStatus(o);
@@ -262,10 +263,11 @@
         : '';
     const amtNum = Number.parseFloat(amount) || 0;
     const stack = statusStackClass(status);
-    return `<tr class="po-row" data-po="${escapeHtml(po)}" data-doc-key="${escapeHtml(docKey)}" data-amount="${escapeHtml(amount)}" data-transferable="${transfer}" data-status="${escapeHtml(status)}" data-description="${escapeHtml(desc)}" data-order-date="${escapeHtml(dateStr)}">
+    return `<tr class="po-row" data-po="${escapeHtml(po)}" data-doc-key="${escapeHtml(docKey)}" data-amount="${escapeHtml(amount)}" data-transferable="${transfer}" data-status="${escapeHtml(status)}" data-vendor="${escapeHtml(vendor)}" data-description="${escapeHtml(desc)}" data-order-date="${escapeHtml(dateStr)}">
       <td class="td-check" data-label="">${chk}</td>
       <td class="po-status-td" data-label=""><div class="po-status-stack ${stack}"><span class="po-status-icon" aria-hidden="true"></span><span class="po-status-text">${escapeHtml(statusDisplay(status))}</span></div></td>
       <td class="po-num" data-label="PO #"><span class="po-num-text">${escapeHtml(po)}</span></td>
+      <td class="po-vendor" data-label="Supplier">${escapeHtml(vendor) || '—'}</td>
       <td class="num po-date" data-label="Date">${escapeHtml(formatDisplayDate(dateStr))}</td>
       <td class="num po-amount" data-label="Amount">${amtNum.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
       <td class="actions" data-label="">
@@ -413,6 +415,7 @@
     if (!reviewBody || !modalApproveBtn) return;
     const modalRejectBtnEl = document.getElementById('modalRejectBtn');
     const po = tr.dataset.po || '';
+    const vendor = tr.dataset.vendor || '';
     const status = rowListStatus(tr);
     const desc = tr.dataset.description || '';
     const orderIso = tr.dataset.orderDate || '';
@@ -516,6 +519,10 @@
 
       <div class="review-card">
         <div class="review-grid">
+          <div class="review-field">
+            <div class="review-label">Supplier</div>
+            <div class="review-value">${escapeHtml(vendor) || '—'}</div>
+          </div>
           <div class="review-field">
             <div class="review-label">Date</div>
             <div class="review-value">${escapeHtml(displayDate)}</div>
