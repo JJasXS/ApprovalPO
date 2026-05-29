@@ -18,7 +18,12 @@ _verifybuild/
 _audit_build/
 _build_verify/
 _bc*/
+_bldchk*/
 _out_*/
+
+# Temp runtime files from local run scripts
+.tmp_pid
+.tmp_run.*
 
 # Visual Studio / MSBuild
 .vs/

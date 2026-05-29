@@ -106,6 +106,7 @@ public sealed class TenantDbConnectionResolver
             var adminDashboardModules = TryParseNamedDashboardModulesFromRoot(root, "adminDashboardModules");
             var maintenanceDashboardModules = TryParseNamedDashboardModulesFromRoot(root, "maintenanceDashboardModules");
             var userRoles = TryParseUserRolesFromRoot(root);
+            var openAiSecretRef = TryParseOpenAiSecretRefFromRoot(root);
             _cache[tenantCode] = new TenantResolvedPayload
             {
                 ConnectionString = conn,
@@ -113,7 +114,8 @@ public sealed class TenantDbConnectionResolver
                 DashboardModules = dashboardModules,
                 AdminDashboardModules = adminDashboardModules,
                 MaintenanceDashboardModules = maintenanceDashboardModules,
-                UserRoles = userRoles
+                UserRoles = userRoles,
+                OpenAiApiKeySecretRef = openAiSecretRef
             };
             return conn;
         }
@@ -135,6 +137,20 @@ public sealed class TenantDbConnectionResolver
 
         await GetConnectionStringForTenantAsync(tenantCode, cancellationToken).ConfigureAwait(false);
         return _cache.TryGetValue(tenantCode, out var hit2) ? hit2.Email : null;
+    }
+
+    /// <summary>Secrets Manager id/ARN for the OpenAI API key from the tenant payload (<c>openai.openaiApiKeySecretRef</c>), if present.</summary>
+    public async Task<string?> GetOpenAiApiKeySecretRefAsync(string tenantCode, CancellationToken cancellationToken = default)
+    {
+        tenantCode = (tenantCode ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(tenantCode))
+            return null;
+
+        if (_cache.TryGetValue(tenantCode, out var hit))
+            return hit.OpenAiApiKeySecretRef;
+
+        await GetConnectionStringForTenantAsync(tenantCode, cancellationToken).ConfigureAwait(false);
+        return _cache.TryGetValue(tenantCode, out var hit2) ? hit2.OpenAiApiKeySecretRef : null;
     }
 
     /// <summary>Dashboard module visibility flags from tenant payload, if present.</summary>
@@ -304,6 +320,17 @@ public sealed class TenantDbConnectionResolver
             return null;
 
         return merged;
+    }
+
+    private static string? TryParseOpenAiSecretRefFromRoot(JsonElement root)
+    {
+        if (TryFindSectionRecursive(root, "openai", depth: 0, maxDepth: 8, out var openAiAttr))
+        {
+            var map = UnwrapDynamoMap(openAiAttr);
+            if (TryGetScalar(map, "openaiApiKeySecretRef", out var secretRef) && !string.IsNullOrWhiteSpace(secretRef))
+                return secretRef.Trim();
+        }
+        return null;
     }
 
     private static TenantEmailOverride MergeTenantEmail(TenantEmailOverride? baseline, TenantEmailOverride next)

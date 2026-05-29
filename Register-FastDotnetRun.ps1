@@ -35,9 +35,9 @@ function global:dotnet {
             `$pass.Add(`$CommandArgs[`$i])
         }
         if (`$lan) {
-            & '$repoRoot\run-lan.ps1' @(`$pass)
+            & '$repoRoot\scripts\run-lan.ps1' @(`$pass)
         } else {
-            & '$repoRoot\run.ps1' @(`$pass)
+            & '$repoRoot\scripts\run.ps1' @(`$pass)
         }
         return
     }
@@ -70,6 +70,6 @@ else {
 Set-Content -Path $marker -Value (Get-Date).ToString('o')
 Write-Host ''
 Write-Host 'Restart PowerShell, then from ApprovalPO:' -ForegroundColor Cyan
-Write-Host '  dotnet run --launch-profile lan   (phone / Wi-Fi — same as .\run-lan.ps1)'
+Write-Host '  dotnet run --launch-profile lan   (phone / Wi-Fi — same as .\scripts\run-lan.ps1)'
 Write-Host '  dotnet run                        (PC only — localhost)'
-Write-Host 'Or:  .\run-lan.ps1   .\run.ps1'
+Write-Host 'Or:  .\scripts\run-lan.ps1   .\scripts\run.ps1'

@@ -123,6 +123,13 @@ builder.Services.AddScoped<IPurchaseOrderCatalog, PurchaseOrderCatalogService>()
 builder.Services.AddScoped<ISalesOrderCatalog, SalesOrderCatalogService>();
 builder.Services.AddScoped<IGoodsReceiptCatalog, GoodsReceiptCatalogService>();
 builder.Services.AddScoped<ApprovalPO.Services.MaintenanceScanner.IMaintenanceScannerService, ApprovalPO.Services.MaintenanceScanner.MaintenanceScannerService>();
+builder.Services.AddScoped<ApprovalPO.Services.Ocr.IOcrCaptureService, ApprovalPO.Services.Ocr.OcrCaptureService>();
+builder.Services.AddScoped<ApprovalPO.Services.Ocr.IOcrEmailSender, ApprovalPO.Services.Ocr.OcrEmailSender>();
+builder.Services.AddHttpClient<ApprovalPO.Services.Ocr.IOpenAiVisionService, ApprovalPO.Services.Ocr.OpenAiVisionService>(client =>
+{
+    var seconds = builder.Configuration.GetValue<int?>("OpenAi:TimeoutSeconds") ?? 60;
+    client.Timeout = TimeSpan.FromSeconds(seconds <= 0 ? 60 : seconds);
+});
 builder.Services.AddScoped<IUserRoleResolver, UserRoleResolver>();
 builder.Services.AddScoped<IModuleAccessService, ModuleAccessService>();
 
@@ -134,6 +141,7 @@ builder.Services.Configure<Microsoft.AspNetCore.Antiforgery.AntiforgeryOptions>(
 builder.Services.Configure<ApprovalOptions>(builder.Configuration.GetSection(ApprovalOptions.SectionName));
 builder.Services.Configure<WebPushOptions>(builder.Configuration.GetSection(WebPushOptions.SectionName));
 builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection(SmtpOptions.SectionName));
+builder.Services.Configure<OpenAiOptions>(builder.Configuration.GetSection(OpenAiOptions.SectionName));
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;

@@ -1,7 +1,7 @@
 @page "/ScanPODetail"
 @model ApprovalPO.Pages.ScanPODetailModel
 @inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
-@inject ApprovalPO.Services.IScanPoSubmitStore ScanSubmits
+@inject ApprovalPO.Services.Scan.IScanPoSubmitStore ScanSubmits
 @{
     var csrf = Antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
     ViewData["Title"] = Model.Order?.PoNumber ?? "PO detail";
@@ -13,6 +13,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="~/css/scan.css" asp-append-version="true" />
+<link rel="stylesheet" href="~/css/ocr/ocr-scan.css" asp-append-version="true" />
 
 <header class="scan-header">
     <div class="scan-header-inner">
@@ -111,6 +112,17 @@
                         }
                     </div>
                 </div>
+                <div class="scan-detail-field scan-detail-field--ocr">
+                    <label>OCR</label>
+                    <button type="button" class="scan-detail-scan-btn" id="ocrOpenBtn" title="Capture a page and read its text">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M14 3v4a1 1 0 0 0 1 1h4"/>
+                            <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z"/>
+                            <line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/>
+                        </svg>
+                        <span>OCR scan</span>
+                    </button>
+                </div>
             </div>
 
             <div id="scanDetailConfig" hidden
@@ -201,6 +213,80 @@
     </div>
 </main>
 
+@if (Model.Order is not null)
+{
+    var ocrExpectedLinesJson = System.Text.Json.JsonSerializer.Serialize(
+        Model.Lines.Select(l => new
+        {
+            code = l.ItemCode ?? "",
+            description = l.Description ?? "",
+            qty = l.Sqty != 0 ? l.Sqty : l.Qty
+        }),
+        new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase });
+    <div id="ocrModal" class="ocr-modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="ocrModalTitle"
+         data-capture-url="@Url.Page("/ScanPODetail", null, new { handler = "OcrCapture" })"
+         data-analyze-url="@Url.Page("/ScanPODetail", null, new { handler = "OcrAnalyze" })"
+         data-doc-key="@Model.DocKey"
+         data-po-number="@(Model.Order.PoNumber)"
+         data-csrf-token="@csrf">
+        <div class="ocr-modal__backdrop" data-ocr-close></div>
+        <div class="ocr-modal__panel" role="document">
+            <div class="ocr-modal__head">
+                <h2 id="ocrModalTitle" class="ocr-modal__title">OCR scan</h2>
+                <button type="button" class="ocr-modal__close" data-ocr-close aria-label="Close">&times;</button>
+            </div>
+            <div class="ocr-modal__body">
+                <p class="ocr-modal__hint">Capture or choose a photo, use <strong>Rotate 90°</strong> until the page is straight, then tap <strong>Analyze document</strong> to check it against PO <strong>@(Model.Order.PoNumber)</strong>.</p>
+                <script type="application/json" id="ocrExpectedLinesJson">@Html.Raw(ocrExpectedLinesJson)</script>
+                <div class="ocr-modal__capture">
+                    <button type="button" id="ocrCaptureBtn" class="ocr-btn ocr-btn--primary">Capture / choose image</button>
+                    <input type="file" id="ocrFileInput" accept="image/*" capture="environment" hidden />
+                </div>
+                <div id="ocrPreviewWrap" class="ocr-preview" hidden>
+                    <div class="ocr-preview__toolbar">
+                        <button type="button" id="ocrRotateBtn" class="ocr-btn ocr-btn--outline ocr-preview__rotate" title="Rotate clockwise 90°">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/>
+                            </svg>
+                            <span>Rotate 90°</span>
+                        </button>
+                    </div>
+                    <img id="ocrPreviewImg" class="ocr-preview__img" alt="Captured page" />
+                </div>
+                <div id="ocrStatus" class="ocr-status" hidden></div>
+                <div id="ocrCompareWrap" class="ocr-compare" hidden aria-live="polite">
+                    <div class="ocr-compare__summary" id="ocrCompareSummary"></div>
+                    <div class="ocr-compare__scroll">
+                        <table class="ocr-compare__table">
+                            <thead>
+                                <tr>
+                                    <th></th>
+                                    <th colspan="3">PO (system)</th>
+                                    <th colspan="3">Scanned (document)</th>
+                                </tr>
+                                <tr>
+                                    <th>Status</th>
+                                    <th>Code</th>
+                                    <th>Description</th>
+                                    <th class="num">Qty</th>
+                                    <th>Code</th>
+                                    <th>Description</th>
+                                    <th class="num">Qty</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ocrCompareBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="ocr-modal__foot">
+                <button type="button" class="ocr-btn ocr-btn--ghost" data-ocr-close>Close</button>
+                <button type="button" id="ocrAiBtn" class="ocr-btn ocr-btn--primary" hidden>Analyze document</button>
+            </div>
+        </div>
+    </div>
+}
+
 <div id="qrOverlay" class="qr-overlay">
     <div class="qr-box">
         <video id="qrVideo" class="qr-video" autoplay muted playsinline></video>
@@ -256,6 +342,7 @@
 <script src="~/js/scan-qr-scanner.js" asp-append-version="true"></script>
 <script src="~/js/scan-resolve.js" asp-append-version="true"></script>
 <script src="~/js/scan-po-detail.js" asp-append-version="true"></script>
+<script src="~/js/ocr/ocr-scan.js" asp-append-version="true"></script>
 <script>
     (function () {
         var link = document.getElementById('qrHttpsLink');

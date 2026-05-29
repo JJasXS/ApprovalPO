@@ -8,6 +8,7 @@ $dirs = @(
     'bin', 'obj', 'artifacts',
     '_lanbuild', '_routechk', '_verifybuild', '_audit_build', '_build_verify',
     '_bc10', '_bc11', '_bc12',
+    '_bldchk', '_bldchk2', '_bldchk3',
     '_out_auth', '_out_hint', '_out_lines', '_out_nomock', '_out_noprobe', '_out_pendingfix'
 )
 
@@ -16,6 +17,12 @@ foreach ($name in $dirs) {
     if (-not (Test-Path $path)) { continue }
     Write-Host "Removing $name ..."
     cmd /c "rmdir /s /q `"$path`""
+}
+
+# Stray temp files from local run scripts.
+foreach ($f in @('.tmp_pid', '.tmp_run.out', '.tmp_run.err')) {
+    $p = Join-Path $repoRoot $f
+    if (Test-Path $p) { Remove-Item -Force $p }
 }
 
 Write-Host 'Done. Run:  dotnet build   then  .\run.ps1' -ForegroundColor Green

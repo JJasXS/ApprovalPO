@@ -25,6 +25,8 @@ public sealed class TenantResolvedPayload
     public TenantDashboardModules? MaintenanceDashboardModules { get; init; }
     /// <summary>Per-user role allowlists (Admin vs Maintenance). Null = legacy mode (treat everyone as Admin).</summary>
     public TenantUserRoles? UserRoles { get; init; }
+    /// <summary>Secrets Manager id/ARN holding the OpenAI API key (tenant field <c>openai.openaiApiKeySecretRef</c>).</summary>
+    public string? OpenAiApiKeySecretRef { get; init; }
 }
 
 /// <summary>
