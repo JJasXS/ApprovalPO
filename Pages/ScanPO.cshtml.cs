@@ -36,7 +36,7 @@ public class ScanPOModel : PageModel
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
-        Orders = await LoadApprovedOrdersAsync(cancellationToken).ConfigureAwait(false);
+        Orders = await LoadOrdersForScanAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IActionResult> OnGetOrdersJsonAsync(CancellationToken cancellationToken)
@@ -64,11 +64,10 @@ public class ScanPOModel : PageModel
         }
     }
 
-    private async Task<IReadOnlyList<PurchaseOrderRow>> LoadApprovedOrdersAsync(CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<PurchaseOrderRow>> LoadOrdersForScanAsync(CancellationToken cancellationToken)
     {
         var all = await _orders.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
         return all
-            .Where(static o => string.Equals(o.Status, "Approved", StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(o => o.OrderDate)
             .ThenByDescending(o => o.PoNumber, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -76,7 +75,7 @@ public class ScanPOModel : PageModel
 
     private async Task<IReadOnlyList<ScanPoOrderListItem>> LoadScanListItemsAsync(CancellationToken cancellationToken)
     {
-        var orders = await LoadApprovedOrdersAsync(cancellationToken).ConfigureAwait(false);
+        var orders = await LoadOrdersForScanAsync(cancellationToken).ConfigureAwait(false);
         var submitSummaries = await _scanSubmits.GetSubmitSummariesAsync(cancellationToken).ConfigureAwait(false);
         var submitByDoc = submitSummaries.ToDictionary(s => s.DocKey);
 

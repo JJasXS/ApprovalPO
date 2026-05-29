@@ -67,10 +67,6 @@
                     <span>@o.OrderDate.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</span>
                 </div>
                 <div class="scan-detail-field">
-                    <label>Amount</label>
-                    <span>@o.Amount.ToString("N2")</span>
-                </div>
-                <div class="scan-detail-field">
                     <label>Today's date</label>
                     <span>@today</span>
                 </div>
@@ -162,8 +158,6 @@
                                 <th>Item code</th>
                                 <th>Description</th>
                                 <th class="num">Qty</th>
-                                <th class="num">Unit price</th>
-                                <th class="num">Amount</th>
                                 <th class="scan-th-status">Status</th>
                             </tr>
                         </thead>
@@ -177,8 +171,6 @@
                                     <td class="scan-line-code">@line.ItemCode</td>
                                     <td>@line.Description</td>
                                     <td class="num">@((line.Sqty != 0 ? line.Sqty : line.Qty).ToString("N2"))</td>
-                                    <td class="num">@line.UnitPrice.ToString("N2")</td>
-                                    <td class="num">@line.LineAmount.ToString("N2")</td>
                                     <td class="scan-line-status"><span class="scan-line-tick" aria-label="Not scanned"></span></td>
                                 </tr>
                             }

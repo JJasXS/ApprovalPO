@@ -13,15 +13,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="~/css/scan.css" asp-append-version="true" />
 
-@{
-    var receivedGoodsJsonUrl = Url.Page("/ScanPO", null, new { handler = "ReceivedGoodsJson" })!;
-    var receivedDetailPageUrl = "/ScanReceivedDetail";
-}
 <div id="scanPageConfig" hidden
      data-orders-json-url="@ordersJsonUrl"
-     data-received-goods-json-url="@receivedGoodsJsonUrl"
-     data-detail-page-url="@detailPageUrl"
-     data-received-detail-page-url="@receivedDetailPageUrl"></div>
+     data-detail-page-url="@detailPageUrl"></div>
 
 <header class="scan-header">
     <div class="scan-header-inner">
@@ -79,9 +73,6 @@
                     <button type="button" id="scanTabSubmitted" class="scan-tab-btn" role="tab" aria-selected="false" data-scan-tab="submitted">
                         Submitted (<span id="scanCountSubmitted">0</span>)
                     </button>
-                    <button type="button" id="scanTabReceived" class="scan-tab-btn" role="tab" aria-selected="false" data-scan-tab="received">
-                        Received goods (<span id="scanCountReceived">0</span>)
-                    </button>
                 </div>
             </div>
             <table class="scan-table scan-table--list">
@@ -89,12 +80,11 @@
                     <tr>
                         <th id="scanListCol1Header">PO #</th>
                         <th id="scanListDateHeader">Date</th>
-                        <th class="num">Amount</th>
                     </tr>
                 </thead>
                 <tbody id="scanTableBody">
                     <tr id="scanLoadingRow" class="scan-loading-row">
-                        <td colspan="3">Loading…</td>
+                        <td colspan="2">Loading…</td>
                     </tr>
                 </tbody>
             </table>

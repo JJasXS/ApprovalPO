@@ -1,4 +1,4 @@
-/* scan-po.js — PO list + received goods tabs */
+/* scan-po.js — PO list tabs (to-scan + submitted) */
 (function () {
   'use strict';
 
@@ -6,19 +6,15 @@
   if (!cfg) return;
 
   const ordersUrl = cfg.dataset.ordersJsonUrl || '';
-  const receivedUrl = cfg.dataset.receivedGoodsJsonUrl || '';
   const detailPageUrl = (cfg.dataset.detailPageUrl || '/ScanPODetail').replace(/\/$/, '');
-  const receivedDetailPageUrl = (cfg.dataset.receivedDetailPageUrl || '/ScanReceivedDetail').replace(/\/$/, '');
 
   const MORE_STEP = 10;
   const VIEWPORT_PAD = 12;
 
   let allOrders = [];
-  let allReceived = [];
-  let receivedLoaded = false;
   let searchTerm = '';
   let visibleCount = 0;
-  /** @type {'toScan' | 'submitted' | 'received'} */
+  /** @type {'toScan' | 'submitted'} */
   let activeTab = 'toScan';
 
   const tbody = document.getElementById('scanTableBody');
@@ -30,10 +26,8 @@
   const listHint = document.getElementById('scanListHint');
   const tabToScan = document.getElementById('scanTabToScan');
   const tabSubmitted = document.getElementById('scanTabSubmitted');
-  const tabReceived = document.getElementById('scanTabReceived');
   const countToScan = document.getElementById('scanCountToScan');
   const countSubmitted = document.getElementById('scanCountSubmitted');
-  const countReceived = document.getElementById('scanCountReceived');
   const listCol1Header = document.getElementById('scanListCol1Header');
   const listDateHeader = document.getElementById('scanListDateHeader');
 
@@ -46,15 +40,7 @@
     return isNaN(d) ? s : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
-  const fmtAmt = (n) => {
-    const v = parseFloat(n) || 0;
-    return v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
-
   const poDetailHref = (docKey) => `${detailPageUrl}?docKey=${encodeURIComponent(docKey)}`;
-  const grDetailHref = (docKey) => `${receivedDetailPageUrl}?docKey=${encodeURIComponent(docKey)}`;
-
-  const isReceivedTab = () => activeTab === 'received';
   const wantsSubmitted = () => activeTab === 'submitted';
 
   const matchesPoTab = (o) => Boolean(o.scanSubmitted) === wantsSubmitted();
@@ -71,28 +57,8 @@
     });
   };
 
-  const sortReceived = (list) =>
-    list.slice().sort((a, b) => {
-      const ta = a.grDate ? new Date(a.grDate).getTime() : 0;
-      const tb = b.grDate ? new Date(b.grDate).getTime() : 0;
-      if (tb !== ta) return tb - ta;
-      return String(a.grNumber || '').localeCompare(String(b.grNumber || ''), undefined, {
-        sensitivity: 'base',
-      });
-    });
-
   const getFiltered = () => {
     const term = searchTerm.toLowerCase().trim();
-    if (isReceivedTab()) {
-      const base = sortReceived(allReceived);
-      if (!term) return base;
-      return base.filter((r) => {
-        const gr = (r.grNumber || '').toLowerCase();
-        const po = (r.poNumber || '').toLowerCase();
-        const vendor = (r.vendor || '').toLowerCase();
-        return gr.includes(term) || po.includes(term) || vendor.includes(term);
-      });
-    }
     const tabbed = sortPoForTab(allOrders.filter(matchesPoTab));
     return term
       ? tabbed.filter((o) => (o.poNumber || '').toLowerCase().includes(term))
@@ -104,42 +70,35 @@
     const submittedN = allOrders.filter((o) => o.scanSubmitted).length;
     if (countToScan) countToScan.textContent = String(toScanN);
     if (countSubmitted) countSubmitted.textContent = String(submittedN);
-    if (countReceived) countReceived.textContent = String(allReceived.length);
   };
 
   const normalizeTab = (tab) => {
     const t = String(tab || '').toLowerCase();
     if (t === 'submitted' || t === 'approved') return 'submitted';
-    if (t === 'received' || t === 'receivedgoods') return 'received';
     return 'toScan';
   };
 
   const updateListChrome = () => {
-    const received = isReceivedTab();
     const submitted = activeTab === 'submitted';
-    const toScan = activeTab === 'toScan';
 
     if (listCol1Header) {
-      listCol1Header.textContent = received ? 'GR # / PO #' : 'PO #';
+      listCol1Header.textContent = 'PO #';
     }
     if (listDateHeader) {
       listDateHeader.textContent = submitted ? 'Submitted' : 'Date';
     }
     if (searchInput) {
-      searchInput.placeholder = received ? 'Search GR #, PO #, vendor…' : 'Search PO #…';
+      searchInput.placeholder = 'Search PO #…';
     }
     if (listHint) {
-      if (received) {
-        listHint.textContent = 'Goods receipts from PH_GR — newest first. Tap a row for line details.';
-      } else if (submitted) {
+      if (submitted) {
         listHint.textContent = 'Submitted POs (newest first) — tap to view or reopen for scanning.';
       } else {
         listHint.textContent = 'ERP-approved POs to scan — tap a row to open lines.';
       }
     }
     if (emptyState) {
-      if (received) emptyState.textContent = 'No goods receipts found.';
-      else if (submitted) emptyState.textContent = 'No submitted POs yet.';
+      if (submitted) emptyState.textContent = 'No submitted POs yet.';
       else emptyState.textContent = 'No POs waiting to scan.';
     }
   };
@@ -148,7 +107,6 @@
     activeTab = normalizeTab(tab);
     const toScanOn = activeTab === 'toScan';
     const submittedOn = activeTab === 'submitted';
-    const receivedOn = activeTab === 'received';
 
     if (tabToScan) {
       tabToScan.classList.toggle('is-active', toScanOn);
@@ -158,17 +116,7 @@
       tabSubmitted.classList.toggle('is-active', submittedOn);
       tabSubmitted.setAttribute('aria-selected', submittedOn ? 'true' : 'false');
     }
-    if (tabReceived) {
-      tabReceived.classList.toggle('is-active', receivedOn);
-      tabReceived.setAttribute('aria-selected', receivedOn ? 'true' : 'false');
-    }
-
     updateListChrome();
-
-    if (receivedOn && !receivedLoaded) {
-      void loadReceived().then(() => setInitialVisible(getFiltered()));
-      return;
-    }
 
     setInitialVisible(getFiltered());
   };
@@ -178,12 +126,6 @@
     const who = (o.submittedByName || '').trim();
     if (!who) return '';
     return `<span class="scan-row-meta">${esc(who)}</span>`;
-  };
-
-  const receivedMetaHtml = (r) => {
-    const po = (r.poNumber || '').trim();
-    if (!po) return '';
-    return `<span class="scan-row-meta">PO ${esc(po)}</span>`;
   };
 
   const rowListDatePo = (o) => {
@@ -201,22 +143,10 @@
       <tr class="scan-row scan-row--link" data-href="${esc(href)}" role="link" tabindex="0">
         <td class="scan-col-po">${esc(o.poNumber || '—')}${submittedMetaHtml(o)}</td>
         <td class="scan-col-date"${submittedTitle}>${rowListDatePo(o)}</td>
-        <td class="scan-col-amount num">${fmtAmt(o.amount)}</td>
       </tr>`;
   };
 
-  const rowHtmlReceived = (r) => {
-    const href = grDetailHref(r.docKey);
-    const gr = r.grNumber || '—';
-    return `
-      <tr class="scan-row scan-row--link" data-href="${esc(href)}" role="link" tabindex="0">
-        <td class="scan-col-po">${esc(gr)}${receivedMetaHtml(r)}</td>
-        <td class="scan-col-date">${fmtDate(r.grDate)}</td>
-        <td class="scan-col-amount num">${fmtAmt(r.amount)}</td>
-      </tr>`;
-  };
-
-  const rowHtml = (item) => (isReceivedTab() ? rowHtmlReceived(item) : rowHtmlPo(item));
+  const rowHtml = (item) => rowHtmlPo(item);
 
   const contentBottom = () => {
     let bottom = 0;
@@ -278,7 +208,7 @@
   const updateResultCount = (shown, total) => {
     if (!resultCount) return;
     const label =
-      activeTab === 'received' ? 'received' : activeTab === 'submitted' ? 'submitted' : 'to scan';
+      activeTab === 'submitted' ? 'submitted' : 'to scan';
     if (total === 0) {
       resultCount.textContent = `0 ${label}`;
       return;
@@ -349,7 +279,7 @@
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
-      if (allOrders.length || allReceived.length) setInitialVisible(getFiltered());
+      if (allOrders.length) setInitialVisible(getFiltered());
     }, 200);
   });
 
@@ -361,7 +291,6 @@
 
   if (tabToScan) tabToScan.addEventListener('click', () => setActiveTab('toScan'));
   if (tabSubmitted) tabSubmitted.addEventListener('click', () => setActiveTab('submitted'));
-  if (tabReceived) tabReceived.addEventListener('click', () => setActiveTab('received'));
 
   const loadOrders = async () => {
     try {
@@ -369,33 +298,12 @@
       const data = await res.json();
       allOrders = Array.isArray(data) ? data : [];
       updateTabCounts();
-      if (!isReceivedTab()) setInitialVisible(getFiltered());
+      setInitialVisible(getFiltered());
     } catch (e) {
-      if (!isReceivedTab() && tbody) {
-        tbody.innerHTML = `<tr><td colspan="3" class="scan-empty">Failed to load orders: ${esc(e.message)}</td></tr>`;
+      if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="2" class="scan-empty">Failed to load orders: ${esc(e.message)}</td></tr>`;
       }
       if (loadMoreBtn) loadMoreBtn.hidden = true;
-    }
-  };
-
-  const loadReceived = async () => {
-    if (!receivedUrl) return;
-    try {
-      const res = await fetch(receivedUrl);
-      const data = await res.json();
-      if (data && data.error) throw new Error(data.error);
-      allReceived = Array.isArray(data) ? data : [];
-      receivedLoaded = true;
-      updateTabCounts();
-      if (isReceivedTab()) setInitialVisible(getFiltered());
-    } catch (e) {
-      receivedLoaded = true;
-      allReceived = [];
-      if (isReceivedTab() && tbody) {
-        tbody.innerHTML = `<tr><td colspan="3" class="scan-empty">Failed to load received goods: ${esc(e.message)}</td></tr>`;
-      }
-      if (loadMoreBtn) loadMoreBtn.hidden = true;
-      updateTabCounts();
     }
   };
 
@@ -439,9 +347,4 @@
 
   initTabFromUrl();
   loadOrders();
-  if (activeTab === 'received') {
-    void loadReceived();
-  } else {
-    void loadReceived().then(() => updateTabCounts());
-  }
 })();
