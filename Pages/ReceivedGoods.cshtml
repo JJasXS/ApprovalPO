@@ -1,0 +1,86 @@
+@page "/ReceivedGoods"
+@model ApprovalPO.Pages.ReceivedGoodsModel
+@{
+    ViewData["Title"] = "Received goods";
+    ViewData["AppName"] = "Approval PO";
+    var listJsonUrl = Url.Page("/ReceivedGoods", null, new { handler = "ListJson" })!;
+    var detailPageUrl = "/ScanReceivedDetail";
+    var userName = User.Identity?.Name ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "User";
+}
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="~/css/scan.css" asp-append-version="true" />
+
+<div id="receivedGoodsConfig" hidden
+     data-list-json-url="@listJsonUrl"
+     data-detail-page-url="@detailPageUrl"></div>
+
+<header class="scan-header">
+    <div class="scan-header-inner">
+        <div class="scan-header-titles">
+            <a asp-page="/Dashboard" class="scan-back-link" title="Back to home" aria-label="Back to home">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"/>
+                </svg>
+            </a>
+            <div>
+                <h1 class="scan-header-title">Received goods</h1>
+                <p class="scan-header-subtitle">Goods receipts (PH_GR) — tap a row for line items, receive &amp; return qty</p>
+            </div>
+        </div>
+        <div class="scan-header-actions">
+            <a asp-page="/ScanPO" class="scan-module-link" title="Open Scan PO">Scan PO</a>
+            <div class="scan-menu-wrap">
+                <button class="scan-menu-btn" id="scanMenuBtn" type="button" aria-expanded="false" aria-controls="scanMenuPanel" aria-label="Open menu">
+                    <span></span><span></span><span></span>
+                </button>
+                <div id="scanMenuPanel" class="scan-menu-panel" hidden>
+                    <div class="scan-menu-user">@userName</div>
+                    <a asp-page="/Dashboard" class="scan-menu-link">&#8592; Back to home</a>
+                    <a asp-page="/ScanPO" class="scan-menu-link">Scan PO</a>
+                    <form method="post" asp-page="/Logout" style="margin:0;padding:0">
+                        <button type="submit" class="scan-menu-link scan-menu-link--danger">Sign out</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<main class="scan-main">
+    <div class="scan-main-inner">
+        <div class="scan-search-bar">
+            <input id="grSearch" class="scan-search-input" type="search" placeholder="Search GR # or PO #…" autocomplete="off" />
+            <span id="grResultCount" class="scan-result-count"></span>
+        </div>
+
+        <p id="grListHint" class="scan-list-hint">Posted goods receipts from SQL Accounting — not purchase orders awaiting scan.</p>
+
+        <div class="scan-table-wrap">
+            <table class="scan-table scan-table--list scan-table--gr-list">
+                <thead>
+                    <tr>
+                        <th>GR #</th>
+                        <th>PO #</th>
+                        <th>GR date</th>
+                    </tr>
+                </thead>
+                <tbody id="grTableBody">
+                    <tr class="scan-loading-row">
+                        <td colspan="3">Loading…</td>
+                    </tr>
+                </tbody>
+            </table>
+            <div id="grEmpty" class="scan-empty" hidden>
+                No goods receipts found.
+            </div>
+        </div>
+        <div class="scan-list-footer">
+            <button type="button" id="grLoadMoreBtn" class="scan-load-more-btn" hidden>More</button>
+        </div>
+    </div>
+</main>
+
+<script src="~/js/received-goods.js" asp-append-version="true"></script>

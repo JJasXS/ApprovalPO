@@ -1,0 +1,46 @@
+﻿Testing Company (200310108596 (611016-M))
+1, Jalan Setia Dagang AK U13/AK,
+Setia Alam, 40170, Shah Alam, Selangor.
+Phone: 03-78901300
+Email: sales@SQL.com.my
+
+Purchase Order
+
+Billing Address
+REPUBLICA STORAGE PLT
+Lot 8125N, Road Apollo,
+50470, KL
+
+Attn: Mr. Neo
+Tel: 012-9989890
+
+Supplier Account: 400-R0001
+Purchase Executive: 
+Currency: MYR
+From Doc Date: 
+From Doc No: 
+
+Delivery Address
+1, Jalan Setia Dagang AK U13/AK,
+Setia Alam, 40170,
+Shah Alam, Selangor.
+
+Attn: 
+Tel: 03-78901300
+
+Page No: 1 of 1
+Purchase Order No: PO-00026
+Date: 12/05/2026
+
+No	Item Code	Description	Qty	Price/Unit	Total Price
+1	RFC/Green	Ultra Soft Fluffy Rug Rectangle Carpet (Green)	1.00 UNIT	25.00	25.00
+
+RINGGIT MALAYSIA : TWENTY FIVE ONLY
+
+Payment Terms
+30 Days
+
+Total Payable	25.00
+
+Authorised Signature
+eQUOTATION (200310108596 (611016-M))

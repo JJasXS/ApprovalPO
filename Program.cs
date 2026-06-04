@@ -122,13 +122,18 @@ builder.Services.AddSingleton<IScanPoSubmitStore, ScanPoSubmitFileStore>();
 builder.Services.AddScoped<IPurchaseOrderCatalog, PurchaseOrderCatalogService>();
 builder.Services.AddScoped<ISalesOrderCatalog, SalesOrderCatalogService>();
 builder.Services.AddScoped<IGoodsReceiptCatalog, GoodsReceiptCatalogService>();
+builder.Services.AddHttpClient<ApprovalPO.Services.SqlApi.ISqlAccountingApi, ApprovalPO.Services.SqlApi.SqlAccountingApiClient>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(60);
+});
+builder.Services.AddScoped<ApprovalPO.Services.Orders.IGoodsReceivedTransfer, ApprovalPO.Services.Orders.GoodsReceivedTransferService>();
 builder.Services.AddScoped<ApprovalPO.Services.MaintenanceScanner.IMaintenanceScannerService, ApprovalPO.Services.MaintenanceScanner.MaintenanceScannerService>();
 builder.Services.AddScoped<ApprovalPO.Services.Ocr.IOcrCaptureService, ApprovalPO.Services.Ocr.OcrCaptureService>();
 builder.Services.AddScoped<ApprovalPO.Services.Ocr.IOcrEmailSender, ApprovalPO.Services.Ocr.OcrEmailSender>();
 builder.Services.AddHttpClient<ApprovalPO.Services.Ocr.IOpenAiVisionService, ApprovalPO.Services.Ocr.OpenAiVisionService>(client =>
 {
-    var seconds = builder.Configuration.GetValue<int?>("OpenAi:TimeoutSeconds") ?? 60;
-    client.Timeout = TimeSpan.FromSeconds(seconds <= 0 ? 60 : seconds);
+    var seconds = builder.Configuration.GetValue<int?>("OpenAi:TimeoutSeconds") ?? 120;
+    client.Timeout = TimeSpan.FromSeconds(seconds <= 0 ? 120 : seconds);
 });
 builder.Services.AddScoped<IUserRoleResolver, UserRoleResolver>();
 builder.Services.AddScoped<IModuleAccessService, ModuleAccessService>();
@@ -286,7 +291,12 @@ async Task WarmupTenantConnectionStringAsync()
     try
     {
         var resolver = scope.ServiceProvider.GetRequiredService<TenantDbConnectionResolver>();
-        await resolver.GetConnectionStringForTenantAsync(tenant).ConfigureAwait(false);
+        var connStr = await resolver.GetConnectionStringForTenantAsync(tenant).ConfigureAwait(false);
+        await using (var conn = new FirebirdSql.Data.FirebirdClient.FbConnection(connStr))
+        {
+            await conn.OpenAsync().ConfigureAwait(false);
+            await PhPoSchemaBootstrap.EnsureUdfPoStatusColumnAsync(conn, logger).ConfigureAwait(false);
+        }
         logger.LogInformation(
             "Tenant Firebird connection string cached for {Tenant} in {ElapsedMs} ms (startup warmup).",
             tenant,

@@ -69,7 +69,8 @@ internal sealed class ModuleAccessService : IModuleAccessService
             module = "scanPo";
             return true;
         }
-        if (p.Equals("/ScanReceivedDetail", StringComparison.OrdinalIgnoreCase))
+        if (p.Equals("/ReceivedGoods", StringComparison.OrdinalIgnoreCase)
+            || p.Equals("/ScanReceivedDetail", StringComparison.OrdinalIgnoreCase))
         {
             module = "receivedGoods";
             return true;

@@ -69,6 +69,24 @@ body {
   margin: 0; font-size: clamp(1.2rem, 3.5vw, 1.55rem);
   font-weight: 700; letter-spacing: -.03em; color: var(--scan-text); line-height: 1.25;
 }
+.scan-header-subtitle {
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--scan-muted);
+  line-height: 1.35;
+  max-width: 36rem;
+}
+.scan-header-actions .scan-module-link {
+  margin-top: 0;
+}
+.scan-table--gr-list .scan-col-gr {
+  font-weight: 600;
+}
+.scan-table--gr-list .scan-col-po-ref {
+  color: var(--scan-muted);
+  font-size: 0.95em;
+}
 .scan-module-link {
   display: inline-flex; align-items: center; gap: 5px; margin-top: 8px;
   font-size: 12px; font-weight: 600; color: var(--scan-accent);

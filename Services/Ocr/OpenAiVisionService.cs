@@ -124,6 +124,12 @@ public sealed class OpenAiVisionService : IOpenAiVisionService
             var parsed = ParseAnalysis(content);
             return parsed ?? new OcrAnalysisResult(true, content, null, null);
         }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // HttpClient.Timeout elapsed (not a client/browser cancellation).
+            _logger.LogWarning("OpenAI vision call timed out.");
+            return new OcrAnalysisResult(false, null, null, "AI analysis timed out. Use a clearer, smaller photo and tap Analyze again.");
+        }
         catch (OperationCanceledException)
         {
             throw;

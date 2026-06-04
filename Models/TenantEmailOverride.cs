@@ -27,6 +27,8 @@ public sealed class TenantResolvedPayload
     public TenantUserRoles? UserRoles { get; init; }
     /// <summary>Secrets Manager id/ARN holding the OpenAI API key (tenant field <c>openai.openaiApiKeySecretRef</c>).</summary>
     public string? OpenAiApiKeySecretRef { get; init; }
+    /// <summary>Optional SQL Accounting HTTP API config (tenant field <c>sqlApi</c>); null when not provisioned.</summary>
+    public TenantSqlApiConfig? SqlApi { get; init; }
 }
 
 /// <summary>

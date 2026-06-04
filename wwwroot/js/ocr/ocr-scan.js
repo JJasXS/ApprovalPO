@@ -16,9 +16,12 @@
   var compareSummary = document.getElementById('ocrCompareSummary');
   var compareBody = document.getElementById('ocrCompareBody');
   var aiBtn = document.getElementById('ocrAiBtn');
+  var confirmBtn = document.getElementById('ocrConfirmBtn');
 
   var captureUrl = modal.getAttribute('data-capture-url') || '';
   var analyzeUrl = modal.getAttribute('data-analyze-url') || '';
+  var confirmUrl = modal.getAttribute('data-confirm-url') || '';
+  var scanPoUrl = modal.getAttribute('data-scan-po-url') || '';
   var docKey = modal.getAttribute('data-doc-key') || '';
   var poNumber = modal.getAttribute('data-po-number') || '';
   var csrf = modal.getAttribute('data-csrf-token') || '';
@@ -71,6 +74,7 @@
     if (compareBody) compareBody.innerHTML = '';
     if (rotateBtn) rotateBtn.hidden = true;
     if (aiBtn) { aiBtn.hidden = true; aiBtn.disabled = false; aiBtn.textContent = 'Analyze document'; }
+    if (confirmBtn) { confirmBtn.hidden = true; confirmBtn.disabled = false; confirmBtn.textContent = 'Confirm & transfer to Goods Received'; }
     if (previewWrap) previewWrap.hidden = true;
     lastFile = null;
     lastCleanedText = '';
@@ -80,6 +84,7 @@
     if (compareWrap) compareWrap.hidden = true;
     if (compareSummary) compareSummary.innerHTML = '';
     if (compareBody) compareBody.innerHTML = '';
+    if (confirmBtn) confirmBtn.hidden = true;
   }
 
   if (openBtn) {
@@ -111,6 +116,7 @@
 
   if (aiBtn) aiBtn.addEventListener('click', function () { analyzeWithAi(); });
   if (rotateBtn) rotateBtn.addEventListener('click', function () { rotateImage90(); });
+  if (confirmBtn) confirmBtn.addEventListener('click', function () { confirmTransfer(); });
 
   function showPreview(file) {
     if (!previewWrap || !previewImg) return;
@@ -184,7 +190,7 @@
 
     if (aiBtn && analyzeUrl) {
       aiBtn.hidden = false;
-      setStatus('Rotate if needed, then tap Analyze document.', '');
+      setStatus('Photo added. Tap Rotate 90° until the page is straight, then tap Analyze document.', '');
     } else {
       setStatus('AI analysis is not available.', 'warn');
     }
@@ -240,16 +246,10 @@
     return a.length >= 3 && b.length >= 3 && (a.indexOf(b) >= 0 || b.indexOf(a) >= 0);
   }
 
-  function findScannedForCode(normCode, aiItems) {
-    for (var i = 0; i < aiItems.length; i++) {
-      if (tokensMatch(normCode, normToken(aiItems[i].code))) return { item: aiItems[i], index: i };
-    }
-    return null;
-  }
-
   function lineAccurate(poLine, scanned) {
     if (!scanned) return false;
-    var codeOk = tokensMatch(normToken(poLine.code), normToken(scanned.code));
+    var hasCode = !!normToken(poLine.code);
+    var codeOk = hasCode ? tokensMatch(normToken(poLine.code), normToken(scanned.code)) : true;
     var descOk = descMatch(poLine.description, scanned.description);
     var qtyOk = qtyMatch(poLine.qty, scanned.quantity);
     return codeOk && descOk && qtyOk;
@@ -265,13 +265,38 @@
     var aiItems = (f.items && f.items.length) ? f.items : [];
     var used = {};
     var rows = [];
+    var matches = new Array(expectedLines.length);
 
-    expectedLines.forEach(function (poLine) {
-      var norm = normToken(poLine.code);
-      if (!norm) return;
-      var hit = findScannedForCode(norm, aiItems);
-      var scanned = hit ? hit.item : null;
-      if (hit) used[hit.index] = true;
+    // Pass 1: pair PO lines to scanned items by exact code (across ALL lines first),
+    // so a code-less line can't steal a scanned item that belongs to a coded line.
+    expectedLines.forEach(function (poLine, idx) {
+      var normCode = normToken(poLine.code);
+      if (!normCode) return;
+      for (var i = 0; i < aiItems.length; i++) {
+        if (used[i]) continue;
+        if (tokensMatch(normCode, normToken(aiItems[i].code))) {
+          matches[idx] = aiItems[i];
+          used[i] = true;
+          break;
+        }
+      }
+    });
+
+    // Pass 2: for still-unmatched PO lines, fall back to a description match.
+    expectedLines.forEach(function (poLine, idx) {
+      if (matches[idx]) return;
+      for (var j = 0; j < aiItems.length; j++) {
+        if (used[j]) continue;
+        if (descMatch(poLine.description, aiItems[j].description)) {
+          matches[idx] = aiItems[j];
+          used[j] = true;
+          break;
+        }
+      }
+    });
+
+    expectedLines.forEach(function (poLine, idx) {
+      var scanned = matches[idx] || null;
       rows.push({
         kind: 'po',
         accurate: lineAccurate(poLine, scanned),
@@ -310,7 +335,8 @@
   function issuesForLine(poLine, scanned) {
     if (!scanned) return ['Not found on scanned document'];
     var issues = [];
-    if (!tokensMatch(normToken(poLine.code), normToken(scanned.code))) issues.push('Code');
+    var hasCode = !!normToken(poLine.code);
+    if (hasCode && !tokensMatch(normToken(poLine.code), normToken(scanned.code))) issues.push('Code');
     if (!descMatch(poLine.description, scanned.description)) issues.push('Description');
     if (!qtyMatch(poLine.qty, scanned.quantity)) issues.push('Qty');
     return issues;
@@ -388,6 +414,54 @@
     return c;
   }
 
+  async function downscaleForUpload(file, maxDim, quality) {
+    try {
+      var img = await loadImageFromFile(file);
+      var w = img.naturalWidth || img.width;
+      var h = img.naturalHeight || img.height;
+      if (!w || !h) return file;
+      var scale = Math.min(1, maxDim / Math.max(w, h));
+      if (scale >= 1) return file; // already small enough
+      var cw = Math.round(w * scale);
+      var ch = Math.round(h * scale);
+      var canvas = document.createElement('canvas');
+      canvas.width = cw;
+      canvas.height = ch;
+      canvas.getContext('2d').drawImage(img, 0, 0, cw, ch);
+      return await new Promise(function (resolve) {
+        canvas.toBlob(function (blob) {
+          if (!blob) { resolve(file); return; }
+          var stem = (file.name || 'ocr-capture').replace(/\.[^.]+$/, '');
+          resolve(new File([blob], stem + '.jpg', { type: 'image/jpeg', lastModified: Date.now() }));
+        }, 'image/jpeg', quality || 0.85);
+      });
+    } catch (_) {
+      return file;
+    }
+  }
+
+  async function sendAnalyze(maxDim, quality) {
+    // Shrink big phone photos before upload so the AI call stays fast and doesn't time out.
+    var uploadImage = await downscaleForUpload(lastFile, maxDim, quality);
+    var fd = new FormData();
+    fd.append('docKey', docKey);
+    fd.append('poNumber', poNumber);
+    fd.append('image', uploadImage, uploadImage.name || 'ocr-capture.jpg');
+    var headers = {};
+    if (csrf) headers['X-CSRF-TOKEN'] = csrf;
+    var resp = await fetch(analyzeUrl, { method: 'POST', headers: headers, body: fd });
+    var data = await resp.json().catch(function () { return null; });
+    return { status: resp.status, data: data };
+  }
+
+  function isTimeoutResult(r) {
+    if (!r) return true;
+    if (r.status === 504 || r.status === 408 || r.status === 500) return true;
+    if (!r.data) return true; // non-JSON (e.g. raw 500 before restart)
+    if (r.data.ok === false && /time(d)?\s*out|timeout/i.test(String(r.data.error || ''))) return true;
+    return false;
+  }
+
   async function analyzeWithAi() {
     if (!lastFile || !analyzeUrl) return;
 
@@ -397,16 +471,13 @@
     clearCompare();
 
     try {
-      var fd = new FormData();
-      fd.append('docKey', docKey);
-      fd.append('poNumber', poNumber);
-      fd.append('image', lastFile, lastFile.name || 'ocr-capture.png');
-
-      var headers = {};
-      if (csrf) headers['X-CSRF-TOKEN'] = csrf;
-
-      var resp = await fetch(analyzeUrl, { method: 'POST', headers: headers, body: fd });
-      var data = await resp.json().catch(function () { return null; });
+      var r = await sendAnalyze(2200, 0.85);
+      // One automatic retry with a smaller/lighter image if the first call timed out.
+      if (!(r.data && r.data.ok) && isTimeoutResult(r)) {
+        setStatus('Taking longer than usual — retrying with a smaller image…', 'busy');
+        r = await sendAnalyze(1500, 0.8);
+      }
+      var data = r.data;
 
       if (data && data.ok) {
         lastCleanedText = data.cleanedText || '';
@@ -417,6 +488,8 @@
           allOk ? 'ok' : 'warn'
         );
         if (aiBtn) { aiBtn.textContent = 'Re-analyze'; aiBtn.disabled = false; }
+        // Compare is ready — let the user confirm and transfer to a Goods Received.
+        if (confirmBtn && confirmUrl) { confirmBtn.hidden = false; confirmBtn.disabled = false; }
         if (lastFile) uploadCapture(lastFile, lastCleanedText);
       } else {
         setStatus((data && data.error) || 'AI analysis failed.', 'warn');
@@ -425,6 +498,37 @@
     } catch (err) {
       setStatus('AI analysis failed.', 'warn');
       if (aiBtn) { aiBtn.disabled = false; aiBtn.textContent = prev; }
+    }
+  }
+
+  async function confirmTransfer() {
+    if (!confirmUrl) return;
+    var prev = confirmBtn ? confirmBtn.textContent : '';
+    if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = 'Transferring…'; }
+    setStatus('Creating Goods Received in SQL…', 'busy');
+    try {
+      var fd = new FormData();
+      fd.append('docKey', docKey);
+      fd.append('poNumber', poNumber);
+      var headers = {};
+      if (csrf) headers['X-CSRF-TOKEN'] = csrf;
+      var resp = await fetch(confirmUrl, { method: 'POST', headers: headers, body: fd });
+      var data = await resp.json().catch(function () { return null; });
+
+      if (data && data.ok) {
+        setStatus(data.message || 'Goods Received created.', 'ok');
+        if (confirmBtn) { confirmBtn.textContent = data.mode === 'gr' ? 'Transferred ✓' : 'Recorded ✓'; }
+        // Move on to the submitted list so the PO reflects its new state.
+        if (scanPoUrl) {
+          setTimeout(function () { window.location.href = scanPoUrl; }, 1400);
+        }
+      } else {
+        setStatus((data && data.error) || 'Could not transfer to Goods Received.', 'warn');
+        if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = prev; }
+      }
+    } catch (err) {
+      setStatus('Could not transfer to Goods Received.', 'warn');
+      if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = prev; }
     }
   }
 

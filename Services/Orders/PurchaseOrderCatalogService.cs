@@ -84,14 +84,23 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
         if (string.IsNullOrWhiteSpace(tenant))
             throw new InvalidOperationException("TenantBootstrap:TenantCode is required to load PH_PO.");
 
-        var sql = string.IsNullOrWhiteSpace(_approval.Value.PurchaseOrdersSql)
-            ? DefaultPurchaseOrdersSql
-            : _approval.Value.PurchaseOrdersSql!;
-
         var connStr = await _tenantResolver.GetConnectionStringForTenantAsync(tenant, cancellationToken).ConfigureAwait(false);
 
         await using var conn = new FbConnection(connStr);
         await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+        string sql;
+        if (!string.IsNullOrWhiteSpace(_approval.Value.PurchaseOrdersSql))
+        {
+            sql = _approval.Value.PurchaseOrdersSql!;
+        }
+        else
+        {
+            await PhPoSchemaBootstrap.EnsureUdfPoStatusColumnAsync(conn, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+            var poCols = await FirebirdSchemaHelper.GetColumnNamesAsync(conn, "PH_PO", cancellationToken).ConfigureAwait(false);
+            sql = BuildPurchaseOrdersSql(poCols);
+        }
 
         await using var cmd = new FbCommand(sql, conn);
         await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -102,6 +111,79 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
 
         return list;
     }
+
+    /// <summary>Builds list SQL from <c>PH_PO</c> columns; uses <c>UDF_POSTATUS</c> when present.</summary>
+    internal static string BuildPurchaseOrdersSql(HashSet<string> poCols)
+    {
+        var statusCol = FirebirdSchemaHelper.PickColumn(
+            poCols,
+            "UDF_POSTATUS",
+            "UDF_PO_STATUS",
+            "POSTATUS",
+            "UDF_STATUS");
+
+        string transferableExpr;
+        string pqStatusExpr;
+        if (statusCol is not null)
+        {
+            var statusUpper = $"UPPER(TRIM(COALESCE(CAST({statusCol} AS VARCHAR(40)), '')))";
+            transferableExpr = $"""
+                CAST(CASE {statusUpper}
+                  WHEN 'APPROVED' THEN 1
+                  WHEN 'CANCELLED' THEN 0
+                  WHEN 'REJECTED' THEN 0
+                  ELSE NULL
+                END AS SMALLINT)
+                """;
+            pqStatusExpr = $"""
+                CAST(CASE {statusUpper}
+                  WHEN 'APPROVED' THEN 'Approved'
+                  WHEN 'CANCELLED' THEN 'Cancelled'
+                  WHEN 'REJECTED' THEN 'Rejected'
+                  ELSE 'Pending'
+                END AS VARCHAR(20))
+                """;
+        }
+        else
+        {
+            transferableExpr = "CAST(NULL AS SMALLINT)";
+            pqStatusExpr = "CAST('Pending' AS VARCHAR(20))";
+        }
+
+        return $"""
+            SELECT FIRST 200
+              DOCKEY,
+              TRIM(DOCNO) AS PONUMBER,
+              TRIM(COALESCE(COMPANYNAME, CODE, '')) AS VENDOR,
+              COALESCE(DOCAMT, 0) AS AMOUNT,
+              TRIM(COALESCE(CAST(DESCRIPTION AS VARCHAR(2000)), '')) AS DESCRIPTION,
+              COALESCE(DOCDATE, CURRENT_DATE) AS ORDERDATE,
+              {transferableExpr} AS TRANSFERABLEINT,
+              {pqStatusExpr} AS PQSTATUS
+            FROM PH_PO
+            ORDER BY DOCDATE DESC NULLS LAST, DOCNO DESC
+            """;
+    }
+
+    private static async Task<string?> ResolvePoStatusColumnAsync(
+        FbConnection conn,
+        CancellationToken cancellationToken)
+    {
+        var poCols = await FirebirdSchemaHelper.GetColumnNamesAsync(conn, "PH_PO", cancellationToken).ConfigureAwait(false);
+        return FirebirdSchemaHelper.PickColumn(
+            poCols,
+            "UDF_POSTATUS",
+            "UDF_PO_STATUS",
+            "POSTATUS",
+            "UDF_STATUS");
+    }
+
+    private static string BuildPendingHeaderSqlPredicate(string statusCol) =>
+        $"""
+        (P.{statusCol} IS NULL
+         OR TRIM(COALESCE(CAST(P.{statusCol} AS VARCHAR(40)), '')) = ''
+         OR UPPER(TRIM(CAST(P.{statusCol} AS VARCHAR(40)))) = 'PENDING')
+        """;
 
     /// <inheritdoc />
     public async Task<(bool Success, string? ErrorMessage)> TrySetHeaderListStatusAsync(
@@ -134,8 +216,26 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
             await using var conn = new FbConnection(connStr);
             await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
 
+            var statusCol = await ResolvePoStatusColumnAsync(conn, cancellationToken).ConfigureAwait(false);
+            if (statusCol is null)
+            {
+                if (!await PhPoSchemaBootstrap.EnsureUdfPoStatusColumnAsync(conn, cancellationToken: cancellationToken)
+                        .ConfigureAwait(false))
+                {
+                    return (false,
+                        "PH_PO.UDF_POSTATUS is not on this database and could not be created automatically. Add VARCHAR(40) column UDF_POSTATUS to PH_PO, or run eQuotation db_initializer.");
+                }
+
+                statusCol = await ResolvePoStatusColumnAsync(conn, cancellationToken).ConfigureAwait(false);
+                if (statusCol is null)
+                {
+                    return (false,
+                        "PH_PO.UDF_POSTATUS was not found after schema ensure. Contact your administrator.");
+                }
+            }
+
             await using var cmd = new FbCommand(
-                "UPDATE PH_PO SET UDF_POSTATUS = @S WHERE DOCKEY = @D",
+                $"UPDATE PH_PO SET {statusCol} = @S WHERE DOCKEY = @D",
                 conn);
 
             cmd.Parameters.Add("@S", FbDbType.VarChar, 20).Value = statusText;
@@ -176,7 +276,12 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
             await using var conn = new FbConnection(connStr);
             await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
 
-            const string sql = """
+            var statusCol = await ResolvePoStatusColumnAsync(conn, cancellationToken).ConfigureAwait(false);
+            var pendingPredicate = statusCol is null
+                ? "1=1"
+                : BuildPendingHeaderSqlPredicate(statusCol);
+
+            var sql = $"""
                 UPDATE PH_PODTL D
                 SET D.TRANSFERABLE = @T
                 WHERE D.DOCKEY = @D
@@ -184,9 +289,7 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
                   AND EXISTS (
                     SELECT 1 FROM PH_PO P
                     WHERE P.DOCKEY = @D
-                      AND (P.UDF_POSTATUS IS NULL
-                           OR TRIM(COALESCE(CAST(P.UDF_POSTATUS AS VARCHAR(40)), '')) = ''
-                           OR UPPER(TRIM(CAST(P.UDF_POSTATUS AS VARCHAR(40)))) = 'PENDING')
+                      AND {pendingPredicate}
                   )
                 """;
 

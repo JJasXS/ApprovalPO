@@ -1,0 +1,30 @@
+﻿Testing Company
+1, Jalan Setia Dagang AK U13/AK, 40170 Shah Alam, Selangor.
+Email: sales@testingcompany.com.my
+
+DELIVERY ORDER
+
+Acc No: (400-10001)
+
+Ship To: 1, Jalan Setia Dagang AK U13/AK, 40170 Shah Alam, Selangor.
+
+DO No: GR-60013
+Date: 28/05/2022
+Currency: MYR
+Delivery Mode: 
+Page: 1 of 1
+
+Item No  Item Code   Description                                   Customer P/O  Qty   Unit
+1         RL-Pillow   Rubber Latex Neck Support Firm Pillow        PO-00027     30.00 UNIT
+2         PS-Pillow   Polyester Super Soft Pillow                  PO-00027     40.00 UNIT
+3         PCL-Pillow  Premium Quality Contour Latex Foam Pillow   PO-00027     30.00 UNIT
+4         PMF-Pillow  Premium Memory Foam Pillow                   PO-00027     20.00 UNIT
+
+Total Carton/Case :
+Total Gross Weight :
+
+TOTAL QTY : 120.00
+
+Before acceptance, please inspect the goods as we will not be responsible for any defects after the acceptance. No claims whatsoever will be entertained unless with official written advice to us within 7 days of chop sign of receipt of goods.
+
+Recipient Chop & Sign                     Authorised Signature

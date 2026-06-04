@@ -42,6 +42,13 @@ public static class FirebirdSchemaHelper
         return set;
     }
 
+    public static void InvalidateColumnCache(string tableName)
+    {
+        var table = (tableName ?? "").Trim().ToUpperInvariant();
+        if (!string.IsNullOrEmpty(table))
+            ColumnCache.TryRemove(table, out _);
+    }
+
     /// <summary>Returns the first candidate that exists on the table (case-insensitive).</summary>
     public static string? PickColumn(HashSet<string> columns, params string[] candidates)
     {

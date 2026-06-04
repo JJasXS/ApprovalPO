@@ -26,8 +26,10 @@ public class ScanPODetailModel : PageModel
     private readonly IOcrCaptureService _ocrCaptures;
     private readonly IOcrEmailSender _ocrEmail;
     private readonly IOpenAiVisionService _ocrVision;
+    private readonly Services.Orders.IGoodsReceivedTransfer _grTransfer;
+    private readonly ILogger<ScanPODetailModel> _logger;
 
-    public ScanPODetailModel(IPurchaseOrderCatalog orders, IScanQrLinkResolver scanResolver, IScanPoSubmitStore scanSubmits, IOcrCaptureService ocrCaptures, IOcrEmailSender ocrEmail, IOpenAiVisionService ocrVision)
+    public ScanPODetailModel(IPurchaseOrderCatalog orders, IScanQrLinkResolver scanResolver, IScanPoSubmitStore scanSubmits, IOcrCaptureService ocrCaptures, IOcrEmailSender ocrEmail, IOpenAiVisionService ocrVision, Services.Orders.IGoodsReceivedTransfer grTransfer, ILogger<ScanPODetailModel> logger)
     {
         _orders = orders;
         _scanResolver = scanResolver;
@@ -35,6 +37,8 @@ public class ScanPODetailModel : PageModel
         _ocrCaptures = ocrCaptures;
         _ocrEmail = ocrEmail;
         _ocrVision = ocrVision;
+        _grTransfer = grTransfer;
+        _logger = logger;
     }
 
     [BindProperty(SupportsGet = true)]
@@ -226,6 +230,24 @@ public class ScanPODetailModel : PageModel
 
         var result = await _ocrVision.AnalyzeAsync(bytes, contentType, hint, cancellationToken).ConfigureAwait(false);
 
+        if (result.Ok && docKey > 0)
+        {
+            try
+            {
+                var lines = await _orders.GetPurchaseRequestLinesAsync(docKey, cancellationToken).ConfigureAwait(false);
+                var expected = string.Join(" || ", lines.Select(l =>
+                    $"code='{(l.ItemCode ?? "").Trim()}' desc='{(l.Description ?? "").Trim()}' qty={(l.Sqty != 0 ? l.Sqty : l.Qty)}"));
+                var scanned = string.Join(" || ", (result.Fields?.Items ?? new List<OcrLineItem>()).Select(i =>
+                    $"code='{(i.Code ?? "").Trim()}' desc='{(i.Description ?? "").Trim()}' qty='{(i.Quantity ?? "").Trim()}'"));
+                _logger.LogInformation("OCR compare PO {Po} docKey {DocKey}\n  EXPECTED (system): {Expected}\n  SCANNED  (AI):     {Scanned}",
+                    poNumber, docKey, expected, scanned);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "OCR compare diagnostic logging failed.");
+            }
+        }
+
         return new JsonResult(new
         {
             ok = result.Ok,
@@ -233,6 +255,76 @@ public class ScanPODetailModel : PageModel
             fields = result.Fields,
             error = result.Error
         }, JsonCamel);
+    }
+
+    /// <summary>
+    /// Confirms the verified scan: transfers the PO to a Goods Received via the SQL API when the
+    /// tenant has SQL API credentials; otherwise records the scan locally as a fallback.
+    /// </summary>
+    public async Task<IActionResult> OnPostConfirmTransferAsync(int docKey, string? poNumber, string? scanCountsJson, CancellationToken cancellationToken)
+    {
+        if (docKey <= 0)
+            return new JsonResult(new { ok = false, error = "Invalid document." }, JsonCamel);
+
+        var all = await _orders.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
+        var order = all.FirstOrDefault(o =>
+            o.DocKey == docKey &&
+            string.Equals(o.Status, "Approved", StringComparison.OrdinalIgnoreCase));
+        if (order is null)
+            return new JsonResult(new { ok = false, error = "PO not found or not approved." }, JsonCamel);
+
+        var counts = TryParseScanCounts(scanCountsJson);
+        var actor = ScanPoAuditHelper.FromUser(User);
+
+        GrTransferOutcome outcome;
+        try
+        {
+            var result = await _grTransfer.TransferPoAsync(docKey, order.PoNumber, cancellationToken).ConfigureAwait(false);
+            outcome = result.ApiAvailable
+                ? (result.Ok
+                    ? GrTransferOutcome.Created(result.GrDocNo)
+                    : GrTransferOutcome.Failed(result.Error))
+                : GrTransferOutcome.Local;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "GR transfer threw; falling back to local record for {Po}.", order.PoNumber);
+            outcome = GrTransferOutcome.Local;
+        }
+
+        // A genuine SQL rejection (e.g. balance/validation) should be shown, not silently recorded.
+        if (outcome.Kind == GrTransferOutcomeKind.Failed)
+            return new JsonResult(new { ok = false, mode = "gr", error = outcome.Error ?? "Transfer was rejected by SQL." }, JsonCamel);
+
+        // Created in SQL, or recorded locally (no SQL API on this company): mark the scan submitted locally.
+        await _scanSubmits.MarkSubmittedAsync(docKey, order.PoNumber, counts, actor, cancellationToken).ConfigureAwait(false);
+
+        if (outcome.Kind == GrTransferOutcomeKind.Created)
+        {
+            return new JsonResult(new
+            {
+                ok = true,
+                mode = "gr",
+                grDocNo = outcome.GrDocNo,
+                message = $"Goods Received {outcome.GrDocNo} created from {order.PoNumber}."
+            }, JsonCamel);
+        }
+
+        return new JsonResult(new
+        {
+            ok = true,
+            mode = "local",
+            message = $"Scan confirmed for {order.PoNumber}. (Goods Received API is not enabled for this company yet, so it was recorded locally.)"
+        }, JsonCamel);
+    }
+
+    private enum GrTransferOutcomeKind { Created, Local, Failed }
+
+    private readonly record struct GrTransferOutcome(GrTransferOutcomeKind Kind, string? GrDocNo, string? Error)
+    {
+        public static GrTransferOutcome Created(string? grDocNo) => new(GrTransferOutcomeKind.Created, grDocNo, null);
+        public static GrTransferOutcome Local => new(GrTransferOutcomeKind.Local, null, null);
+        public static GrTransferOutcome Failed(string? error) => new(GrTransferOutcomeKind.Failed, null, error);
     }
 
     private async Task<string?> BuildOcrAnalyzeHintAsync(int docKey, string? poNumber, CancellationToken cancellationToken)

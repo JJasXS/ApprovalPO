@@ -107,6 +107,7 @@ public sealed class TenantDbConnectionResolver
             var maintenanceDashboardModules = TryParseNamedDashboardModulesFromRoot(root, "maintenanceDashboardModules");
             var userRoles = TryParseUserRolesFromRoot(root);
             var openAiSecretRef = TryParseOpenAiSecretRefFromRoot(root);
+            var sqlApi = TryParseSqlApiFromRoot(root);
             _cache[tenantCode] = new TenantResolvedPayload
             {
                 ConnectionString = conn,
@@ -115,7 +116,8 @@ public sealed class TenantDbConnectionResolver
                 AdminDashboardModules = adminDashboardModules,
                 MaintenanceDashboardModules = maintenanceDashboardModules,
                 UserRoles = userRoles,
-                OpenAiApiKeySecretRef = openAiSecretRef
+                OpenAiApiKeySecretRef = openAiSecretRef,
+                SqlApi = sqlApi
             };
             return conn;
         }
@@ -151,6 +153,20 @@ public sealed class TenantDbConnectionResolver
 
         await GetConnectionStringForTenantAsync(tenantCode, cancellationToken).ConfigureAwait(false);
         return _cache.TryGetValue(tenantCode, out var hit2) ? hit2.OpenAiApiKeySecretRef : null;
+    }
+
+    /// <summary>Optional SQL Accounting HTTP API config from the tenant payload (<c>sqlApi</c>), if present.</summary>
+    public async Task<TenantSqlApiConfig?> GetTenantSqlApiAsync(string tenantCode, CancellationToken cancellationToken = default)
+    {
+        tenantCode = (tenantCode ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(tenantCode))
+            return null;
+
+        if (_cache.TryGetValue(tenantCode, out var hit))
+            return hit.SqlApi;
+
+        await GetConnectionStringForTenantAsync(tenantCode, cancellationToken).ConfigureAwait(false);
+        return _cache.TryGetValue(tenantCode, out var hit2) ? hit2.SqlApi : null;
     }
 
     /// <summary>Dashboard module visibility flags from tenant payload, if present.</summary>
@@ -320,6 +336,56 @@ public sealed class TenantDbConnectionResolver
             return null;
 
         return merged;
+    }
+
+    /// <summary>
+    /// Reads the optional <c>sqlApi</c> section (host/region/service/useTls + inline accessKey/secretKey
+    /// and/or <c>sqlApiCredentialsSecretRef</c>). Returns null when the tenant has no SQL API block at all.
+    /// </summary>
+    private static TenantSqlApiConfig? TryParseSqlApiFromRoot(JsonElement root)
+    {
+        if (!TryFindSectionRecursive(root, "sqlApi", depth: 0, maxDepth: 8, out var attr)
+            && !TryFindSectionRecursive(root, "sqlapi", depth: 0, maxDepth: 8, out attr))
+            return null;
+
+        var map = UnwrapDynamoMap(attr);
+        if (map.ValueKind != JsonValueKind.Object)
+            return null;
+
+        string? First(params string[] names)
+        {
+            foreach (var n in names)
+            {
+                if (TryGetScalar(map, n, out var v) && !string.IsNullOrWhiteSpace(v))
+                    return v.Trim();
+            }
+            return null;
+        }
+
+        var cfg = new TenantSqlApiConfig
+        {
+            Host = First("host", "sqlApiHost"),
+            Region = First("region", "sqlApiRegion"),
+            Service = First("service", "sqlApiService"),
+            AccessKey = First("accessKey", "sqlApiAccessKey", "SQL_API_ACCESS_KEY"),
+            SecretKey = First("secretKey", "sqlApiSecretKey", "SQL_API_SECRET_KEY"),
+            CredentialsSecretRef = First("sqlApiCredentialsSecretRef", "credentialsSecretRef", "secretRef"),
+        };
+
+        var useTls = First("useTls", "sqlApiUseTls");
+        if (useTls is not null)
+        {
+            var t = useTls.ToLowerInvariant();
+            cfg.UseTls = t is "1" or "true" or "yes" or "on";
+        }
+
+        // Treat an empty/uninformative block as "no SQL API".
+        if (string.IsNullOrWhiteSpace(cfg.Host)
+            && !cfg.HasInlineKeys
+            && string.IsNullOrWhiteSpace(cfg.CredentialsSecretRef))
+            return null;
+
+        return cfg;
     }
 
     private static string? TryParseOpenAiSecretRefFromRoot(JsonElement root)

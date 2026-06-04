@@ -226,6 +226,8 @@
     <div id="ocrModal" class="ocr-modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="ocrModalTitle"
          data-capture-url="@Url.Page("/ScanPODetail", null, new { handler = "OcrCapture" })"
          data-analyze-url="@Url.Page("/ScanPODetail", null, new { handler = "OcrAnalyze" })"
+         data-confirm-url="@Url.Page("/ScanPODetail", null, new { handler = "ConfirmTransfer" })"
+         data-scan-po-url="@Url.Page("/ScanPO", null, new { tab = "submitted" })"
          data-doc-key="@Model.DocKey"
          data-po-number="@(Model.Order.PoNumber)"
          data-csrf-token="@csrf">
@@ -282,6 +284,7 @@
             <div class="ocr-modal__foot">
                 <button type="button" class="ocr-btn ocr-btn--ghost" data-ocr-close>Close</button>
                 <button type="button" id="ocrAiBtn" class="ocr-btn ocr-btn--primary" hidden>Analyze document</button>
+                <button type="button" id="ocrConfirmBtn" class="ocr-btn ocr-btn--success" hidden>Confirm &amp; transfer to Goods Received</button>
             </div>
         </div>
     </div>
