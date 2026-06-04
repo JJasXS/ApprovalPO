@@ -1,0 +1,14 @@
+﻿Ship To: 1, Jalan Setia Dagang AK U13/AK, Setia Alam, 40170, Shah Alam, Selangor.
+Currency: MYR
+Delivery Mode: ----
+PAGE: 1 of 1
+
+Item	Item Code	Description	Customer P/O	Qty	Unit
+1	RL-Pillow	BAC	25.00	UNIT
+2	PS-Pillow	Polyester Pillow	30.00	UNIT
+3	PCL-Pillow	PILLOW	18.00	UNIT
+4	PMF-Pillow	Premium Pillow	20.00	UNIT
+5	PS-Pillow	Polyester Super Soft Pillow	10.00	UNIT
+
+Total Carton/Case:
+Total Gross Weight:

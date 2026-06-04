@@ -26,27 +26,51 @@ public interface IGoodsReceivedTransfer
 
 public sealed class GoodsReceivedTransferService : IGoodsReceivedTransfer
 {
+    private readonly PoToGoodsReceiptFirebirdTransferService _firebird;
     private readonly ISqlAccountingApi _api;
     private readonly ILogger<GoodsReceivedTransferService> _logger;
 
-    public GoodsReceivedTransferService(ISqlAccountingApi api, ILogger<GoodsReceivedTransferService> logger)
+    public GoodsReceivedTransferService(
+        PoToGoodsReceiptFirebirdTransferService firebird,
+        ISqlAccountingApi api,
+        ILogger<GoodsReceivedTransferService> logger)
     {
+        _firebird = firebird;
         _api = api;
         _logger = logger;
     }
 
-    public Task<bool> IsAvailableAsync(CancellationToken cancellationToken = default) =>
-        _api.IsAvailableAsync(cancellationToken);
+    public async Task<bool> IsAvailableAsync(CancellationToken cancellationToken = default) =>
+        await _api.IsAvailableAsync(cancellationToken).ConfigureAwait(false);
 
     public async Task<GrTransferResult> TransferPoAsync(int docKey, string poNumber, CancellationToken cancellationToken = default)
     {
         if (docKey <= 0)
             return GrTransferResult.Failure("Invalid PO document key.");
 
+        try
+        {
+            var firebird = await _firebird.TransferAsync(docKey, poNumber, cancellationToken).ConfigureAwait(false);
+            if (firebird.Ok)
+                return firebird;
+
+            _logger.LogInformation(
+                "Firebird PO->GR transfer for {Po} (docKey {DocKey}) did not complete: {Error}. Trying SQL API.",
+                poNumber, docKey, firebird.Error);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Firebird PO->GR transfer threw for {Po}; trying SQL API.", poNumber);
+        }
+
+        return await TransferViaSqlApiAsync(docKey, poNumber, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<GrTransferResult> TransferViaSqlApiAsync(int docKey, string poNumber, CancellationToken cancellationToken)
+    {
         if (!await _api.IsAvailableAsync(cancellationToken).ConfigureAwait(false))
             return GrTransferResult.Unavailable();
 
-        // 1) Load the source PO (dockey + line dtlkeys) from the SQL API.
         var poResp = await _api.SendAsync(HttpMethod.Get, $"/purchaseorder/{docKey}", null, cancellationToken).ConfigureAwait(false);
         if (!poResp.Available)
             return GrTransferResult.Unavailable();
@@ -56,10 +80,8 @@ public sealed class GoodsReceivedTransferService : IGoodsReceivedTransfer
         if (!TryReadPo(poResp.Body, out var po))
             return GrTransferResult.Failure("PO has no detail lines to transfer.");
 
-        // 2) Pick a unique GR document number (scan existing, then increment on collision).
         var (startSeq, pad, prefix) = await NextGrDocNoSeedAsync(cancellationToken).ConfigureAwait(false);
 
-        // 3) Build + POST the Goods Received transfer, retrying the docno on uniqueness collisions.
         var today = DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         for (var seq = startSeq; seq < startSeq + 200; seq++)
         {
@@ -70,13 +92,13 @@ public sealed class GoodsReceivedTransferService : IGoodsReceivedTransfer
             if (resp.IsSuccess)
             {
                 var created = ReadDocNo(resp.Body) ?? grDocNo;
-                _logger.LogInformation("GR transfer OK: PO {Po} (docKey {DocKey}) -> GR {Gr}", poNumber, docKey, created);
+                _logger.LogInformation("SQL API GR transfer OK: PO {Po} (docKey {DocKey}) -> GR {Gr}", poNumber, docKey, created);
                 return GrTransferResult.Success(created);
             }
 
             var lower = (resp.Body ?? "").ToLowerInvariant();
             if (lower.Contains("unique") && lower.Contains("document"))
-                continue; // docno collision -> next number
+                continue;
 
             return GrTransferResult.Failure(ExtractError(resp.Body) ?? $"SQL rejected the transfer ({resp.Status}).");
         }

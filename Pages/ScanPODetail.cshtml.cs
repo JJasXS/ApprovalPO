@@ -258,8 +258,8 @@ public class ScanPODetailModel : PageModel
     }
 
     /// <summary>
-    /// Confirms the verified scan: transfers the PO to a Goods Received via the SQL API when the
-    /// tenant has SQL API credentials; otherwise records the scan locally as a fallback.
+    /// Confirms the verified scan: transfers the PO to Goods Received in Firebird (PH_GR / ST_XTRANS),
+    /// with SQL API as fallback when configured; otherwise records the scan locally.
     /// </summary>
     public async Task<IActionResult> OnPostConfirmTransferAsync(int docKey, string? poNumber, string? scanCountsJson, CancellationToken cancellationToken)
     {

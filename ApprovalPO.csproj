@@ -13,6 +13,9 @@
     <Compile Remove="tests\**\*.cs" />
     <Content Remove="tests\**\*" />
     <None Remove="tests\**\*" />
+    <Compile Remove="scripts\**\*.cs" />
+    <Content Remove="scripts\**\*" />
+    <None Remove="scripts\**\*" />
   </ItemGroup>
 
   <ItemGroup>

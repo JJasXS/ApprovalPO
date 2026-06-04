@@ -126,6 +126,7 @@ builder.Services.AddHttpClient<ApprovalPO.Services.SqlApi.ISqlAccountingApi, App
 {
     client.Timeout = TimeSpan.FromSeconds(60);
 });
+builder.Services.AddScoped<ApprovalPO.Services.Orders.PoToGoodsReceiptFirebirdTransferService>();
 builder.Services.AddScoped<ApprovalPO.Services.Orders.IGoodsReceivedTransfer, ApprovalPO.Services.Orders.GoodsReceivedTransferService>();
 builder.Services.AddScoped<ApprovalPO.Services.MaintenanceScanner.IMaintenanceScannerService, ApprovalPO.Services.MaintenanceScanner.MaintenanceScannerService>();
 builder.Services.AddScoped<ApprovalPO.Services.Ocr.IOcrCaptureService, ApprovalPO.Services.Ocr.OcrCaptureService>();

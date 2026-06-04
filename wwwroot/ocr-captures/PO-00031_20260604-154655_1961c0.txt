@@ -1,0 +1,15 @@
+﻿Address: 25, Brickfields, 50470, KL
+Ship To: 1, Jalan Setia Dagang AK U13/AK, Setia Alam, 40170, Shah Alam, Selangor.
+Date: 04/06/2026
+Currency: MYR
+Delivery Mode: ----
+PAGE: 1 of 1
+
+Item	Item Code	Description	Customer P/O	Qty	Unit
+1	RL-Pillow	Rubber Latex Neck Support Firm Pillow	30.00	UNIT
+2	PS-Pillow	Polyester Super Soft Pillow	30.00	UNIT
+3	PCL-Pillow	Premium Quality Contour Latex Foam Pillow	30.00	UNIT
+4	PMF-Pillow	Premium Memory Foam Pillow	30.00	UNIT
+5	PS-Pillow	Polyester Super Soft Pillow	30.00	UNIT
+
+Total Carton/Case:

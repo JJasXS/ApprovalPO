@@ -1,0 +1,16 @@
+﻿DELIVERY ORDER
+DO No. : GR-00016
+Date : 04/06/2026
+Currency : MYR
+Delivery Mode : ----
+PAGE : 1 of 1
+
+Item Code	Description	Customer P/O	Qty	Unit
+RL-Pillow	BAC	25.00	UNIT
+PCL-Pillow	Polyester Pillow	30.00	UNIT
+PMF-Pillow	Premium Pillow	20.00	UNIT
+PS-Pillow	Polyester Super Soft Pillow	10.00	UNIT
+
+TOTAL QTY : 103.00
+
+for eQUOTATION
