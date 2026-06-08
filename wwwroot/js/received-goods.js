@@ -33,12 +33,6 @@
     return isNaN(d) ? s : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
-  const fmtMoney = (n) => {
-    const v = Number(n);
-    if (Number.isNaN(v)) return '';
-    return v.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
-
   const detailHref = (docKey) => `${detailPageUrl}?docKey=${encodeURIComponent(docKey)}`;
 
   const getFiltered = () => {
@@ -62,12 +56,8 @@
 
   const vendorMeta = (r) => {
     const v = (r.vendor || '').trim();
-    const amt = fmtMoney(r.amount);
-    const parts = [];
-    if (v) parts.push(v);
-    if (amt) parts.push(amt);
-    if (!parts.length) return '';
-    return `<span class="scan-row-meta">${esc(parts.join(' · '))}</span>`;
+    if (!v) return '';
+    return `<span class="scan-row-meta">${esc(v)}</span>`;
   };
 
   const rowHtml = (r) => {

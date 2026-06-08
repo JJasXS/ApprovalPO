@@ -27,6 +27,13 @@ public sealed class OcrFields
 public sealed class OcrLineItem
 {
     public string? Code { get; set; }
+    /// <summary>Canonical description from stock master when code was resolved.</summary>
     public string? Description { get; set; }
     public string? Quantity { get; set; }
+    /// <summary>Raw description read from the document before stock lookup.</summary>
+    public string? ScannedDescription { get; set; }
+    /// <summary>True when OCR description differed from stock master and was replaced.</summary>
+    public bool DescriptionCorrected { get; set; }
+    /// <summary><c>sqlApi</c>, <c>firebird</c>, or null when not looked up.</summary>
+    public string? DescriptionSource { get; set; }
 }

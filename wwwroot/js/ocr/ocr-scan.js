@@ -30,16 +30,28 @@
   var lastObjectUrl = null;
   var lastFile = null;
   var lastCleanedText = '';
+  var lastCompare = null;
 
   function loadExpectedLines() {
     try {
       var el = document.getElementById('ocrExpectedLinesJson');
       if (!el || !el.textContent) return [];
       var parsed = JSON.parse(el.textContent);
-      return Array.isArray(parsed) ? parsed : [];
+      if (!Array.isArray(parsed)) return [];
+      return parsed.slice().sort(function (a, b) {
+        return normToken(a.code).localeCompare(normToken(b.code));
+      });
     } catch (_) {
       return [];
     }
+  }
+
+  function sortRowsByCode(rows) {
+    return rows.slice().sort(function (a, b) {
+      var ac = a.po ? normToken(a.po.code) : normToken(a.scanned && a.scanned.code);
+      var bc = b.po ? normToken(b.po.code) : normToken(b.scanned && b.scanned.code);
+      return ac.localeCompare(bc);
+    });
   }
 
   function setStatus(msg, kind) {
@@ -78,6 +90,7 @@
     if (previewWrap) previewWrap.hidden = true;
     lastFile = null;
     lastCleanedText = '';
+    lastCompare = null;
   }
 
   function clearCompare() {
@@ -250,9 +263,25 @@
     if (!scanned) return false;
     var hasCode = !!normToken(poLine.code);
     var codeOk = hasCode ? tokensMatch(normToken(poLine.code), normToken(scanned.code)) : true;
-    var descOk = descMatch(poLine.description, scanned.description);
     var qtyOk = qtyMatch(poLine.qty, scanned.quantity);
+    // When item code matches, description is validated against stock master on the server (not OCR text).
+    if (hasCode && codeOk) return qtyOk;
+    var descOk = descMatch(poLine.description, scanned.description);
     return codeOk && descOk && qtyOk;
+  }
+
+  function buildTransferLinesFromCompare(compare) {
+    if (!compare || !compare.rows) return [];
+    var lines = [];
+    compare.rows.forEach(function (row) {
+      if (row.kind !== 'po' || !row.scanned) return;
+      var code = (row.po && row.po.code ? row.po.code : row.scanned.code || '').trim();
+      if (!code) return;
+      var qty = parseQty(row.scanned.quantity);
+      if (qty == null || qty <= 0) return;
+      lines.push({ itemCode: code, quantity: qty });
+    });
+    return lines;
   }
 
   function buildCompare(data) {
@@ -282,9 +311,10 @@
       }
     });
 
-    // Pass 2: for still-unmatched PO lines, fall back to a description match.
+    // Pass 2: description match only for PO lines without an item code.
     expectedLines.forEach(function (poLine, idx) {
       if (matches[idx]) return;
+      if (normToken(poLine.code)) return;
       for (var j = 0; j < aiItems.length; j++) {
         if (used[j]) continue;
         if (descMatch(poLine.description, aiItems[j].description)) {
@@ -318,6 +348,8 @@
       });
     });
 
+    rows = sortRowsByCode(rows);
+
     var accurateCount = rows.filter(function (r) { return r.accurate; }).length;
     var poRows = rows.filter(function (r) { return r.kind === 'po'; });
 
@@ -336,10 +368,21 @@
     if (!scanned) return ['Not found on scanned document'];
     var issues = [];
     var hasCode = !!normToken(poLine.code);
-    if (hasCode && !tokensMatch(normToken(poLine.code), normToken(scanned.code))) issues.push('Code');
-    if (!descMatch(poLine.description, scanned.description)) issues.push('Description');
+    var codeOk = hasCode && tokensMatch(normToken(poLine.code), normToken(scanned.code));
+    if (hasCode && !codeOk) issues.push('Code');
+    if (!codeOk && !descMatch(poLine.description, scanned.description)) issues.push('Description');
     if (!qtyMatch(poLine.qty, scanned.quantity)) issues.push('Qty');
     return issues;
+  }
+
+  function formatScannedDescription(sc) {
+    if (!sc) return '<span class="ocr-compare__empty">—</span>';
+    var main = esc(sc.description || '');
+    if (sc.descriptionCorrected && sc.scannedDescription) {
+      return main +
+        '<span class="ocr-compare__hint" title="OCR read: ' + esc(sc.scannedDescription) + '"> · stock</span>';
+    }
+    return main;
   }
 
   function cellPair(poVal, scanVal, mismatch) {
@@ -374,7 +417,7 @@
         '<strong class="ocr-compare__ok">' + c.accurateCount + ' accurate</strong>' +
         ' · ' +
         '<strong class="ocr-compare__bad">' + badCount + ' not accurate</strong>' +
-        ' (code, description, or qty differs)' +
+        ' (match by item code; qty must match)' +
         '</span>';
     }
 
@@ -397,7 +440,9 @@
       var po = row.po;
       var sc = row.scanned;
       var codeMismatch = sc && !tokensMatch(normToken(po.code), normToken(sc.code));
-      var descMismatch = sc && !descMatch(po.description, sc.description);
+      var hasPoCode = !!normToken(po.code);
+      var codePaired = hasPoCode && sc && tokensMatch(normToken(po.code), normToken(sc.code));
+      var descMismatch = sc && !codePaired && !descMatch(po.description, sc.description);
       var qtyMismatch = sc && !qtyMatch(po.qty, sc.quantity);
 
       return '<tr class="' + cls + '" title="' + esc(row.issues.join(', ')) + '">' +
@@ -406,7 +451,7 @@
         '<td' + (descMismatch ? ' class="ocr-compare__cell--bad"' : '') + '>' + esc(po.description) + '</td>' +
         '<td class="num' + (qtyMismatch ? ' ocr-compare__cell--bad' : '') + '">' + esc(formatQty(po.qty)) + '</td>' +
         '<td' + (codeMismatch ? ' class="ocr-compare__cell--bad"' : '') + '>' + (sc ? esc(sc.code) : '<span class="ocr-compare__empty">—</span>') + '</td>' +
-        '<td' + (descMismatch ? ' class="ocr-compare__cell--bad"' : '') + '>' + (sc ? esc(sc.description) : '<span class="ocr-compare__empty">—</span>') + '</td>' +
+        '<td' + (descMismatch ? ' class="ocr-compare__cell--bad"' : '') + '>' + formatScannedDescription(sc) + '</td>' +
         '<td class="num' + (qtyMismatch ? ' ocr-compare__cell--bad' : '') + '">' + (sc ? esc(formatQty(sc.quantity)) : '<span class="ocr-compare__empty">—</span>') + '</td>' +
         '</tr>';
     }).join('');
@@ -482,9 +527,13 @@
       if (data && data.ok) {
         lastCleanedText = data.cleanedText || '';
         var c = renderCompare(data);
+        lastCompare = c;
+        var transferN = buildTransferLinesFromCompare(c).length;
         var allOk = c.poNumberMatch && c.accurateCount === c.totalPoLines && !c.rows.some(function (r) { return r.kind === 'extra'; });
         setStatus(
-          allOk ? 'All lines match the PO.' : 'Review red rows — code, description, or qty differs from system.',
+          allOk
+            ? ('All lines match the PO. Confirm will receive ' + transferN + ' of ' + c.totalPoLines + ' line(s).')
+            : ('Review red rows — confirm will receive ' + transferN + ' scanned line(s) with detected qty.'),
           allOk ? 'ok' : 'warn'
         );
         if (aiBtn) { aiBtn.textContent = 'Re-analyze'; aiBtn.disabled = false; }
@@ -503,13 +552,27 @@
 
   async function confirmTransfer() {
     if (!confirmUrl) return;
+    var transferLines = buildTransferLinesFromCompare(lastCompare);
+    if (!transferLines.length) {
+      setStatus('No scanned lines to transfer. Analyze the document first.', 'warn');
+      return;
+    }
+
     var prev = confirmBtn ? confirmBtn.textContent : '';
     if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = 'Transferring…'; }
-    setStatus('Creating Goods Received in SQL…', 'busy');
+    setStatus('Creating Goods Received for ' + transferLines.length + ' scanned line(s)…', 'busy');
     try {
       var fd = new FormData();
       fd.append('docKey', docKey);
       fd.append('poNumber', poNumber);
+      fd.append('transferLinesJson', JSON.stringify(transferLines));
+      var scanCounts = {};
+      transferLines.forEach(function (ln) {
+        var c = (ln.itemCode || '').trim();
+        if (!c) return;
+        scanCounts[c] = Math.round(ln.quantity);
+      });
+      fd.append('scanCountsJson', JSON.stringify(scanCounts));
       var headers = {};
       if (csrf) headers['X-CSRF-TOKEN'] = csrf;
       var resp = await fetch(confirmUrl, { method: 'POST', headers: headers, body: fd });

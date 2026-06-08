@@ -258,6 +258,13 @@ body.ocr-modal-open {
   color: #94a3b8;
 }
 
+.ocr-compare__hint {
+  font-size: 11px;
+  font-weight: 600;
+  color: #0369a1;
+  text-decoration: none;
+}
+
 .ocr-ai {
   margin-top: 16px;
   border: 1px solid var(--scan-accent-mid, #bae6fd);

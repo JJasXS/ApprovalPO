@@ -198,11 +198,11 @@ static async Task VerifyGrAsync(FbConnection conn, string grDocNo, int poDocKey)
         throw new InvalidOperationException("PH_GRDTL has no lines.");
 
     await using var xt = new FbCommand(
-        """
+        $"""
         SELECT COUNT(*)
         FROM ST_XTRANS
-        WHERE FROMDOCTYPE = 'PO' AND FROMDOCKEY = @Po
-          AND TODOCTYPE = 'GR' AND TODOCKEY = @Gr
+        WHERE FROMDOCTYPE = '{SqlAccountingDocTypes.PurchaseOrder}' AND FROMDOCKEY = @Po
+          AND TODOCTYPE = '{SqlAccountingDocTypes.GoodsReceived}' AND TODOCKEY = @Gr
         """,
         conn);
     xt.Parameters.Add("@Po", FbDbType.Integer).Value = poDocKey;

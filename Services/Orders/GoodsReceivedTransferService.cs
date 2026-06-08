@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using ApprovalPO.Helpers;
 using ApprovalPO.Services.SqlApi;
 
 namespace ApprovalPO.Services.Orders;
@@ -18,10 +19,15 @@ public interface IGoodsReceivedTransfer
     Task<bool> IsAvailableAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Transfers the full outstanding balance of the given PO to a new Goods Received document.
-    /// SQL Accounting enforces per-line balances; over-transfer is surfaced as <see cref="GrTransferResult.Error"/>.
+    /// Transfers PO lines to a new Goods Received document.
+    /// When <paramref name="lines"/> is provided, only those item codes and quantities are transferred (capped to outstanding balance).
+    /// When null or empty, transfers full outstanding balance on all transferable lines.
     /// </summary>
-    Task<GrTransferResult> TransferPoAsync(int docKey, string poNumber, CancellationToken cancellationToken = default);
+    Task<GrTransferResult> TransferPoAsync(
+        int docKey,
+        string poNumber,
+        IReadOnlyList<GrTransferLineRequest>? lines = null,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed class GoodsReceivedTransferService : IGoodsReceivedTransfer
@@ -43,14 +49,18 @@ public sealed class GoodsReceivedTransferService : IGoodsReceivedTransfer
     public async Task<bool> IsAvailableAsync(CancellationToken cancellationToken = default) =>
         await _api.IsAvailableAsync(cancellationToken).ConfigureAwait(false);
 
-    public async Task<GrTransferResult> TransferPoAsync(int docKey, string poNumber, CancellationToken cancellationToken = default)
+    public async Task<GrTransferResult> TransferPoAsync(
+        int docKey,
+        string poNumber,
+        IReadOnlyList<GrTransferLineRequest>? lines = null,
+        CancellationToken cancellationToken = default)
     {
         if (docKey <= 0)
             return GrTransferResult.Failure("Invalid PO document key.");
 
         try
         {
-            var firebird = await _firebird.TransferAsync(docKey, poNumber, cancellationToken).ConfigureAwait(false);
+            var firebird = await _firebird.TransferAsync(docKey, poNumber, lines, cancellationToken).ConfigureAwait(false);
             if (firebird.Ok)
                 return firebird;
 
@@ -63,10 +73,14 @@ public sealed class GoodsReceivedTransferService : IGoodsReceivedTransfer
             _logger.LogWarning(ex, "Firebird PO->GR transfer threw for {Po}; trying SQL API.", poNumber);
         }
 
-        return await TransferViaSqlApiAsync(docKey, poNumber, cancellationToken).ConfigureAwait(false);
+        return await TransferViaSqlApiAsync(docKey, poNumber, lines, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<GrTransferResult> TransferViaSqlApiAsync(int docKey, string poNumber, CancellationToken cancellationToken)
+    private async Task<GrTransferResult> TransferViaSqlApiAsync(
+        int docKey,
+        string poNumber,
+        IReadOnlyList<GrTransferLineRequest>? lines,
+        CancellationToken cancellationToken)
     {
         if (!await _api.IsAvailableAsync(cancellationToken).ConfigureAwait(false))
             return GrTransferResult.Unavailable();
@@ -80,13 +94,17 @@ public sealed class GoodsReceivedTransferService : IGoodsReceivedTransfer
         if (!TryReadPo(poResp.Body, out var po))
             return GrTransferResult.Failure("PO has no detail lines to transfer.");
 
+        var transferLines = SelectPoLinesForTransfer(po, lines);
+        if (transferLines.Count == 0)
+            return GrTransferResult.Failure("No matching PO lines to transfer for the scanned items.");
+
         var (startSeq, pad, prefix) = await NextGrDocNoSeedAsync(cancellationToken).ConfigureAwait(false);
 
         var today = DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         for (var seq = startSeq; seq < startSeq + 200; seq++)
         {
             var grDocNo = $"{prefix}{seq.ToString(CultureInfo.InvariantCulture).PadLeft(pad, '0')}";
-            var payload = BuildPayload(po, grDocNo, today);
+            var payload = BuildPayload(po with { Lines = transferLines }, grDocNo, today);
             var resp = await _api.SendAsync(HttpMethod.Post, "/goodsreceived", payload, cancellationToken).ConfigureAwait(false);
 
             if (resp.IsSuccess)
@@ -177,6 +195,29 @@ public sealed class GoodsReceivedTransferService : IGoodsReceivedTransfer
         }
     }
 
+    private static List<PoLine> SelectPoLinesForTransfer(PoDoc po, IReadOnlyList<GrTransferLineRequest>? lines)
+    {
+        if (lines is null || lines.Count == 0)
+            return po.Lines;
+
+        var byCode = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        foreach (var line in lines)
+        {
+            var code = (line.ItemCode ?? "").Trim();
+            if (code.Length == 0 || line.Quantity <= 0) continue;
+            byCode[code] = byCode.TryGetValue(code, out var existing) ? existing + line.Quantity : line.Quantity;
+        }
+
+        var result = new List<PoLine>();
+        foreach (var poLine in po.Lines)
+        {
+            if (!byCode.TryGetValue(poLine.ItemCode, out var qty)) continue;
+            result.Add(poLine with { Qty = qty.ToString(CultureInfo.InvariantCulture) });
+        }
+
+        return result;
+    }
+
     private static string BuildPayload(PoDoc po, string grDocNo, string today)
     {
         var detail = po.Lines.Select(l => new Dictionary<string, object?>
@@ -194,7 +235,7 @@ public sealed class GoodsReceivedTransferService : IGoodsReceivedTransfer
             ["irbm_classification"] = l.Irbm,
             ["deliverydate"] = today,
             // Transfer linkage back to the source PO line:
-            ["fromdoctype"] = "PO",
+            ["fromdoctype"] = SqlAccountingDocTypes.PurchaseOrder,
             ["fromdockey"] = po.DocKey,
             ["fromdtlkey"] = l.DtlKey,
             ["transferable"] = true,

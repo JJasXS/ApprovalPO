@@ -131,6 +131,8 @@ builder.Services.AddScoped<ApprovalPO.Services.Orders.IGoodsReceivedTransfer, Ap
 builder.Services.AddScoped<ApprovalPO.Services.MaintenanceScanner.IMaintenanceScannerService, ApprovalPO.Services.MaintenanceScanner.MaintenanceScannerService>();
 builder.Services.AddScoped<ApprovalPO.Services.Ocr.IOcrCaptureService, ApprovalPO.Services.Ocr.OcrCaptureService>();
 builder.Services.AddScoped<ApprovalPO.Services.Ocr.IOcrEmailSender, ApprovalPO.Services.Ocr.OcrEmailSender>();
+builder.Services.AddScoped<ApprovalPO.Services.Stock.IStockItemLookup, ApprovalPO.Services.Stock.StockItemLookupService>();
+builder.Services.AddScoped<ApprovalPO.Services.Ocr.OcrScanEnrichmentService>();
 builder.Services.AddHttpClient<ApprovalPO.Services.Ocr.IOpenAiVisionService, ApprovalPO.Services.Ocr.OpenAiVisionService>(client =>
 {
     var seconds = builder.Configuration.GetValue<int?>("OpenAi:TimeoutSeconds") ?? 120;

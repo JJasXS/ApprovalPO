@@ -792,4 +792,17 @@ public sealed class TenantDbConnectionResolver
                 return false;
         }
     }
+
+    /// <summary>Opens a tenant Firebird connection (caller disposes).</summary>
+    public async Task<FbConnection> OpenConnectionAsync(
+        IConfiguration configuration,
+        string? operation = null,
+        CancellationToken cancellationToken = default)
+    {
+        var tenant = TenantConfigurationHelper.RequireTenantCode(configuration, operation);
+        var connStr = await GetConnectionStringForTenantAsync(tenant, cancellationToken).ConfigureAwait(false);
+        var conn = new FbConnection(connStr);
+        await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
+        return conn;
+    }
 }

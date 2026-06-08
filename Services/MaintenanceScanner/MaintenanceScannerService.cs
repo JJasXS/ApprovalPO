@@ -161,7 +161,7 @@ ORDER BY DESCRIPTION", conn);
         if (string.IsNullOrEmpty(cleanCode))
             throw new ArgumentException("Code is required.", nameof(request));
 
-        var tenantCode = ResolveTenantCode();
+        var tenantCode = TenantConfigurationHelper.RequireTenantCode(_configuration, "Maintenance Scanner");
         await using var conn = await OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
 
         // Fetch item description (UI does not send it)
@@ -367,21 +367,12 @@ VALUES
 
     private async Task<FbConnection> OpenConnectionAsync(CancellationToken cancellationToken)
     {
-        var tenant = ResolveTenantCode();
+        var tenant = TenantConfigurationHelper.RequireTenantCode(_configuration, "Maintenance Scanner");
         var connStr = await _tenantResolver.GetConnectionStringForTenantAsync(tenant, cancellationToken).ConfigureAwait(false);
         var conn = new FbConnection(connStr);
         await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
         return conn;
     }
-
-    private string ResolveTenantCode()
-    {
-        var tenant = (_configuration["TenantBootstrap:TenantCode"] ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(tenant))
-            throw new InvalidOperationException("TenantBootstrap:TenantCode is required for Maintenance Scanner.");
-        return tenant;
-    }
-
     private static async Task<string?> QueryScalarStringAsync(
         FbConnection conn,
         string sql,

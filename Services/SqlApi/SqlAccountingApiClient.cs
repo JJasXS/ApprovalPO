@@ -47,7 +47,7 @@ public sealed class SqlAccountingApiClient : ISqlAccountingApi
         _logger = logger;
     }
 
-    private string TenantCode => (_configuration["TenantBootstrap:TenantCode"] ?? "").Trim();
+    private string TenantCode => TenantConfigurationHelper.GetTenantCodeOrEmpty(_configuration);
 
     public async Task<bool> IsAvailableAsync(CancellationToken cancellationToken = default)
     {

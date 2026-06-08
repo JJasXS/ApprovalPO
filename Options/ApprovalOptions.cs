@@ -59,6 +59,11 @@ public class ApprovalOptions
     public string? GoodsReceiptLinesSql { get; set; }
 
     /// <summary>
+    /// Seconds to cache the goods receipt list JSON per tenant; <c>0</c> disables. Default 5.
+    /// </summary>
+    public int GoodsReceiptListCacheSeconds { get; set; } = 5;
+
+    /// <summary>
     /// When false (default), only emails present on <c>SY_USER.EMAIL</c> (active per <c>ISACTIVE</c>) may request an OTP.
     /// Set true for local development without Firebird.
     /// </summary>

@@ -26,10 +26,20 @@ public class ScanPODetailModel : PageModel
     private readonly IOcrCaptureService _ocrCaptures;
     private readonly IOcrEmailSender _ocrEmail;
     private readonly IOpenAiVisionService _ocrVision;
+    private readonly OcrScanEnrichmentService _ocrEnrichment;
     private readonly Services.Orders.IGoodsReceivedTransfer _grTransfer;
     private readonly ILogger<ScanPODetailModel> _logger;
 
-    public ScanPODetailModel(IPurchaseOrderCatalog orders, IScanQrLinkResolver scanResolver, IScanPoSubmitStore scanSubmits, IOcrCaptureService ocrCaptures, IOcrEmailSender ocrEmail, IOpenAiVisionService ocrVision, Services.Orders.IGoodsReceivedTransfer grTransfer, ILogger<ScanPODetailModel> logger)
+    public ScanPODetailModel(
+        IPurchaseOrderCatalog orders,
+        IScanQrLinkResolver scanResolver,
+        IScanPoSubmitStore scanSubmits,
+        IOcrCaptureService ocrCaptures,
+        IOcrEmailSender ocrEmail,
+        IOpenAiVisionService ocrVision,
+        OcrScanEnrichmentService ocrEnrichment,
+        Services.Orders.IGoodsReceivedTransfer grTransfer,
+        ILogger<ScanPODetailModel> logger)
     {
         _orders = orders;
         _scanResolver = scanResolver;
@@ -37,6 +47,7 @@ public class ScanPODetailModel : PageModel
         _ocrCaptures = ocrCaptures;
         _ocrEmail = ocrEmail;
         _ocrVision = ocrVision;
+        _ocrEnrichment = ocrEnrichment;
         _grTransfer = grTransfer;
         _logger = logger;
     }
@@ -229,6 +240,8 @@ public class ScanPODetailModel : PageModel
         var hint = await BuildOcrAnalyzeHintAsync(docKey, poNumber, cancellationToken).ConfigureAwait(false);
 
         var result = await _ocrVision.AnalyzeAsync(bytes, contentType, hint, cancellationToken).ConfigureAwait(false);
+        if (result.Ok && result.Fields is not null)
+            await _ocrEnrichment.EnrichAsync(result.Fields, cancellationToken).ConfigureAwait(false);
 
         if (result.Ok && docKey > 0)
         {
@@ -261,7 +274,12 @@ public class ScanPODetailModel : PageModel
     /// Confirms the verified scan: transfers the PO to Goods Received in Firebird (PH_GR / ST_XTRANS),
     /// with SQL API as fallback when configured; otherwise records the scan locally.
     /// </summary>
-    public async Task<IActionResult> OnPostConfirmTransferAsync(int docKey, string? poNumber, string? scanCountsJson, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostConfirmTransferAsync(
+        int docKey,
+        string? poNumber,
+        string? scanCountsJson,
+        string? transferLinesJson,
+        CancellationToken cancellationToken)
     {
         if (docKey <= 0)
             return new JsonResult(new { ok = false, error = "Invalid document." }, JsonCamel);
@@ -273,13 +291,26 @@ public class ScanPODetailModel : PageModel
         if (order is null)
             return new JsonResult(new { ok = false, error = "PO not found or not approved." }, JsonCamel);
 
-        var counts = TryParseScanCounts(scanCountsJson);
+        var transferLines = TryParseTransferLines(transferLinesJson);
+        if (transferLines.Count == 0)
+            transferLines = TransferLinesFromScanCounts(TryParseScanCounts(scanCountsJson));
+
+        if (transferLines.Count == 0)
+        {
+            return new JsonResult(new
+            {
+                ok = false,
+                error = "No scanned lines to transfer. Run OCR analyze and ensure item codes and quantities are detected."
+            }, JsonCamel);
+        }
+
+        var counts = ScanCountsFromTransferLines(transferLines, TryParseScanCounts(scanCountsJson));
         var actor = ScanPoAuditHelper.FromUser(User);
 
         GrTransferOutcome outcome;
         try
         {
-            var result = await _grTransfer.TransferPoAsync(docKey, order.PoNumber, cancellationToken).ConfigureAwait(false);
+            var result = await _grTransfer.TransferPoAsync(docKey, order.PoNumber, transferLines, cancellationToken).ConfigureAwait(false);
             outcome = result.ApiAvailable
                 ? (result.Ok
                     ? GrTransferOutcome.Created(result.GrDocNo)
@@ -347,6 +378,75 @@ public class ScanPODetailModel : PageModel
         }
 
         return parts.Count == 0 ? null : string.Join(" ", parts);
+    }
+
+    private static IReadOnlyList<Services.Orders.GrTransferLineRequest> TryParseTransferLines(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return Array.Empty<Services.Orders.GrTransferLineRequest>();
+
+        try
+        {
+            var rows = JsonSerializer.Deserialize<List<TransferLineDto>>(json, JsonCamel);
+            if (rows is null || rows.Count == 0)
+                return Array.Empty<Services.Orders.GrTransferLineRequest>();
+
+            var list = new List<Services.Orders.GrTransferLineRequest>();
+            foreach (var row in rows)
+            {
+                var code = (row.ItemCode ?? "").Trim();
+                if (code.Length == 0) continue;
+                var qty = row.Quantity;
+                if (qty <= 0 && row.Qty > 0) qty = row.Qty;
+                if (qty <= 0) continue;
+                list.Add(new Services.Orders.GrTransferLineRequest(code, qty));
+            }
+
+            return list;
+        }
+        catch
+        {
+            return Array.Empty<Services.Orders.GrTransferLineRequest>();
+        }
+    }
+
+    private static IReadOnlyList<Services.Orders.GrTransferLineRequest> TransferLinesFromScanCounts(
+        IReadOnlyDictionary<string, int> scanCounts)
+    {
+        if (scanCounts.Count == 0)
+            return Array.Empty<Services.Orders.GrTransferLineRequest>();
+
+        return scanCounts
+            .Where(kv => !string.IsNullOrWhiteSpace(kv.Key) && kv.Value > 0)
+            .Select(kv => new Services.Orders.GrTransferLineRequest(kv.Key.Trim(), kv.Value))
+            .ToList();
+    }
+
+    private static IReadOnlyDictionary<string, int> ScanCountsFromTransferLines(
+        IReadOnlyList<Services.Orders.GrTransferLineRequest> transferLines,
+        IReadOnlyDictionary<string, int> fallback)
+    {
+        if (transferLines.Count == 0)
+            return fallback;
+
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var line in transferLines)
+        {
+            var code = (line.ItemCode ?? "").Trim();
+            if (code.Length == 0) continue;
+            var n = (int)Math.Round(line.Quantity, MidpointRounding.AwayFromZero);
+            if (n <= 0) continue;
+            counts[code] = n;
+        }
+
+        return counts;
+    }
+
+    private sealed class TransferLineDto
+    {
+        public string? ItemCode { get; set; }
+        public decimal Quantity { get; set; }
+        public decimal Qty { get; set; }
     }
 
     private static IReadOnlyDictionary<string, int> TryParseScanCounts(string? json)

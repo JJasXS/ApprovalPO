@@ -1,0 +1,15 @@
+﻿DELIVERY ORDER
+Acc No. : 400-10001
+Name : ITALY BEDDING DESIGN & SUPPLY
+Address : 25, Brickfields, 50470, KL
+Ship To : 1, Jalan Setia Dagang AK U13/AK, Setia Alam, 40170, Shah Alam, Selangor.
+DO No. : GR-00016
+Date : 04/06/2026
+Currency : MYR
+Delivery Mode : ----
+PAGE : 1 of 1
+
+Item	Item Code	Description	Customer P/O	Qty	Unit
+1	RL-Pillow	BAC	25.00	UNIT
+2	PMF-Pillow	Premium Pillow	20.00	UNIT
+3	PS-Pillow	Polyester Super Soft Pillow	10.00	UNIT

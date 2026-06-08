@@ -61,4 +61,12 @@ public static class FirebirdSchemaHelper
 
         return null;
     }
+
+    /// <summary><c>ST_XTRANS</c> (or similar) columns needed to link PO header to another document.</summary>
+    public static bool HasDocumentLinkColumns(HashSet<string>? columns) =>
+        columns is not null
+        && columns.Contains("FROMDOCKEY")
+        && columns.Contains("TODOCKEY")
+        && columns.Contains("FROMDOCTYPE")
+        && columns.Contains("TODOCTYPE");
 }

@@ -25,12 +25,16 @@ public sealed class PoToGoodsReceiptFirebirdTransferService
         _logger = logger;
     }
 
-    public async Task<GrTransferResult> TransferAsync(int poDocKey, string poNumber, CancellationToken cancellationToken = default)
+    public async Task<GrTransferResult> TransferAsync(
+        int poDocKey,
+        string poNumber,
+        IReadOnlyList<GrTransferLineRequest>? lines = null,
+        CancellationToken cancellationToken = default)
     {
         if (poDocKey <= 0)
             return GrTransferResult.Failure("Invalid PO document key.");
 
-        var tenant = RequireTenant();
+        var tenant = TenantConfigurationHelper.RequireTenantCode(_configuration);
         var connStr = await _tenantResolver.GetConnectionStringForTenantAsync(tenant, cancellationToken).ConfigureAwait(false);
 
         await using var conn = new FbConnection(connStr);
@@ -80,6 +84,7 @@ public sealed class PoToGoodsReceiptFirebirdTransferService
             var existingQty = await FetchExistingTransferQtyMapAsync(
                 conn, tx, poDocKey, detailIds, xtransCols, cancellationToken).ConfigureAwait(false);
 
+            var partialByCode = BuildPartialRequestMap(lines);
             var transfers = new List<(Dictionary<string, object?> Source, int PoDtlKey, decimal Qty)>();
             foreach (var line in poLines)
             {
@@ -96,11 +101,29 @@ public sealed class PoToGoodsReceiptFirebirdTransferService
                 var remaining = Money(sourceQty - already);
                 if (remaining <= 0) continue;
 
-                transfers.Add((line, dtlKey, remaining));
+                decimal transferQty;
+                if (partialByCode is not null)
+                {
+                    var itemCode = Clean(line.GetValueOrDefault("ITEMCODE"));
+                    if (string.IsNullOrEmpty(itemCode) || !partialByCode.TryGetValue(itemCode, out var requested))
+                        continue;
+                    transferQty = Money(Math.Min(requested, remaining));
+                    if (transferQty <= 0) continue;
+                }
+                else
+                {
+                    transferQty = remaining;
+                }
+
+                transfers.Add((line, dtlKey, transferQty));
             }
 
             if (transfers.Count == 0)
-                return GrTransferResult.Failure("No outstanding PO quantity remains to receive (or lines are not transferable).");
+            {
+                return partialByCode is not null
+                    ? GrTransferResult.Failure("No scanned items matched transferable PO lines with remaining quantity.")
+                    : GrTransferResult.Failure("No outstanding PO quantity remains to receive (or lines are not transferable).");
+            }
 
             var docno = await NextGrDocNoAsync(conn, tx, grHeaderCols, cancellationToken).ConfigureAwait(false);
             if (await GrDocNoExistsAsync(conn, tx, grHeaderCols, docno, cancellationToken).ConfigureAwait(false))
@@ -173,7 +196,7 @@ public sealed class PoToGoodsReceiptFirebirdTransferService
                     ["AMOUNT"] = (double)amount,
                     ["LOCALAMOUNT"] = (double)amount,
                     ["PRINTABLE"] = source.GetValueOrDefault("PRINTABLE") is null || CoerceBool(source.GetValueOrDefault("PRINTABLE")),
-                    ["FROMDOCTYPE"] = "PO",
+                    ["FROMDOCTYPE"] = SqlAccountingDocTypes.PurchaseOrder,
                     ["FROMDOCKEY"] = poDocKey,
                     ["FROMDTLKEY"] = poDtlKey,
                     ["TRANSFERABLE"] = true,
@@ -189,8 +212,8 @@ public sealed class PoToGoodsReceiptFirebirdTransferService
                 var xRow = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
                 {
                     ["CODE"] = supplierCode,
-                    ["FROMDOCTYPE"] = "PO",
-                    ["TODOCTYPE"] = "GR",
+                    ["FROMDOCTYPE"] = SqlAccountingDocTypes.PurchaseOrder,
+                    ["TODOCTYPE"] = SqlAccountingDocTypes.GoodsReceived,
                     ["FROMDOCKEY"] = poDocKey,
                     ["TODOCKEY"] = grDocKey,
                     ["FROMDTLKEY"] = poDtlKey,
@@ -272,7 +295,7 @@ public sealed class PoToGoodsReceiptFirebirdTransferService
             if (grHeaderCols.Contains("FROMDOCKEY"))
                 headerValues["FROMDOCKEY"] = poDocKey;
             if (grHeaderCols.Contains("FROMDOCTYPE"))
-                headerValues["FROMDOCTYPE"] = "PO";
+                headerValues["FROMDOCTYPE"] = SqlAccountingDocTypes.PurchaseOrder;
 
             await FirebirdTableWriter.InsertDynamicAsync(
                 conn, "PH_GR",
@@ -322,17 +345,6 @@ public sealed class PoToGoodsReceiptFirebirdTransferService
             return GrTransferResult.Failure(ex.Message);
         }
     }
-
-    private string RequireTenant()
-    {
-        var tenant = (_configuration["TenantBootstrap:TenantCode"] ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(tenant))
-            tenant = (_configuration["TENANT_CODE"] ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(tenant))
-            throw new InvalidOperationException("TenantBootstrap:TenantCode is required.");
-        return tenant;
-    }
-
     private static async Task<Dictionary<string, object?>?> LoadHeaderAsync(
         FbConnection conn,
         FbTransaction tx,
@@ -420,7 +432,7 @@ public sealed class PoToGoodsReceiptFirebirdTransferService
             """;
 
         await using var cmd = new FbCommand(sql, conn, tx);
-        cmd.Parameters.Add("@FromType", FbDbType.VarChar).Value = "PO";
+        cmd.Parameters.Add("@FromType", FbDbType.VarChar).Value = SqlAccountingDocTypes.PurchaseOrder;
         cmd.Parameters.Add("@FromKey", FbDbType.Integer).Value = poDocKey;
         for (var i = 0; i < detailIds.Count; i++)
             cmd.Parameters.Add($"@D{i}", FbDbType.Integer).Value = detailIds[i];
@@ -545,6 +557,25 @@ public sealed class PoToGoodsReceiptFirebirdTransferService
     }
 
     private static int EncodeStatus(int numericDraft) => numericDraft;
+
+    private static Dictionary<string, decimal>? BuildPartialRequestMap(IReadOnlyList<GrTransferLineRequest>? lines)
+    {
+        if (lines is null || lines.Count == 0)
+            return null;
+
+        var map = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        foreach (var line in lines)
+        {
+            var code = (line.ItemCode ?? "").Trim();
+            if (code.Length == 0 || line.Quantity <= 0) continue;
+            if (map.TryGetValue(code, out var existing))
+                map[code] = Money(existing + line.Quantity);
+            else
+                map[code] = Money(line.Quantity);
+        }
+
+        return map.Count == 0 ? null : map;
+    }
 
     private static Task<bool> GlobalDtlKeyInUseAsync(
         FbConnection conn,
