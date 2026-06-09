@@ -211,8 +211,13 @@ public sealed class GoodsReceivedTransferService : IGoodsReceivedTransfer
         var result = new List<PoLine>();
         foreach (var poLine in po.Lines)
         {
-            if (!byCode.TryGetValue(poLine.ItemCode, out var qty)) continue;
-            result.Add(poLine with { Qty = qty.ToString(CultureInfo.InvariantCulture) });
+            if (!byCode.TryGetValue(poLine.ItemCode, out var requested)) continue;
+            var poQty = decimal.TryParse(poLine.Qty, NumberStyles.Number, CultureInfo.InvariantCulture, out var pq)
+                ? pq
+                : 0m;
+            var transferQty = poQty > 0 ? Math.Min(requested, poQty) : requested;
+            if (transferQty <= 0) continue;
+            result.Add(poLine with { Qty = transferQty.ToString(CultureInfo.InvariantCulture) });
         }
 
         return result;

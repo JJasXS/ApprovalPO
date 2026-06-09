@@ -29,6 +29,8 @@ public sealed class OcrScanEnrichmentService
             if (string.IsNullOrEmpty(item.ScannedDescription))
                 item.ScannedDescription = item.Description;
 
+            // Item code is authoritative — description always comes from stock master (SQL API / ST_ITEM).
+            item.Code = lookup.Code;
             item.Description = lookup.Description;
             item.DescriptionSource = lookup.Source;
             item.DescriptionCorrected = !DescriptionsMatch(item.ScannedDescription, lookup.Description);

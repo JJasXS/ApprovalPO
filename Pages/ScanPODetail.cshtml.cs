@@ -291,8 +291,9 @@ public class ScanPODetailModel : PageModel
         if (order is null)
             return new JsonResult(new { ok = false, error = "PO not found or not approved." }, JsonCamel);
 
+        var usedOcrTransferPayload = !string.IsNullOrWhiteSpace(transferLinesJson);
         var transferLines = TryParseTransferLines(transferLinesJson);
-        if (transferLines.Count == 0)
+        if (transferLines.Count == 0 && !usedOcrTransferPayload)
             transferLines = TransferLinesFromScanCounts(TryParseScanCounts(scanCountsJson));
 
         if (transferLines.Count == 0)
@@ -301,6 +302,16 @@ public class ScanPODetailModel : PageModel
             {
                 ok = false,
                 error = "No scanned lines to transfer. Run OCR analyze and ensure item codes and quantities are detected."
+            }, JsonCamel);
+        }
+
+        transferLines = await ResolveTransferLinesAgainstPoAsync(docKey, transferLines, cancellationToken).ConfigureAwait(false);
+        if (transferLines.Count == 0)
+        {
+            return new JsonResult(new
+            {
+                ok = false,
+                error = "No scanned item codes matched this PO. Transfer only includes lines detected on the document with a matching item code."
             }, JsonCamel);
         }
 
@@ -378,6 +389,40 @@ public class ScanPODetailModel : PageModel
         }
 
         return parts.Count == 0 ? null : string.Join(" ", parts);
+    }
+
+    private async Task<IReadOnlyList<Services.Orders.GrTransferLineRequest>> ResolveTransferLinesAgainstPoAsync(
+        int docKey,
+        IReadOnlyList<Services.Orders.GrTransferLineRequest> lines,
+        CancellationToken cancellationToken)
+    {
+        var poLines = await _orders.GetPurchaseRequestLinesAsync(docKey, cancellationToken).ConfigureAwait(false);
+        if (poLines.Count == 0)
+            return lines;
+
+        var byCode = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in poLines)
+        {
+            var code = (row.ItemCode ?? "").Trim();
+            if (code.Length == 0) continue;
+            byCode.TryAdd(code, code);
+        }
+
+        var merged = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        foreach (var line in lines)
+        {
+            var scanned = (line.ItemCode ?? "").Trim();
+            if (scanned.Length == 0 || line.Quantity <= 0) continue;
+            if (!byCode.TryGetValue(scanned, out var poCode)) continue;
+
+            merged[poCode] = merged.TryGetValue(poCode, out var existing)
+                ? existing + line.Quantity
+                : line.Quantity;
+        }
+
+        return merged
+            .Select(kv => new Services.Orders.GrTransferLineRequest(kv.Key, kv.Value))
+            .ToList();
     }
 
     private static IReadOnlyList<Services.Orders.GrTransferLineRequest> TryParseTransferLines(string? json)

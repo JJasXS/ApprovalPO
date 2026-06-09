@@ -50,8 +50,81 @@ public sealed class StockItemLookupService : IStockItemLookup
         if (catalog is not null && catalog.TryGetValue(key, out var fromCatalog))
             return new StockItemLookupResult(trimmed, fromCatalog, "sqlApi");
 
+        var fromDetail = await LookupDirectApiAsync(trimmed, cancellationToken).ConfigureAwait(false);
+        if (fromDetail is not null)
+            return fromDetail;
+
         var fromDb = await LookupFirebirdAsync(trimmed, cancellationToken).ConfigureAwait(false);
         return fromDb is null ? null : new StockItemLookupResult(trimmed, fromDb, "firebird");
+    }
+
+    /// <summary>GET <c>/stockitem/{code}</c> — includes UDFs and works when the list endpoint is empty.</summary>
+    private async Task<StockItemLookupResult?> LookupDirectApiAsync(string code, CancellationToken cancellationToken)
+    {
+        if (!await _sqlApi.IsAvailableAsync(cancellationToken).ConfigureAwait(false))
+            return null;
+
+        var basePath = (_configuration["SqlApi:StockItemListPath"] ?? DefaultStockListPath).Trim().TrimEnd('/');
+        if (!basePath.StartsWith('/'))
+            basePath = "/" + basePath;
+
+        var path = $"{basePath}/{Uri.EscapeDataString(code)}";
+        var resp = await _sqlApi.SendAsync(HttpMethod.Get, path, null, cancellationToken).ConfigureAwait(false);
+        if (!resp.IsSuccess)
+        {
+            _logger.LogDebug("SQL API stock detail failed for {Code} ({Status}).", code, resp.Status);
+            return null;
+        }
+
+        if (!TryParseStockDetail(resp.Body, out var canonicalCode, out var description))
+            return null;
+
+        return new StockItemLookupResult(canonicalCode, description, "sqlApi");
+    }
+
+    private static bool TryParseStockDetail(string body, out string code, out string description)
+    {
+        code = "";
+        description = "";
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            var row = UnwrapStockRow(doc.RootElement);
+            if (row is null) return false;
+
+            code = PickString(row.Value, "code", "CODE", "itemcode", "ITEMCODE");
+            description = PickString(row.Value, "description", "DESCRIPTION");
+            if (string.IsNullOrWhiteSpace(code)) return false;
+            if (string.IsNullOrWhiteSpace(description))
+                description = code.Trim();
+            code = code.Trim();
+            description = description.Trim();
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static JsonElement? UnwrapStockRow(JsonElement root)
+    {
+        if (root.ValueKind == JsonValueKind.Object)
+        {
+            if (root.TryGetProperty("data", out var data))
+            {
+                if (data.ValueKind == JsonValueKind.Object) return data;
+                if (data.ValueKind == JsonValueKind.Array && data.GetArrayLength() > 0) return data[0];
+            }
+
+            if (PickString(root, "code", "CODE", "itemcode", "ITEMCODE").Length > 0)
+                return root;
+        }
+
+        if (root.ValueKind == JsonValueKind.Array && root.GetArrayLength() > 0)
+            return root[0];
+
+        return null;
     }
 
     private async Task<Dictionary<string, string>?> GetCatalogIndexAsync(CancellationToken cancellationToken)

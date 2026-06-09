@@ -275,11 +275,13 @@
     var lines = [];
     compare.rows.forEach(function (row) {
       if (row.kind !== 'po' || !row.scanned) return;
-      var code = (row.po && row.po.code ? row.po.code : row.scanned.code || '').trim();
-      if (!code) return;
+      var poCode = normToken(row.po && row.po.code);
+      var scanCode = normToken(row.scanned.code);
+      // Transfer only lines where OCR detected an item code that matches this PO line.
+      if (!poCode || !scanCode || !tokensMatch(poCode, scanCode)) return;
       var qty = parseQty(row.scanned.quantity);
       if (qty == null || qty <= 0) return;
-      lines.push({ itemCode: code, quantity: qty });
+      lines.push({ itemCode: (row.po.code || '').trim(), quantity: qty });
     });
     return lines;
   }
@@ -370,6 +372,7 @@
     var hasCode = !!normToken(poLine.code);
     var codeOk = hasCode && tokensMatch(normToken(poLine.code), normToken(scanned.code));
     if (hasCode && !codeOk) issues.push('Code');
+    // When item code matches, description is validated via stock master on the server (not OCR text).
     if (!codeOk && !descMatch(poLine.description, scanned.description)) issues.push('Description');
     if (!qtyMatch(poLine.qty, scanned.quantity)) issues.push('Qty');
     return issues;
@@ -532,8 +535,8 @@
         var allOk = c.poNumberMatch && c.accurateCount === c.totalPoLines && !c.rows.some(function (r) { return r.kind === 'extra'; });
         setStatus(
           allOk
-            ? ('All lines match the PO. Confirm will receive ' + transferN + ' of ' + c.totalPoLines + ' line(s).')
-            : ('Review red rows — confirm will receive ' + transferN + ' scanned line(s) with detected qty.'),
+            ? ('All lines match the PO. Confirm will transfer all ' + transferN + ' line(s).')
+            : ('Confirm will transfer only ' + transferN + ' scanned line(s) (of ' + c.totalPoLines + ' on PO) with detected qty — not the full PO.'),
           allOk ? 'ok' : 'warn'
         );
         if (aiBtn) { aiBtn.textContent = 'Re-analyze'; aiBtn.disabled = false; }
