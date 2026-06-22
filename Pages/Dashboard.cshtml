@@ -20,8 +20,12 @@
                 <span class="dash-brand-name">ProAcc Approvals</span>
             </div>
             <div class="dash-header-actions">
+                @if (!string.IsNullOrEmpty(Model.RoleLabel))
+                {
+                    <span class="dash-header-role" title="Your access role">@Model.RoleLabel</span>
+                }
                 <span class="dash-header-user">@userName</span>
-                <a href="/Logout" class="dash-signout-btn">Sign out</a>
+                <partial name="_LogoutForm" />
             </div>
         </div>
     </header>
@@ -156,8 +160,8 @@
             {
                 <div class="dash-card" style="pointer-events:none;opacity:.82;">
                     <div class="dash-card-body">
-                        <h2 class="dash-card-title">No modules enabled</h2>
-                        <p class="dash-card-desc">Please enable at least one dashboard module in the environment configuration.</p>
+                        <h2 class="dash-card-title">No modules available</h2>
+                        <p class="dash-card-desc">Your role or tenant configuration has no modules enabled. Contact your administrator if you need access.</p>
                     </div>
                 </div>
             }

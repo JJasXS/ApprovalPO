@@ -205,11 +205,12 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
         if (docKey <= 0)
             return Array.Empty<PurchaseRequestLineRow>();
 
-        var sql = string.IsNullOrWhiteSpace(_approval.Value.PurchaseRequestLinesSql)
-            ? DefaultPurchaseRequestLinesSql
-            : _approval.Value.PurchaseRequestLinesSql!;
-
         await using var conn = await _tenantResolver.OpenConnectionAsync(_configuration, "load PH_PODTL", cancellationToken).ConfigureAwait(false);
+
+        var sql = string.IsNullOrWhiteSpace(_approval.Value.PurchaseRequestLinesSql)
+            ? PhPoSqlBuilder.BuildDetailLinesSql(
+                await FirebirdSchemaHelper.GetColumnNamesAsync(conn, "PH_PODTL", cancellationToken).ConfigureAwait(false))
+            : _approval.Value.PurchaseRequestLinesSql!;
 
         await using var cmd = new FbCommand(sql, conn);
         cmd.Parameters.Add("@DocKey", FbDbType.Integer).Value = docKey;
@@ -260,6 +261,7 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
             UnitPrice = FirebirdDataReaderHelper.GetDecimal(reader, "UNITPRICE", "RATE"),
             LineAmount = FirebirdDataReaderHelper.GetDecimal(reader, "LINEAMOUNT", "AMOUNT", "TOTAL"),
             Transferable = FirebirdDataReaderHelper.GetBoolNullable(reader, "TRANSFERABLEINT", "TRANSFERABLE"),
+            Project = (FirebirdDataReaderHelper.GetString(reader, "PROJECT") ?? "").Trim(),
         };
     }
 }

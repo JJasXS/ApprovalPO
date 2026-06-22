@@ -1,8 +1,8 @@
 namespace ApprovalPO.Services.Ocr;
 
 /// <summary>
-/// Persists OCR capture images (and the recognized text) under wwwroot/ocr-captures.
-/// All OCR-related storage lives in this folder so the files are easy to identify.
+/// Persists OCR capture images (and recognized text) under <c>Data/ocr-captures</c>.
+/// Files are served only through an authorized endpoint, not as public static files.
 /// </summary>
 public interface IOcrCaptureService
 {

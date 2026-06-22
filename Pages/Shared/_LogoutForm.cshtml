@@ -1,0 +1,4 @@
+@* POST-only sign-out (avoids logout CSRF via GET links). *@
+<form method="post" asp-page="/Logout" class="dash-signout-form">
+    <button type="submit" class="dash-signout-btn">Sign out</button>
+</form>

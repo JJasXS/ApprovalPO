@@ -57,3 +57,7 @@ Thumbs.db
 # Local secrets and env (keep *.example committed)
 .env
 .env.*.local
+
+# OCR captures (private; served only when signed in)
+Data/ocr-captures/
+wwwroot/ocr-captures/

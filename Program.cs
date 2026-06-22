@@ -1,6 +1,7 @@
 using ApprovalPO.Authorization;
 using ApprovalPO.Configuration;
 using ApprovalPO.Hosting;
+using ApprovalPO.Services.Ocr;
 using ApprovalPO.Models;
 using ApprovalPO.Options;
 using ApprovalPO.Services;
@@ -11,12 +12,12 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.HttpOverrides;
 using System.Security.Cryptography.X509Certificates;
 
-// Optional .env: typically only TENANT_CODE (see appsettings / .env.example). All other config lives in appsettings.json.
-// Prefer exe folder first: Windows Services often have CurrentDirectory = System32, so publish\.env would be skipped if we checked CWD first.
+// Optional .env: TENANT_CODE, FIREBIRD_PASSWORD (see .env.example). Other defaults in appsettings.json.
+// Prefer project folder .env before publish/bin — dotnet exec runs from repo root but BaseDirectory is bin\.
 foreach (var envPath in new[]
          {
-             Path.Combine(AppContext.BaseDirectory, ".env"),
              Path.Combine(Directory.GetCurrentDirectory(), ".env"),
+             Path.Combine(AppContext.BaseDirectory, ".env"),
          })
 {
     if (File.Exists(envPath))
@@ -31,11 +32,17 @@ builder.Host.UseWindowsService();
 
 // Tenant id: use TENANT_CODE from environment (.env) only — always wins over appsettings when set.
 var tenantFromEnv = (Environment.GetEnvironmentVariable("TENANT_CODE") ?? builder.Configuration["TENANT_CODE"])?.Trim();
+var bootstrapFromEnv = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 if (!string.IsNullOrEmpty(tenantFromEnv))
-{
-    builder.Configuration.AddInMemoryCollection(
-        new Dictionary<string, string?> { ["TenantBootstrap:TenantCode"] = tenantFromEnv });
-}
+    bootstrapFromEnv["TenantBootstrap:TenantCode"] = tenantFromEnv;
+
+var fbPassFromEnv = (Environment.GetEnvironmentVariable("FIREBIRD_PASSWORD")
+    ?? Environment.GetEnvironmentVariable("TenantBootstrap__FirebirdPassword"))?.Trim();
+if (!string.IsNullOrEmpty(fbPassFromEnv))
+    bootstrapFromEnv["TenantBootstrap:FirebirdPassword"] = fbPassFromEnv;
+
+if (bootstrapFromEnv.Count > 0)
+    builder.Configuration.AddInMemoryCollection(bootstrapFromEnv);
 
 // Empty process env vars (TenantBootstrap__*) override appsettings with blanks — restore from appsettings*.json.
 TenantBootstrapJsonReinstate.Apply(builder.Configuration, builder.Environment.ContentRootPath);
@@ -120,6 +127,7 @@ builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IScanQrLinkResolver, ScanQrLinkResolver>();
 builder.Services.AddSingleton<IScanPoSubmitStore, ScanPoSubmitFileStore>();
 builder.Services.AddScoped<IPurchaseOrderCatalog, PurchaseOrderCatalogService>();
+builder.Services.AddScoped<ApprovalPO.Services.Orders.IPurchaseOrderScanQuery, ApprovalPO.Services.Orders.PurchaseOrderScanQueryService>();
 builder.Services.AddScoped<ISalesOrderCatalog, SalesOrderCatalogService>();
 builder.Services.AddScoped<IGoodsReceiptCatalog, GoodsReceiptCatalogService>();
 builder.Services.AddHttpClient<ApprovalPO.Services.SqlApi.ISqlAccountingApi, ApprovalPO.Services.SqlApi.SqlAccountingApiClient>(client =>
@@ -189,7 +197,10 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.HttpOnly = true;
         options.Cookie.IsEssential = true;
         options.Cookie.SameSite = SameSiteMode.Lax;
-        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        var cookieSecureAlways = builder.Configuration.GetValue("Approval:CookieSecureAlways", false);
+        options.Cookie.SecurePolicy = cookieSecureAlways
+            ? CookieSecurePolicy.Always
+            : CookieSecurePolicy.SameAsRequest;
     });
 
 builder.Services.AddAuthorization(options =>
@@ -207,13 +218,7 @@ var app = builder.Build();
 
 app.UseForwardedHeaders();
 
-app.Use(async (context, next) =>
-{
-    context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
-    context.Response.Headers.Append("X-Frame-Options", "SAMEORIGIN");
-    context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
-    await next();
-});
+app.UseApprovalSecurityHeaders();
 
 // Development: phone camera needs HTTPS — redirect LAN http → https (same path).
 if (app.Environment.IsDevelopment())
@@ -281,6 +286,25 @@ app.MapGet("/ScanPO/Detail", (HttpContext ctx) =>
         : Results.Redirect($"/ScanPODetail?docKey={Uri.EscapeDataString(docKey)}");
 });
 app.MapWebPushEndpoints();
+
+app.MapGet("/ocr-captures/{fileName}", (string fileName, HttpContext ctx, IWebHostEnvironment env) =>
+{
+    if (ctx.User.Identity?.IsAuthenticated != true)
+        return Results.Unauthorized();
+
+    var path = OcrCaptureService.ResolveAuthorizedFilePath(env, fileName);
+    if (path is null)
+        return Results.NotFound();
+
+    var ext = Path.GetExtension(path).ToLowerInvariant();
+    var contentType = ext switch
+    {
+        ".jpg" or ".jpeg" => "image/jpeg",
+        ".webp" => "image/webp",
+        _ => "image/png"
+    };
+    return Results.File(path, contentType);
+}).RequireAuthorization();
 
 async Task WarmupTenantConnectionStringAsync()
 {

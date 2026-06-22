@@ -7,6 +7,9 @@ namespace ApprovalPO.Services.Auth;
 public interface IModuleAccessService
 {
     Task<bool> IsAllowedAsync(ClaimsPrincipal user, PathString path, CancellationToken cancellationToken = default);
+
+    /// <summary>Module cards for the home dashboard (same rules as path middleware).</summary>
+    Task<DashboardModuleFlags> GetDashboardModulesAsync(ClaimsPrincipal user, CancellationToken cancellationToken = default);
 }
 
 internal sealed class ModuleAccessService : IModuleAccessService
@@ -46,6 +49,33 @@ internal sealed class ModuleAccessService : IModuleAccessService
             "receivedGoods" => modules.ReceivedGoods ?? true,
             "maintenanceScanner" => modules.MaintenanceScanner ?? true,
             _ => true
+        };
+    }
+
+    public async Task<DashboardModuleFlags> GetDashboardModulesAsync(
+        ClaimsPrincipal user,
+        CancellationToken cancellationToken = default)
+    {
+        var flags = new DashboardModuleFlags();
+        var tenantCode = (_configuration["TenantBootstrap:TenantCode"] ?? "").Trim();
+        if (tenantCode.Length == 0)
+            return flags;
+
+        var isMaintenance = user.IsInRole(ApprovalRoles.Maintenance);
+        var modules = await _tenantResolver
+            .GetTenantDashboardModulesForRoleAsync(tenantCode, isMaintenance, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (modules is null)
+            return flags;
+
+        return new DashboardModuleFlags
+        {
+            PurchaseApproval = modules.PurchaseApproval ?? true,
+            SalesApproval = modules.SalesApproval ?? true,
+            ScanPo = modules.ScanPo ?? true,
+            ReceivedGoods = modules.ReceivedGoods ?? true,
+            MaintenanceScanner = modules.MaintenanceScanner ?? true
         };
     }
 

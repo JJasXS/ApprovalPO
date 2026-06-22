@@ -42,7 +42,12 @@ public class OtpSessionStore
             lock (entry.LockObj)
             {
                 var now = DateTimeOffset.UtcNow;
-                if (entry.LockedUntil.HasValue && entry.LockedUntil.Value > now)
+                if (opt.OtpMaxSendsPerWindow <= 0 || opt.OtpMaxVerifyFailures <= 0)
+                {
+                    entry.LockedUntil = null;
+                    entry.SendTimestamps.Clear();
+                }
+                else if (entry.LockedUntil.HasValue && entry.LockedUntil.Value > now)
                 {
                     var mins = Math.Ceiling((entry.LockedUntil.Value - now).TotalMinutes);
                     return (false, $"Too many attempts. Try again in {(int)mins} minute(s).", null);
@@ -87,7 +92,8 @@ public class OtpSessionStore
             lock (entry.LockObj)
             {
                 var now = DateTimeOffset.UtcNow;
-                if (entry.LockedUntil.HasValue && entry.LockedUntil.Value > now)
+                if (opt.OtpMaxVerifyFailures > 0 &&
+                    entry.LockedUntil.HasValue && entry.LockedUntil.Value > now)
                 {
                     var mins = Math.Ceiling((entry.LockedUntil.Value - now).TotalMinutes);
                     return (false, $"Account temporarily locked. Try again in {(int)mins} minute(s).");
@@ -106,7 +112,7 @@ public class OtpSessionStore
                 if (entry.Otp != (otp ?? "").Trim())
                 {
                     entry.FailedVerifications++;
-                    if (entry.FailedVerifications >= opt.OtpMaxVerifyFailures)
+                    if (opt.OtpMaxVerifyFailures > 0 && entry.FailedVerifications >= opt.OtpMaxVerifyFailures)
                     {
                         entry.LockedUntil = now.AddMinutes(opt.OtpLockoutMinutes);
                         entry.Otp = null;

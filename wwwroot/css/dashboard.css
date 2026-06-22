@@ -84,6 +84,23 @@
   white-space: nowrap;
 }
 
+.dash-header-role {
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.dash-signout-form {
+  margin: 0;
+  padding: 0;
+  display: inline;
+}
+
 .dash-signout-btn {
   font-size: 13px;
   font-weight: 600;
@@ -93,6 +110,8 @@
   border: 1.5px solid #fca5a5;
   border-radius: 8px;
   background: #fff;
+  cursor: pointer;
+  font-family: inherit;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
   white-space: nowrap;
 }

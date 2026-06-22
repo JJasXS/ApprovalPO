@@ -9,7 +9,8 @@ namespace ApprovalPO.Pages;
 [AllowAnonymous]
 public class LogoutModel : PageModel
 {
-    public async Task<IActionResult> OnGetAsync() => await SignOutAndRedirectAsync().ConfigureAwait(false);
+    /// <summary>GET does not sign out (prevents logout CSRF via links).</summary>
+    public IActionResult OnGet() => RedirectToPage("/Dashboard");
 
     public async Task<IActionResult> OnPostAsync() => await SignOutAndRedirectAsync().ConfigureAwait(false);
 

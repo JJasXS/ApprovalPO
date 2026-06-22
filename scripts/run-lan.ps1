@@ -34,6 +34,18 @@ $env:ASPNETCORE_ENVIRONMENT = 'Development'
 $env:APPROVALPO_LISTEN_LAN = 'true'
 Remove-Item Env:ASPNETCORE_URLS -ErrorAction SilentlyContinue
 
+# Load .env into process env (TENANT_CODE, FIREBIRD_PASSWORD, AWS_*, etc.) before dotnet exec.
+$dotEnv = Join-Path $root '.env'
+if (Test-Path $dotEnv) {
+    Get-Content $dotEnv | ForEach-Object {
+        if ($_ -match '^\s*([^#=]+)=(.*)$') {
+            $name = $matches[1].Trim()
+            $value = $matches[2].Trim()
+            if ($name) { Set-Item -Path "Env:$name" -Value $value }
+        }
+    }
+}
+
 $httpPort = 2095
 $httpsPort = 2096
 $settingsPath = Join-Path $root 'appsettings.json'
@@ -47,10 +59,32 @@ if (Test-Path $settingsPath) {
 
 Write-Host "LAN mode: HTTP *:$httpPort, HTTPS *:$httpsPort" -ForegroundColor Cyan
 if ($ip) {
-    Write-Host "On your phone (same Wi-Fi):" -ForegroundColor Green
-    Write-Host "  http://${ip}:$httpPort/ScanPO   (Scan QR -> Take photo)"
-    Write-Host "  https://${ip}:$httpsPort/ScanPO  (live camera; optional)"
+    Write-Host "On your phone (same Wi-Fi, not guest network):" -ForegroundColor Green
+    Write-Host "  https://${ip}:$httpsPort/Login          (recommended; accept cert warning once)"
+    Write-Host "  https://${ip}:$httpsPort/Dashboard"
+    Write-Host "  https://${ip}:$httpsPort/ScanPO          (PO scanning - use HTTPS for live camera)"
+    Write-Host "  http://${ip}:$httpPort/Login            (HTTP; QR photo mode only on Scan)"
+} else {
+    Write-Host "Could not detect LAN IP - use ipconfig and your PC IPv4 address." -ForegroundColor Yellow
 }
+
+# Inbound firewall (Private profile) so phones can reach this PC - needs Admin; skip if denied.
+try {
+    foreach ($port in @($httpPort, $httpsPort)) {
+        $name = "ApprovalPO LAN TCP $port"
+        if (-not (Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue)) {
+            New-NetFirewallRule -DisplayName $name -Direction Inbound -Protocol TCP -LocalPort $port -Action Allow -Profile Private -ErrorAction Stop | Out-Null
+            Write-Host "Firewall: allowed inbound TCP $port (Private)" -ForegroundColor DarkGray
+        }
+    }
+} catch {
+    Write-Host "Firewall: could not add rules (run scripts\Open-LanFirewall.ps1 as Administrator if phone cannot connect)." -ForegroundColor Yellow
+}
+
+if (-not (Test-Path $dotEnv)) {
+    Write-Host 'Warning: .env missing - copy .env.example and set TENANT_CODE + FIREBIRD_PASSWORD for login.' -ForegroundColor Yellow
+}
+
 Write-Host ''
 
 dotnet exec $dll @args

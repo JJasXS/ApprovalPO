@@ -1,16 +1,19 @@
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace ApprovalPO.Services.Ocr;
 
 public sealed class OcrCaptureService : IOcrCaptureService
 {
-    /// <summary>Web-accessible folder under wwwroot that holds every OCR capture.</summary>
+    /// <summary>Folder name under <c>Data/</c> (not wwwroot — served only via authorized endpoint).</summary>
     public const string FolderName = "ocr-captures";
 
     private static readonly HashSet<string> AllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".png", ".jpg", ".jpeg", ".webp"
     };
+
+    private static readonly Regex SafeFileName = new(@"^[A-Za-z0-9._-]+$", RegexOptions.Compiled);
 
     private readonly IWebHostEnvironment _env;
     private readonly ILogger<OcrCaptureService> _logger;
@@ -20,6 +23,9 @@ public sealed class OcrCaptureService : IOcrCaptureService
         _env = env;
         _logger = logger;
     }
+
+    public static string GetStorageDirectory(IWebHostEnvironment env) =>
+        Path.Combine(env.ContentRootPath, "Data", FolderName);
 
     public async Task<OcrCaptureResult> SaveCaptureAsync(
         string? poNumber,
@@ -31,11 +37,7 @@ public sealed class OcrCaptureService : IOcrCaptureService
     {
         try
         {
-            var webRoot = _env.WebRootPath;
-            if (string.IsNullOrWhiteSpace(webRoot))
-                webRoot = Path.Combine(_env.ContentRootPath, "wwwroot");
-
-            var dir = Path.Combine(webRoot, FolderName);
+            var dir = GetStorageDirectory(_env);
             Directory.CreateDirectory(dir);
 
             var ext = Path.GetExtension(originalFileName ?? string.Empty);
@@ -58,13 +60,37 @@ public sealed class OcrCaptureService : IOcrCaptureService
             }
 
             _logger.LogInformation("Saved OCR capture {File} for PO {Po} (docKey {DocKey}).", imageFileName, poNumber, docKey);
-            return new OcrCaptureResult(true, imageFileName, $"/{FolderName}/{imageFileName}", null);
+            var url = $"/ocr-captures/{Uri.EscapeDataString(imageFileName)}";
+            return new OcrCaptureResult(true, imageFileName, url, null);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to save OCR capture for PO {Po} (docKey {DocKey}).", poNumber, docKey);
             return new OcrCaptureResult(false, null, null, "Could not save the captured image.");
         }
+    }
+
+    /// <summary>Resolves a safe file under the capture directory; null when invalid or missing.</summary>
+    public static string? ResolveAuthorizedFilePath(IWebHostEnvironment env, string fileName)
+    {
+        var trimmed = (fileName ?? "").Trim();
+        var safe = Path.GetFileName(trimmed);
+        if (safe.Length == 0 || safe != trimmed)
+            return null;
+
+        if (!SafeFileName.IsMatch(safe))
+            return null;
+
+        var ext = Path.GetExtension(safe);
+        if (string.IsNullOrEmpty(ext) || !AllowedExtensions.Contains(ext))
+            return null;
+
+        var full = Path.GetFullPath(Path.Combine(GetStorageDirectory(env), safe));
+        var root = Path.GetFullPath(GetStorageDirectory(env));
+        if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase) || !File.Exists(full))
+            return null;
+
+        return full;
     }
 
     private static string BuildBaseName(string? poNumber, int docKey)

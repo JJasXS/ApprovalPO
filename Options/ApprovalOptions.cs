@@ -7,6 +7,9 @@ public class ApprovalOptions
     /// <summary>Auth cookie sliding session length (hours).</summary>
     public int SessionHours { get; set; } = 2;
 
+    /// <summary>When true, auth cookie uses <c>Secure</c> even on HTTP (set when HTTPS is always used).</summary>
+    public bool CookieSecureAlways { get; set; }
+
     /// <summary>PO amount at or above triggers extra confirm before approve.</summary>
     public decimal HighValueAmountThreshold { get; set; } = 5000m;
 

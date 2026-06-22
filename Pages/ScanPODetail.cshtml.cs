@@ -1,26 +1,20 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using ApprovalPO.Helpers;
 using ApprovalPO.Models;
 using ApprovalPO.Services;
 using ApprovalPO.Services.Ocr;
+using ApprovalPO.Services.Orders;
+using ApprovalPO.Services.Scan;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace ApprovalPO.Pages;
 
+[ValidateAntiForgeryToken]
 public class ScanPODetailModel : PageModel
 {
-    private static readonly JsonSerializerOptions JsonCamel = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-    };
-
-    // Test recipient for the "Send in email" OCR button.
-    private const string OcrEmailRecipient = "jason.choo2004@gmail.com";
-
     private readonly IPurchaseOrderCatalog _orders;
+    private readonly IPurchaseOrderScanQuery _scanQuery;
     private readonly IScanQrLinkResolver _scanResolver;
     private readonly IScanPoSubmitStore _scanSubmits;
     private readonly IOcrCaptureService _ocrCaptures;
@@ -32,6 +26,7 @@ public class ScanPODetailModel : PageModel
 
     public ScanPODetailModel(
         IPurchaseOrderCatalog orders,
+        IPurchaseOrderScanQuery scanQuery,
         IScanQrLinkResolver scanResolver,
         IScanPoSubmitStore scanSubmits,
         IOcrCaptureService ocrCaptures,
@@ -42,6 +37,7 @@ public class ScanPODetailModel : PageModel
         ILogger<ScanPODetailModel> logger)
     {
         _orders = orders;
+        _scanQuery = scanQuery;
         _scanResolver = scanResolver;
         _scanSubmits = scanSubmits;
         _ocrCaptures = ocrCaptures;
@@ -66,10 +62,7 @@ public class ScanPODetailModel : PageModel
         if (DocKey <= 0)
             return RedirectToPage("/ScanPO");
 
-        var all = await _orders.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
-        Order = all.FirstOrDefault(o =>
-            o.DocKey == DocKey &&
-            string.Equals(o.Status, "Approved", StringComparison.OrdinalIgnoreCase));
+        Order = await _scanQuery.GetApprovedByDocKeyAsync(DocKey, cancellationToken).ConfigureAwait(false);
 
         if (Order is null)
             return Page();
@@ -78,42 +71,114 @@ public class ScanPODetailModel : PageModel
         IsScanSubmitted = state.IsSubmitted;
         ViewData["ScanSubmitted"] = IsScanSubmitted;
 
-        Lines = await _orders.GetPurchaseRequestLinesAsync(DocKey, cancellationToken).ConfigureAwait(false);
+        Lines = ScanPoProjectHelper.EnrichDerivedProjects(
+            await _orders.GetPurchaseRequestLinesAsync(DocKey, cancellationToken).ConfigureAwait(false));
         return Page();
     }
 
-    public async Task<IActionResult> OnGetResolveScanAsync(string url, [FromQuery] string[]? codes, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetResolveScanAsync(
+        string url,
+        int docKey,
+        [FromQuery] string[]? codes,
+        CancellationToken cancellationToken)
     {
-        var result = await _scanResolver.ResolveAsync(url ?? "", codes, cancellationToken).ConfigureAwait(false);
-        return new JsonResult(result);
+        IReadOnlyList<string> hints = codes ?? [];
+        PurchaseOrderRow? order = null;
+        IReadOnlyList<PurchaseRequestLineRow> poLines = [];
+
+        if (docKey > 0)
+        {
+            order = await _scanQuery.GetApprovedByDocKeyAsync(docKey, cancellationToken).ConfigureAwait(false);
+            if (order is null)
+            {
+                return new JsonResult(new ScanQrResolveResult
+                {
+                    Scanned = url ?? "",
+                    Error = "Purchase order not found or not approved.",
+                    ErrorCode = "po_not_found"
+                });
+            }
+
+            poLines = ScanPoProjectHelper.EnrichDerivedProjects(
+                await _orders.GetPurchaseRequestLinesAsync(docKey, cancellationToken).ConfigureAwait(false));
+            hints = poLines
+                .Select(l => (l.ItemCode ?? "").Trim())
+                .Where(c => c.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        var result = await _scanResolver.ResolveAsync(url ?? "", hints, cancellationToken).ConfigureAwait(false);
+        if (docKey <= 0 || order is null)
+            return new JsonResult(result);
+
+        var itemCode = (result.ItemCode ?? "").Trim();
+        if (string.IsNullOrEmpty(itemCode))
+            return new JsonResult(result);
+
+        var scanProject = result.ScanLocation ?? "";
+        var matchedRow = ScanPoValidationHelper.MatchPoLine(poLines, itemCode, scanProject);
+        if (matchedRow is null)
+        {
+            var sameItem = poLines.Where(l => ScanPoValidationHelper.ItemCodesMatch(itemCode, l.ItemCode)).ToList();
+            var errorCode = sameItem.Count > 1 && string.IsNullOrWhiteSpace(scanProject)
+                ? "need_project"
+                : "not_on_po";
+            var error = errorCode switch
+            {
+                "need_project" =>
+                    $"Item {itemCode} is on multiple project lines on {order.PoNumber}. Scan a label that includes the project (P1, P2, …).",
+                _ when !string.IsNullOrWhiteSpace(scanProject) =>
+                    $"No line for {itemCode} on project {scanProject.Trim()} on purchase order {order.PoNumber}.",
+                _ => $"Item {itemCode} is not on purchase order {order.PoNumber}."
+            };
+
+            return new JsonResult(new ScanQrResolveResult
+            {
+                Scanned = result.Scanned,
+                ItemCode = itemCode,
+                ScanLocation = result.ScanLocation,
+                Error = error,
+                ErrorCode = errorCode,
+                Source = result.Source,
+                SearchedCodes = hints
+            });
+        }
+
+        return new JsonResult(new ScanQrResolveResult
+        {
+            Scanned = result.Scanned,
+            ItemCode = matchedRow.ItemCode,
+            ScanQuantity = result.ScanQuantity,
+            ScanLocation = matchedRow.Project,
+            LineNo = matchedRow.LineNo,
+            Source = result.Source,
+            SearchedCodes = hints
+        });
     }
 
     public async Task<IActionResult> OnGetScanStateAsync(int docKey, CancellationToken cancellationToken)
     {
         if (docKey <= 0)
-            return new JsonResult(new ScanPoSubmissionState(), JsonCamel);
+            return new JsonResult(new ScanPoSubmissionState(), ApprovalJson.CamelCase);
 
         var state = await _scanSubmits.GetStateAsync(docKey, cancellationToken).ConfigureAwait(false);
-        return new JsonResult(state, JsonCamel);
+        return new JsonResult(state, ApprovalJson.CamelCase);
     }
 
     public async Task<IActionResult> OnPostSaveDraftAsync(int docKey, string? scanCountsJson, CancellationToken cancellationToken)
     {
         if (docKey <= 0)
-            return new JsonResult(new { ok = false }, JsonCamel);
+            return new JsonResult(new { ok = false }, ApprovalJson.CamelCase);
 
-        var all = await _orders.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
-        var order = all.FirstOrDefault(o =>
-            o.DocKey == docKey &&
-            string.Equals(o.Status, "Approved", StringComparison.OrdinalIgnoreCase));
-
+        var order = await _scanQuery.GetApprovedByDocKeyAsync(docKey, cancellationToken).ConfigureAwait(false);
         if (order is null)
-            return new JsonResult(new { ok = false, error = "PO not found." }, JsonCamel);
+            return new JsonResult(new { ok = false, error = "PO not found." }, ApprovalJson.CamelCase);
 
         var counts = TryParseScanCounts(scanCountsJson);
         var actor = ScanPoAuditHelper.FromUser(User);
         await _scanSubmits.SaveDraftAsync(docKey, order.PoNumber, counts, actor, cancellationToken).ConfigureAwait(false);
-        return new JsonResult(new { ok = true }, JsonCamel);
+        return new JsonResult(new { ok = true }, ApprovalJson.CamelCase);
     }
 
     public async Task<IActionResult> OnPostSubmitAsync(int docKey, string? scanCountsJson, CancellationToken cancellationToken)
@@ -121,10 +186,7 @@ public class ScanPODetailModel : PageModel
         if (docKey <= 0)
             return RedirectToPage("/ScanPO");
 
-        var all = await _orders.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
-        var order = all.FirstOrDefault(o =>
-            o.DocKey == docKey &&
-            string.Equals(o.Status, "Approved", StringComparison.OrdinalIgnoreCase));
+        var order = await _scanQuery.GetApprovedByDocKeyAsync(docKey, cancellationToken).ConfigureAwait(false);
 
         if (order is null)
             return RedirectToPage("/ScanPO");
@@ -145,8 +207,7 @@ public class ScanPODetailModel : PageModel
         if (docKey <= 0)
             return RedirectToPage("/ScanPO");
 
-        var all = await _orders.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
-        var order = all.FirstOrDefault(o => o.DocKey == docKey);
+        var order = await _scanQuery.GetApprovedByDocKeyAsync(docKey, cancellationToken).ConfigureAwait(false);
         var poNumber = order?.PoNumber ?? "";
 
         var actor = ScanPoAuditHelper.FromUser(User);
@@ -162,12 +223,12 @@ public class ScanPODetailModel : PageModel
     public async Task<IActionResult> OnPostOcrCaptureAsync(int docKey, string? poNumber, string? ocrText, IFormFile? image, CancellationToken cancellationToken)
     {
         if (image is null || image.Length == 0)
-            return new JsonResult(new { ok = false, error = "No image received." }, JsonCamel);
+            return new JsonResult(new { ok = false, error = "No image received." }, ApprovalJson.CamelCase);
 
         // Guard against oversized uploads (phone photos are typically 2-6 MB).
         const long maxBytes = 15L * 1024 * 1024;
         if (image.Length > maxBytes)
-            return new JsonResult(new { ok = false, error = "Image too large (max 15 MB)." }, JsonCamel);
+            return new JsonResult(new { ok = false, error = "Image too large (max 15 MB)." }, ApprovalJson.CamelCase);
 
         await using var stream = image.OpenReadStream();
         var result = await _ocrCaptures
@@ -180,7 +241,7 @@ public class ScanPODetailModel : PageModel
             url = result.Url,
             fileName = result.FileName,
             error = result.Error
-        }, JsonCamel);
+        }, ApprovalJson.CamelCase);
     }
 
     public async Task<IActionResult> OnPostOcrEmailAsync(int docKey, string? poNumber, string? ocrText, IFormFile? image, CancellationToken cancellationToken)
@@ -193,7 +254,7 @@ public class ScanPODetailModel : PageModel
         {
             const long maxBytes = 15L * 1024 * 1024;
             if (image.Length > maxBytes)
-                return new JsonResult(new { ok = false, error = "Image too large (max 15 MB)." }, JsonCamel);
+                return new JsonResult(new { ok = false, error = "Image too large (max 15 MB)." }, ApprovalJson.CamelCase);
 
             using var ms = new MemoryStream();
             await image.CopyToAsync(ms, cancellationToken).ConfigureAwait(false);
@@ -210,24 +271,30 @@ public class ScanPODetailModel : PageModel
             "--- Recognized text ---\r\n" +
             (string.IsNullOrWhiteSpace(ocrText) ? "(No text detected)" : ocrText.Trim());
 
+        var to = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+            ?? User.Identity?.Name
+            ?? "";
+        if (string.IsNullOrWhiteSpace(to))
+            return new JsonResult(new { ok = false, error = "Your account has no email address for OCR delivery." }, ApprovalJson.CamelCase);
+
         var (sent, error) = await _ocrEmail
-            .SendAsync(OcrEmailRecipient, subject, body, bytes, fileName, contentType, cancellationToken)
+            .SendAsync(to.Trim(), subject, body, bytes, fileName, contentType, cancellationToken)
             .ConfigureAwait(false);
 
-        return new JsonResult(new { ok = sent, to = OcrEmailRecipient, error }, JsonCamel);
+        return new JsonResult(new { ok = sent, to, error }, ApprovalJson.CamelCase);
     }
 
     public async Task<IActionResult> OnPostOcrAnalyzeAsync(int docKey, string? poNumber, IFormFile? image, CancellationToken cancellationToken)
     {
         if (image is null || image.Length == 0)
-            return new JsonResult(new { ok = false, error = "No image received." }, JsonCamel);
+            return new JsonResult(new { ok = false, error = "No image received." }, ApprovalJson.CamelCase);
 
         const long maxBytes = 15L * 1024 * 1024;
         if (image.Length > maxBytes)
-            return new JsonResult(new { ok = false, error = "Image too large (max 15 MB)." }, JsonCamel);
+            return new JsonResult(new { ok = false, error = "Image too large (max 15 MB)." }, ApprovalJson.CamelCase);
 
         if (!_ocrVision.IsConfigured)
-            return new JsonResult(new { ok = false, error = "AI OCR is not configured on the server." }, JsonCamel);
+            return new JsonResult(new { ok = false, error = "AI OCR is not configured on the server." }, ApprovalJson.CamelCase);
 
         byte[] bytes;
         using (var ms = new MemoryStream())
@@ -267,7 +334,7 @@ public class ScanPODetailModel : PageModel
             cleanedText = result.CleanedText,
             fields = result.Fields,
             error = result.Error
-        }, JsonCamel);
+        }, ApprovalJson.CamelCase);
     }
 
     /// <summary>
@@ -282,19 +349,19 @@ public class ScanPODetailModel : PageModel
         CancellationToken cancellationToken)
     {
         if (docKey <= 0)
-            return new JsonResult(new { ok = false, error = "Invalid document." }, JsonCamel);
+            return new JsonResult(new { ok = false, error = "Invalid document." }, ApprovalJson.CamelCase);
 
-        var all = await _orders.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
-        var order = all.FirstOrDefault(o =>
-            o.DocKey == docKey &&
-            string.Equals(o.Status, "Approved", StringComparison.OrdinalIgnoreCase));
+        var order = await _scanQuery.GetApprovedByDocKeyAsync(docKey, cancellationToken).ConfigureAwait(false);
         if (order is null)
-            return new JsonResult(new { ok = false, error = "PO not found or not approved." }, JsonCamel);
+            return new JsonResult(new { ok = false, error = "PO not found or not approved." }, ApprovalJson.CamelCase);
 
         var usedOcrTransferPayload = !string.IsNullOrWhiteSpace(transferLinesJson);
         var transferLines = TryParseTransferLines(transferLinesJson);
         if (transferLines.Count == 0 && !usedOcrTransferPayload)
-            transferLines = TransferLinesFromScanCounts(TryParseScanCounts(scanCountsJson));
+        {
+            var poLines = await _orders.GetPurchaseRequestLinesAsync(docKey, cancellationToken).ConfigureAwait(false);
+            transferLines = TransferLinesFromScanCounts(TryParseScanCounts(scanCountsJson), poLines);
+        }
 
         if (transferLines.Count == 0)
         {
@@ -302,7 +369,7 @@ public class ScanPODetailModel : PageModel
             {
                 ok = false,
                 error = "No scanned lines to transfer. Run OCR analyze and ensure item codes and quantities are detected."
-            }, JsonCamel);
+            }, ApprovalJson.CamelCase);
         }
 
         transferLines = await ResolveTransferLinesAgainstPoAsync(docKey, transferLines, cancellationToken).ConfigureAwait(false);
@@ -312,7 +379,7 @@ public class ScanPODetailModel : PageModel
             {
                 ok = false,
                 error = "No scanned item codes matched this PO. Transfer only includes lines detected on the document with a matching item code."
-            }, JsonCamel);
+            }, ApprovalJson.CamelCase);
         }
 
         var counts = ScanCountsFromTransferLines(transferLines, TryParseScanCounts(scanCountsJson));
@@ -336,7 +403,7 @@ public class ScanPODetailModel : PageModel
 
         // A genuine SQL rejection (e.g. balance/validation) should be shown, not silently recorded.
         if (outcome.Kind == GrTransferOutcomeKind.Failed)
-            return new JsonResult(new { ok = false, mode = "gr", error = outcome.Error ?? "Transfer was rejected by SQL." }, JsonCamel);
+            return new JsonResult(new { ok = false, mode = "gr", error = outcome.Error ?? "Transfer was rejected by SQL." }, ApprovalJson.CamelCase);
 
         // Created in SQL, or recorded locally (no SQL API on this company): mark the scan submitted locally.
         await _scanSubmits.MarkSubmittedAsync(docKey, order.PoNumber, counts, actor, cancellationToken).ConfigureAwait(false);
@@ -349,7 +416,7 @@ public class ScanPODetailModel : PageModel
                 mode = "gr",
                 grDocNo = outcome.GrDocNo,
                 message = $"Goods Received {outcome.GrDocNo} created from {order.PoNumber}."
-            }, JsonCamel);
+            }, ApprovalJson.CamelCase);
         }
 
         return new JsonResult(new
@@ -357,7 +424,7 @@ public class ScanPODetailModel : PageModel
             ok = true,
             mode = "local",
             message = $"Scan confirmed for {order.PoNumber}. (Goods Received API is not enabled for this company yet, so it was recorded locally.)"
-        }, JsonCamel);
+        }, ApprovalJson.CamelCase);
     }
 
     private enum GrTransferOutcomeKind { Created, Local, Failed }
@@ -432,7 +499,7 @@ public class ScanPODetailModel : PageModel
 
         try
         {
-            var rows = JsonSerializer.Deserialize<List<TransferLineDto>>(json, JsonCamel);
+            var rows = JsonSerializer.Deserialize<List<TransferLineDto>>(json, ApprovalJson.CamelCase);
             if (rows is null || rows.Count == 0)
                 return Array.Empty<Services.Orders.GrTransferLineRequest>();
 
@@ -456,13 +523,35 @@ public class ScanPODetailModel : PageModel
     }
 
     private static IReadOnlyList<Services.Orders.GrTransferLineRequest> TransferLinesFromScanCounts(
-        IReadOnlyDictionary<string, int> scanCounts)
+        IReadOnlyDictionary<string, int> scanCounts,
+        IReadOnlyList<PurchaseRequestLineRow>? poLines = null)
     {
         if (scanCounts.Count == 0)
             return Array.Empty<Services.Orders.GrTransferLineRequest>();
 
+        if (poLines is { Count: > 0 })
+        {
+            var fromLines = new List<Services.Orders.GrTransferLineRequest>();
+            foreach (var line in poLines)
+            {
+                var key = ScanPoValidationHelper.LineScanKey(line.LineNo);
+                if (!scanCounts.TryGetValue(key, out var n) || n <= 0)
+                    continue;
+                var code = (line.ItemCode ?? "").Trim();
+                if (code.Length == 0)
+                    continue;
+                fromLines.Add(new Services.Orders.GrTransferLineRequest(code, n));
+            }
+
+            if (fromLines.Count > 0)
+                return fromLines;
+        }
+
         return scanCounts
-            .Where(kv => !string.IsNullOrWhiteSpace(kv.Key) && kv.Value > 0)
+            .Where(kv =>
+                !string.IsNullOrWhiteSpace(kv.Key) &&
+                kv.Value > 0 &&
+                !kv.Key.StartsWith("L:", StringComparison.OrdinalIgnoreCase))
             .Select(kv => new Services.Orders.GrTransferLineRequest(kv.Key.Trim(), kv.Value))
             .ToList();
     }

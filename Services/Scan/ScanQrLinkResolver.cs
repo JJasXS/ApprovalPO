@@ -1,5 +1,7 @@
+using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using ApprovalPO.Helpers;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace ApprovalPO.Services.Scan;
@@ -16,6 +18,13 @@ public sealed class ScanQrResolveResult
 {
     public string Scanned { get; init; } = "";
     public string? ItemCode { get; init; }
+    /// <summary>Qty from semicolon payloads (field 4), when present.</summary>
+    public decimal? ScanQuantity { get; init; }
+    public string? DocumentCode { get; init; }
+    /// <summary>Pallet / bin from semicolon payloads (e.g. P1).</summary>
+    public string? ScanLocation { get; init; }
+    /// <summary>Matched <c>PH_PODTL.SEQ</c> when scanning on a PO detail page.</summary>
+    public int? LineNo { get; init; }
     public string Source { get; init; } = "";
     public string? Error { get; init; }
     /// <summary>Stable code for UI: <c>empty_scan</c>, <c>resolve_failed</c>, <c>no_code_on_page</c>.</summary>
@@ -64,15 +73,43 @@ public sealed class ScanQrLinkResolver(IHttpClientFactory httpClientFactory, IMe
         if (cache.TryGetValue(cacheKey, out ScanQrResolveResult? cached) && cached is not null)
             return cached;
 
+        if (raw.Contains(';', StringComparison.Ordinal) &&
+            ScanPayloadParser.TryParse(raw, hints) is { } semicolonFirst)
+        {
+            return Remember(cacheKey, new ScanQrResolveResult
+            {
+                Scanned = raw,
+                ItemCode = semicolonFirst.ItemCode,
+                ScanQuantity = semicolonFirst.Quantity,
+                ScanLocation = semicolonFirst.Location,
+                Source = "semicolon-format",
+                SearchedCodes = hints
+            });
+        }
+
         if (!Uri.TryCreate(raw, UriKind.Absolute, out var uri) ||
             (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
         {
-            var direct = MatchKnownCode(raw, hints) ?? raw;
+            if (ScanPayloadParser.TryParse(raw, hints) is { } parsed)
+            {
+                return Remember(cacheKey, new ScanQrResolveResult
+                {
+                    Scanned = raw,
+                    ItemCode = parsed.ItemCode,
+                    ScanQuantity = parsed.Quantity,
+                    ScanLocation = parsed.Location,
+                    Source = "semicolon-format",
+                    SearchedCodes = hints
+                });
+            }
+
+            var matched = MatchKnownCode(raw, hints);
+            var direct = matched ?? raw;
             return Remember(cacheKey, new ScanQrResolveResult
             {
                 Scanned = raw,
                 ItemCode = direct,
-                Source = MatchKnownCode(raw, hints) is not null ? "text-match" : "raw",
+                Source = matched is not null ? "text-match" : "raw",
                 SearchedCodes = hints
             });
         }
@@ -142,6 +179,8 @@ public sealed class ScanQrLinkResolver(IHttpClientFactory httpClientFactory, IMe
             {
                 Scanned = scanned,
                 ItemCode = page.Code,
+                ScanQuantity = page.ScanQuantity,
+                ScanLocation = page.ScanLocation,
                 Source = page.Source,
                 FinalUrl = page.FinalUrl,
                 HttpStatus = page.HttpStatus,
@@ -181,7 +220,9 @@ public sealed class ScanQrLinkResolver(IHttpClientFactory httpClientFactory, IMe
         string? FinalUrl = null,
         int? HttpStatus = null,
         string? ContentType = null,
-        string? PagePreview = null);
+        string? PagePreview = null,
+        decimal? ScanQuantity = null,
+        string? ScanLocation = null);
 
     private static List<string> NormalizeKnownCodes(IReadOnlyList<string>? knownItemCodes)
     {
@@ -206,10 +247,37 @@ public sealed class ScanQrLinkResolver(IHttpClientFactory httpClientFactory, IMe
         if (string.IsNullOrEmpty(haystack) || hints.Count == 0)
             return null;
 
+        string? best = null;
+        var bestLen = 0;
         foreach (var code in hints)
         {
-            if (ContainsCode(haystack, code))
-                return code;
+            if (!ContainsCode(haystack, code))
+                continue;
+            if (code.Length > bestLen)
+            {
+                best = code;
+                bestLen = code.Length;
+            }
+        }
+
+        return best;
+    }
+
+    private static PageFetchResult? TryParseBarcodeFromText(string text, List<string> hints)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
+        foreach (var line in ExtractScanLines(text))
+        {
+            if (ScanPayloadParser.TryParse(line, hints) is not { } parsed)
+                continue;
+
+            return new PageFetchResult(
+                Code: parsed.ItemCode,
+                Source: "semicolon-format",
+                ScanQuantity: parsed.Quantity,
+                ScanLocation: parsed.Location);
         }
 
         return null;
@@ -294,11 +362,22 @@ public sealed class ScanQrLinkResolver(IHttpClientFactory httpClientFactory, IMe
 
         if (hints.Count > 0)
         {
+            var text = HtmlToText(body);
+            var fromBarcode = TryParseBarcodeFromText(text, hints) ?? TryParseBarcodeFromText(body, hints);
+            if (fromBarcode is not null)
+                return meta with
+                {
+                    Code = fromBarcode.Code,
+                    Source = fromBarcode.Source,
+                    ScanQuantity = fromBarcode.ScanQuantity,
+                    ScanLocation = fromBarcode.ScanLocation,
+                    PagePreview = TruncatePreview(text)
+                };
+
             var onPage = MatchKnownCode(body, hints);
             if (!string.IsNullOrEmpty(onPage))
                 return meta with { Code = onPage, Source = "page-match" };
 
-            var text = HtmlToText(body);
             onPage = MatchKnownCode(text, hints);
             if (!string.IsNullOrEmpty(onPage))
                 return meta with { Code = onPage, Source = "page-text-match", PagePreview = TruncatePreview(text) };
@@ -344,6 +423,23 @@ public sealed class ScanQrLinkResolver(IHttpClientFactory httpClientFactory, IMe
         return t[..MaxPreviewChars] + "… (truncated)";
     }
 
+    private static IEnumerable<string> ExtractScanLines(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            yield break;
+
+        foreach (var line in text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var trimmed = line.Trim();
+            if (trimmed.Contains(';', StringComparison.Ordinal))
+                yield return trimmed;
+        }
+
+        var compact = text.Trim();
+        if (compact.Contains(';', StringComparison.Ordinal))
+            yield return compact;
+    }
+
     private static string HtmlToText(string html)
     {
         var s = ScriptStrip.Replace(html, " ");
@@ -356,7 +452,32 @@ public sealed class ScanQrLinkResolver(IHttpClientFactory httpClientFactory, IMe
     private static bool IsBlockedHost(Uri uri)
     {
         if (uri.IsLoopback) return true;
-        return string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase);
+        if (string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (IPAddress.TryParse(uri.Host, out var ip))
+            return IsPrivateOrReserved(ip);
+
+        return false;
+    }
+
+    private static bool IsPrivateOrReserved(IPAddress ip)
+    {
+        if (IPAddress.IsLoopback(ip)) return true;
+
+        var bytes = ip.GetAddressBytes();
+        if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && bytes.Length == 4)
+        {
+            // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, link-local 169.254.0.0/16
+            if (bytes[0] == 10) return true;
+            if (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) return true;
+            if (bytes[0] == 192 && bytes[1] == 168) return true;
+            if (bytes[0] == 169 && bytes[1] == 254) return true;
+            if (bytes[0] == 127) return true;
+            if (bytes[0] == 0) return true;
+        }
+
+        return false;
     }
 
     private static string? TryJson(string body)

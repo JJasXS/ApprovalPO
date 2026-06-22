@@ -24,4 +24,7 @@ public sealed class PurchaseRequestLineRow
 
     /// <summary>Shown as <c>Sct</c> in the review grid; maps to <c>PH_PODTL.TRANSFERABLE</c>.</summary>
     public bool? Transferable { get; set; }
+
+    /// <summary><c>PH_PODTL.PROJECT</c> (e.g. P1, P2) when present.</summary>
+    public string Project { get; set; } = "";
 }

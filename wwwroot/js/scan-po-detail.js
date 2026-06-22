@@ -15,7 +15,7 @@
   const docKey = String(cfg.dataset.docKey || new URLSearchParams(location.search).get('docKey') || '');
   const poNumber = cfg.dataset.poNumber || '';
   const isSubmitted = cfg.dataset.isSubmitted === 'true';
-  const storageKey = docKey ? `approvalpo-scan-session-${docKey}` : '';
+  const storageKey = docKey ? `approvalpo-scan-lines-v2-${docKey}` : '';
   const offlineKey = docKey ? `approvalpo-scan-offline-${docKey}` : '';
   const requireAllLines = cfg.dataset.requireAllLines !== 'false';
   const csrfToken = cfg.dataset.csrfToken || '';
@@ -29,15 +29,132 @@
   const toastRoot = document.getElementById('scanToastRoot');
   const linesTableBody = document.querySelector('.scan-lines-table tbody');
 
+  if (docKey && typeof ScanResolve.clearCachedForDoc === 'function') {
+    ScanResolve.clearCachedForDoc(docKey);
+  }
+
   /** @type {Record<string, number>} */
   let scanCounts = {};
-  /** @type {{ code: string }[]} */
+  /** @type {{ lineKey: string, code: string, project: string, count: number }[]} */
   let scanHistory = [];
   let draftTimer = null;
   let readOnly = isSubmitted;
 
   const lineRows = () =>
-    Array.from(document.querySelectorAll('.scan-lines-table tbody tr[data-item-code]'));
+    Array.from(document.querySelectorAll('.scan-lines-table tbody tr[data-line-no]'));
+
+  const lineKey = (row) => `L:${String(row?.dataset?.lineNo || '').trim()}`;
+
+  const projectNorm = (s) => String(s ?? '').trim().replace(/\s+/g, '');
+
+  const projectMatches = (rowProject, scanProject) => {
+    const a = projectNorm(rowProject);
+    const b = projectNorm(scanProject);
+    if (!b) return !a;
+    return a.toLowerCase() === b.toLowerCase();
+  };
+
+  const findRowByLineNo = (lineNo) =>
+    lineRows().find((r) => String(r.dataset.lineNo) === String(lineNo));
+
+  const findRowsByItemProject = (code, project) =>
+    lineRows().filter(
+      (r) =>
+        ScanResolve.codesEqual(code, r.dataset.itemCode) &&
+        projectMatches(r.dataset.project, project)
+    );
+
+  const pickScanRow = (code, project, lineNo) => {
+    const candidates = findRowsByItemProject(code, project);
+    if (!candidates.length) return null;
+
+    if (lineNo != null) {
+      const byNo = candidates.find((r) => String(r.dataset.lineNo) === String(lineNo));
+      if (byNo && (scanCounts[lineKey(byNo)] || 0) === 0) return byNo;
+    }
+
+    return candidates.find((r) => (scanCounts[lineKey(r)] || 0) === 0) || candidates[0];
+  };
+
+  const applyParsedBarcode = (local, opts = {}) => {
+    const proj = (local.location || '').trim();
+    if (!projectNorm(proj)) return false;
+
+    const row = pickScanRow(local.itemCode, proj, null);
+    if (!row) return false;
+
+    const qtyRaw = local.quantity;
+    const increment =
+      qtyRaw != null && Number(qtyRaw) > 1
+        ? Math.min(9999, Math.floor(Number(qtyRaw)))
+        : 1;
+    recordScan(row, { noFeedback: true, incrementBy: increment });
+    return { row, increment, proj };
+  };
+
+  const tryLocalBarcodeScan = (raw, opts = {}) => {
+    const trimmed = String(raw || '').trim();
+    if (!trimmed.includes(';')) return null;
+
+    const parseAll = ScanResolve.parseSemicolonPayloadAll || ScanResolve.parseSemicolonPayload;
+    const allParsed = typeof ScanResolve.parseSemicolonPayloadAll === 'function'
+      ? ScanResolve.parseSemicolonPayloadAll(trimmed, knownItemCodes())
+      : [ScanResolve.parseSemicolonPayload(trimmed, knownItemCodes())].filter(Boolean);
+
+    if (!allParsed.length) return null;
+
+    if (allParsed.length > 1) {
+      const hits = [];
+      for (const local of allParsed) {
+        const hit = applyParsedBarcode(local, opts);
+        if (hit) hits.push(hit);
+      }
+      if (hits.length > 0) {
+        if (!opts.silent && !opts.fromQueue) {
+          showToast(`Matched ${hits.length} PO line(s) from QR`, 'ok');
+        }
+        return { handled: true, ok: true };
+      }
+      if (!opts.silent) {
+        showScanError('not_on_po', 'None of the QR lines match this PO.');
+      }
+      return { handled: true, ok: false };
+    }
+
+    const local = allParsed[0];
+    const proj = (local.location || '').trim();
+    if (!projectNorm(proj)) {
+      if (!opts.silent) {
+        showScanError('need_project', 'Scan a label that includes the project (P1, P2, …).');
+      }
+      return { handled: true, ok: false };
+    }
+
+    const row = pickScanRow(local.itemCode, proj, null);
+    if (!row) {
+      if (!opts.silent) {
+        showScanError('not_on_po', `${local.itemCode} @ ${proj} is not on this PO.`);
+      }
+      return { handled: true, ok: false };
+    }
+
+    const qtyRaw = local.quantity;
+    const increment =
+      qtyRaw != null && Number(qtyRaw) > 1
+        ? Math.min(9999, Math.floor(Number(qtyRaw)))
+        : 1;
+    recordScan(row, { noFeedback: opts.fromQueue, incrementBy: increment });
+    if (!opts.silent && !opts.fromQueue) {
+      const displayProj = (row.dataset.project || proj || '').trim();
+      const locPart = displayProj ? ` @ ${displayProj}` : '';
+      const msg =
+        increment > 1
+          ? `Matched: ${local.itemCode}${locPart} (${increment} qty)`
+          : `Matched: ${local.itemCode}${locPart}`;
+      showToast(msg, 'ok');
+    }
+    return { handled: true, ok: true };
+  };
 
   const knownItemCodes = () =>
     lineRows()
@@ -47,7 +164,7 @@
   const totalLines = () => lineRows().length;
 
   const linesWithScan = () =>
-    lineRows().filter((row) => (scanCounts[(row.dataset.itemCode || '').trim()] || 0) > 0).length;
+    lineRows().filter((row) => (scanCounts[lineKey(row)] || 0) > 0).length;
 
   const totalScans = () =>
     Object.values(scanCounts).reduce((sum, n) => sum + (Number(n) || 0), 0);
@@ -127,10 +244,14 @@
         return d && d.length < 120
           ? d
           : 'QR/link opened, but no item code was found on that page.';
+      case 'need_project':
+        return d || 'This item appears on multiple project lines. Scan a QR that includes P1, P2, etc.';
       case 'not_on_po':
-        return d
-          ? `Item code ${d} is not on this purchase order.`
-          : 'That item code is not on this purchase order.';
+        return d || 'That item / project is not on this purchase order.';
+      case 'wrong_po':
+        return d || 'This QR belongs to a different purchase order. Open the correct PO and scan again.';
+      case 'po_not_found':
+        return 'This purchase order is not found or not approved.';
       case 'empty_scan':
         return 'Empty scan — try again.';
       case 'already_submitted':
@@ -275,11 +396,38 @@
         total > 0 ? `${withScan} of ${total} lines scanned` : '';
     }
     updateUndoButton();
+    updateScanButton();
+  };
+
+  const updateScanButton = () => {
+    if (!scanBtn || readOnly) return;
+    const total = totalLines();
+    const allDone = requireAllLines && total > 0 && linesWithScan() >= total;
+    if (allDone) {
+      scanBtn.setAttribute('disabled', 'disabled');
+      scanBtn.setAttribute('title', 'All lines scanned');
+    } else {
+      scanBtn.removeAttribute('disabled');
+      scanBtn.removeAttribute('title');
+    }
+  };
+
+  const canOpenScanner = () => {
+    if (readOnly) {
+      showScanError('already_submitted');
+      return false;
+    }
+    if (requireAllLines && totalLines() > 0 && linesWithScan() >= totalLines()) {
+      showToast('All lines already scanned.', 'ok');
+      return false;
+    }
+    return true;
   };
 
   const syncRowVisuals = (row) => {
+    const key = lineKey(row);
+    const count = scanCounts[key] || 0;
     const code = (row.dataset.itemCode || '').trim();
-    const count = scanCounts[code] || 0;
     const tick = row.querySelector('.scan-line-tick');
     row.classList.toggle('scan-line-scanned', count > 0);
     if (tick) {
@@ -287,7 +435,9 @@
       tick.classList.toggle('is-done', count > 0);
       tick.classList.toggle('is-actionable', count > 0 && !readOnly);
       if (count > 0 && !readOnly) {
-        tick.setAttribute('title', `Remove one scan (${count} on this line)`);
+        const proj = (row.dataset.project || '').trim();
+        const label = proj ? `${code} (${proj})` : code;
+        tick.setAttribute('title', `Remove one scan for ${label} (${count} recorded)`);
         tick.setAttribute('role', 'button');
         tick.setAttribute('tabindex', '0');
       } else {
@@ -305,12 +455,13 @@
 
   const unscanLine = (row, opts = {}) => {
     if (readOnly) return false;
+    const key = lineKey(row);
     const code = (row.dataset.itemCode || '').trim();
-    const n = scanCounts[code] || 0;
+    const n = scanCounts[key] || 0;
     if (n <= 0) return false;
 
-    if (n === 1) delete scanCounts[code];
-    else scanCounts[code] = n - 1;
+    if (n === 1) delete scanCounts[key];
+    else scanCounts[key] = n - 1;
 
     saveLocalSession();
     scheduleDraftSave();
@@ -318,8 +469,10 @@
     updateProgress();
 
     if (!opts.quiet) {
+      const proj = (row.dataset.project || '').trim();
+      const label = proj ? `${code} (${proj})` : code;
       showToast(
-        n === 1 ? `Removed scan for ${code}.` : `Removed one scan for ${code} (${n - 1} left).`,
+        n === 1 ? `Removed scan for ${label}.` : `Removed one scan for ${label} (${n - 1} left).`,
         'info'
       );
     }
@@ -328,10 +481,19 @@
 
   const recordScan = (row, opts = {}) => {
     if (readOnly) return;
+    const key = lineKey(row);
     const code = (row.dataset.itemCode || '').trim();
-    if (!code) return;
-    scanCounts[code] = (scanCounts[code] || 0) + 1;
-    if (!opts.skipHistory) scanHistory.push({ code });
+    if (!key || key === 'L:') return;
+    const increment = Math.max(1, Math.min(9999, Math.floor(Number(opts.incrementBy) || 1)));
+    scanCounts[key] = (scanCounts[key] || 0) + increment;
+    if (!opts.skipHistory) {
+      scanHistory.push({
+        lineKey: key,
+        code,
+        project: (row.dataset.project || '').trim(),
+        count: increment,
+      });
+    }
     saveLocalSession();
     scheduleDraftSave();
     syncRowVisuals(row);
@@ -351,14 +513,25 @@
     if (readOnly) return;
     while (scanHistory.length > 0) {
       const entry = scanHistory.pop();
-      const code = entry?.code;
-      if (!code) continue;
-      const row = lineRows().find((r) =>
-        ScanResolve.codesMatch(code, r.dataset.itemCode)
-      );
-      if (row && (scanCounts[(row.dataset.itemCode || '').trim()] || 0) > 0) {
-        unscanLine(row, { quiet: true });
-        showToast(`Undid last scan (${code}).`, 'info');
+      const key = entry?.lineKey;
+      const count = Math.max(1, Math.floor(Number(entry?.count) || 1));
+      if (!key) continue;
+      const row = lineRows().find((r) => lineKey(r) === key);
+      const current = scanCounts[key] || 0;
+      if (row && current > 0) {
+        const remove = Math.min(count, current);
+        if (remove >= current) delete scanCounts[key];
+        else scanCounts[key] = current - remove;
+        saveLocalSession();
+        scheduleDraftSave();
+        syncRowVisuals(row);
+        updateProgress();
+        const proj = entry?.project || '';
+        const label = proj ? `${entry.code} (${proj})` : entry.code;
+        showToast(
+          remove > 1 ? `Undid last scan (${label}, ${remove} qty).` : `Undid last scan (${label}).`,
+          'info'
+        );
         updateUndoButton();
         return;
       }
@@ -424,7 +597,7 @@
     const err = String(resolved.error || resolved.Error || '').trim();
     if (!err) return 'no_code_on_page';
     if (/empty scan/i.test(err)) return 'empty_scan';
-    if (/could not read link|resolve failed/i.test(err)) return 'resolve_failed';
+    if (/need project|multiple project/i.test(err)) return 'need_project';
     if (/no item code|none of this po/i.test(err)) return 'no_code_on_page';
     return 'resolve_failed';
   };
@@ -437,10 +610,13 @@
       return false;
     }
 
+    const localResult = tryLocalBarcodeScan(trimmed, opts);
+    if (localResult?.handled) return localResult.ok;
+
     let resolved;
     try {
       if (!resolveUrl) throw new Error('Resolve API not configured.');
-      resolved = await ScanResolve.resolve(resolveUrl, trimmed, knownItemCodes());
+      resolved = await ScanResolve.resolve(resolveUrl, trimmed, knownItemCodes(), { docKey });
     } catch (e) {
       if (!navigator.onLine || (e && e.name === 'TypeError')) {
         enqueueOffline(trimmed);
@@ -453,9 +629,37 @@
     }
 
     const code = (resolved.itemCode || resolved.ItemCode || '').trim();
+    const lineNo = resolved.lineNo ?? resolved.LineNo;
+    const scanProject = (resolved.scanLocation || resolved.ScanLocation || '').trim();
     const err = resolved.error || resolved.Error;
 
     if (err && !code) {
+      if (!opts.silent) {
+        showScanError(classifyResolveError(resolved), err);
+      }
+      return false;
+    }
+
+    if (err && code) {
+      const local = ScanResolve.parseSemicolonPayload(trimmed, knownItemCodes());
+      const localProject = (local?.location || '').trim();
+      const localRow = local?.itemCode && projectNorm(localProject)
+        ? pickScanRow(local.itemCode, localProject, null)
+        : null;
+      if (localRow) {
+        const qtyRaw = local.quantity ?? resolved.scanQuantity ?? resolved.ScanQuantity;
+        const increment =
+          qtyRaw != null && Number(qtyRaw) > 1
+            ? Math.min(9999, Math.floor(Number(qtyRaw)))
+            : 1;
+        recordScan(localRow, { noFeedback: opts.fromQueue, incrementBy: increment });
+        if (!opts.silent && !opts.fromQueue) {
+          const proj = (localRow.dataset.project || localProject || '').trim();
+          const locPart = proj ? ` @ ${proj}` : '';
+          showToast(`Matched: ${local.itemCode}${locPart}`, 'ok');
+        }
+        return true;
+      }
       if (!opts.silent) {
         showScanError(classifyResolveError(resolved), err);
       }
@@ -467,33 +671,60 @@
       return false;
     }
 
-    const matchRow = lineRows().find((row) => ScanResolve.codesMatch(code, row.dataset.itemCode));
+    if (!projectNorm(scanProject)) {
+      const sameItemRows = lineRows().filter((r) => ScanResolve.codesEqual(code, r.dataset.itemCode));
+      if (sameItemRows.length > 1) {
+        if (!opts.silent) {
+          showScanError('need_project', 'This item is on multiple lines. Scan a label that includes P1, P2, …');
+        }
+        return false;
+      }
+    }
+
+    let matchRow = pickScanRow(code, scanProject, lineNo);
     if (matchRow) {
-      recordScan(matchRow, { noFeedback: opts.fromQueue });
+      const qtyRaw = resolved.scanQuantity ?? resolved.ScanQuantity;
+      const increment =
+        qtyRaw != null && Number(qtyRaw) > 1
+          ? Math.min(9999, Math.floor(Number(qtyRaw)))
+          : 1;
+      recordScan(matchRow, { noFeedback: opts.fromQueue, incrementBy: increment });
       if (!opts.silent && !opts.fromQueue) {
-        showToast(`Matched: ${code}`, 'ok');
+        const proj = (matchRow.dataset.project || scanProject || '').trim();
+        const locPart = proj ? ` @ ${proj}` : '';
+        const msg =
+          increment > 1
+            ? `Matched: ${code}${locPart} (${increment} qty)`
+            : `Matched: ${code}${locPart}`;
+        showToast(msg, 'ok');
       }
       return true;
     }
 
-    if (!opts.silent) showScanError('not_on_po', code);
+    if (!opts.silent) showScanError('not_on_po', err || code);
     return false;
   };
 
   const qr = typeof ScanQrScanner !== 'undefined'
     ? ScanQrScanner.create({
-        closeOnDetect: false,
-        onDetected(text, meta) {
+        closeOnDetect: true,
+        debounceMs: 600,
+        onDetected(text) {
           const t = (text || '').trim();
           if (!t) return;
-          void processScan(t).then((ok) => {
-            if (!meta?.keepOpen && ok) qr.close();
+          void processScan(t).finally(() => {
+            qr.close();
           });
         },
       })
     : null;
 
-  if (qr && scanBtn) qr.bindButton(scanBtn);
+  if (qr && scanBtn) {
+    scanBtn.addEventListener('click', () => {
+      if (!canOpenScanner()) return;
+      qr.open();
+    });
+  }
 
   const runManual = () => {
     const code = (manualInput?.value || '').trim();
