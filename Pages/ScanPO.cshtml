@@ -50,6 +50,10 @@
         {
             <p class="scan-flash scan-flash--ok" role="status">@submitMsg</p>
         }
+        @if (TempData["ScanSubmitError"] is string submitError && !string.IsNullOrWhiteSpace(submitError))
+        {
+            <p class="scan-flash scan-flash--error" role="alert">@submitError</p>
+        }
 
         <p id="scanHttpsBanner" class="scan-https-banner" hidden role="note">
             For live QR camera, use HTTPS:

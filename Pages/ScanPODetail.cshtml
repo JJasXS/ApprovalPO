@@ -185,6 +185,11 @@
                 </div>
             }
 
+            @if (TempData["ScanSubmitError"] is string submitError && !string.IsNullOrWhiteSpace(submitError))
+            {
+                <p class="scan-flash scan-flash--error" role="alert">@submitError</p>
+            }
+
             <div class="scan-detail-actions">
                 <a asp-page="/ScanPO" class="scan-detail-back-btn">&#8592; Back to list</a>
                 @if (!scanSubmitted)

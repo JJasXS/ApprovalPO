@@ -159,6 +159,12 @@ body {
   border: 1px solid #86efac;
 }
 
+.scan-flash--error {
+  color: #991b1b;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
 .scan-https-banner {
   margin: 0 0 12px;
   padding: 10px 12px;
@@ -780,6 +786,13 @@ body {
   background: linear-gradient(180deg, #bae6fd 0%, #7dd3fc 100%);
   border-color: #38bdf8;
   box-shadow: 0 3px 10px rgba(14, 165, 233, 0.25);
+}
+
+.scan-detail-submit-btn.is-busy {
+  pointer-events: none;
+  background: #c7dfe9;
+  border-color: #94aace;
+  color: #1e3a5f;
 }
 
 .scan-detail-submit-btn:active {

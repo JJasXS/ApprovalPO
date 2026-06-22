@@ -280,42 +280,33 @@ public sealed class GoodsReceivedTransferService : IGoodsReceivedTransfer
     /// <summary>Scans existing GR docnos to seed the next number. Returns (startSeq, padWidth, prefix).</summary>
     private async Task<(int Start, int Pad, string Prefix)> NextGrDocNoSeedAsync(CancellationToken cancellationToken)
     {
-        var prefix = "GR-";
-        var pad = 5;
-        var max = 0;
         try
         {
             var resp = await _api.SendAsync(HttpMethod.Get, "/goodsreceived", null, cancellationToken).ConfigureAwait(false);
-            if (resp.IsSuccess)
+            if (!resp.IsSuccess)
+                return (1, GrNumbering.DefaultPad, GrNumbering.DefaultPrefix);
+
+            using var doc = JsonDocument.Parse(resp.Body);
+            var root = doc.RootElement;
+            var rows = root.ValueKind == JsonValueKind.Object && root.TryGetProperty("data", out var d) && d.ValueKind == JsonValueKind.Array
+                ? d
+                : (root.ValueKind == JsonValueKind.Array ? root : default);
+
+            var docnos = new List<string?>();
+            if (rows.ValueKind == JsonValueKind.Array)
             {
-                using var doc = JsonDocument.Parse(resp.Body);
-                var root = doc.RootElement;
-                var rows = root.ValueKind == JsonValueKind.Object && root.TryGetProperty("data", out var d) && d.ValueKind == JsonValueKind.Array
-                    ? d
-                    : (root.ValueKind == JsonValueKind.Array ? root : default);
-                if (rows.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var r in rows.EnumerateArray())
-                    {
-                        var dn = Str(r, "docno");
-                        var dash = dn.LastIndexOf('-');
-                        if (dash < 0) continue;
-                        var head = dn[..(dash + 1)];
-                        var tail = dn[(dash + 1)..];
-                        if (int.TryParse(tail, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n))
-                        {
-                            if (n > max) { max = n; prefix = head; pad = tail.Length; }
-                        }
-                    }
-                }
+                foreach (var r in rows.EnumerateArray())
+                    docnos.Add(Str(r, "docno"));
             }
+
+            var (max, pad, prefix) = GrNumbering.SeedFromStrings(docnos);
+            return (max + 1, pad, prefix);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Could not seed next GR number; starting from 1.");
+            return (1, GrNumbering.DefaultPad, GrNumbering.DefaultPrefix);
         }
-
-        return (max + 1, pad, prefix);
     }
 
     private static string? ReadDocNo(string body)

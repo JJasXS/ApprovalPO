@@ -456,32 +456,24 @@ public sealed class PoToGoodsReceiptFirebirdTransferService
         CancellationToken cancellationToken)
     {
         var docnoCol = FirebirdSchemaHelper.PickColumn(grHeaderCols, "DOCNO");
-        var prefix = $"GR-{DateTime.UtcNow:yyyyMMdd}-";
         if (docnoCol is null)
-            return $"{prefix}0001";
+            return GrNumbering.BuildNextDocNo(0, GrNumbering.DefaultPad, GrNumbering.DefaultPrefix);
 
-        var sql = $"""
-            SELECT FIRST 1 {docnoCol}
-            FROM PH_GR
-            WHERE {docnoCol} LIKE @P
-            ORDER BY {docnoCol} DESC
-            """;
-        await using var cmd = new FbCommand(sql, conn, tx);
-        cmd.Parameters.Add("@P", FbDbType.VarChar).Value = prefix + "%";
-        var obj = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-        if (obj is null or DBNull)
-            return $"{prefix}0001";
+        var sql = $"SELECT {docnoCol} FROM PH_GR WHERE {docnoCol} LIKE @P";
+        var docnos = new List<string?>();
+        await using (var cmd = new FbCommand(sql, conn, tx))
+        {
+            cmd.Parameters.Add("@P", FbDbType.VarChar).Value = "GR-%";
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                if (reader.IsDBNull(0)) continue;
+                docnos.Add(reader.GetString(0)?.Trim());
+            }
+        }
 
-        var last = Clean(obj) ?? "";
-        try
-        {
-            var sequence = int.Parse(last.Split('-')[^1], CultureInfo.InvariantCulture) + 1;
-            return $"{prefix}{sequence:D4}";
-        }
-        catch
-        {
-            return $"{prefix}0001";
-        }
+        var (max, pad, prefix) = GrNumbering.SeedFromStrings(docnos);
+        return GrNumbering.BuildNextDocNo(max, pad, prefix);
     }
 
     private static async Task<bool> GrDocNoExistsAsync(

@@ -187,18 +187,55 @@ public class ScanPODetailModel : PageModel
             return RedirectToPage("/ScanPO");
 
         var order = await _scanQuery.GetApprovedByDocKeyAsync(docKey, cancellationToken).ConfigureAwait(false);
-
         if (order is null)
             return RedirectToPage("/ScanPO");
 
         var counts = TryParseScanCounts(scanCountsJson);
+        if (counts.Count == 0)
+        {
+            TempData["ScanSubmitError"] = "No scanned lines were received. Please scan again before submitting.";
+            return RedirectToPage("/ScanPODetail", new { docKey });
+        }
+
+        var poLines = await _orders.GetPurchaseRequestLinesAsync(docKey, cancellationToken).ConfigureAwait(false);
+        var transferLines = TransferLinesFromScanCounts(counts, poLines);
+        if (transferLines.Count == 0)
+        {
+            TempData["ScanSubmitError"] = "Scanned items could not be matched to this PO for GR transfer.";
+            return RedirectToPage("/ScanPODetail", new { docKey });
+        }
+
         var actor = ScanPoAuditHelper.FromUser(User);
+        GrTransferOutcome outcome;
+        try
+        {
+            var result = await _grTransfer.TransferPoAsync(docKey, order.PoNumber, transferLines, cancellationToken).ConfigureAwait(false);
+            outcome = result.ApiAvailable
+                ? (result.Ok
+                    ? GrTransferOutcome.Created(result.GrDocNo)
+                    : GrTransferOutcome.Failed(result.Error))
+                : GrTransferOutcome.Local;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "GR transfer threw during submit; falling back to local record for {Po}.", order.PoNumber);
+            outcome = GrTransferOutcome.Local;
+        }
+
+        if (outcome.Kind == GrTransferOutcomeKind.Failed)
+        {
+            TempData["ScanSubmitError"] = string.IsNullOrWhiteSpace(outcome.Error)
+                ? "Goods Received transfer failed. Please try again or contact support."
+                : $"Goods Received transfer failed: {outcome.Error}";
+            return RedirectToPage("/ScanPODetail", new { docKey });
+        }
+
         await _scanSubmits.MarkSubmittedAsync(docKey, order.PoNumber, counts, actor, cancellationToken).ConfigureAwait(false);
 
         var by = string.IsNullOrWhiteSpace(actor.DisplayName) ? actor.Email : actor.DisplayName;
-        TempData["ScanSubmitMessage"] = string.IsNullOrWhiteSpace(by)
-            ? $"Scan submitted for {order.PoNumber}."
-            : $"Scan submitted for {order.PoNumber} by {by}.";
+        TempData["ScanSubmitMessage"] = outcome.Kind == GrTransferOutcomeKind.Created
+            ? $"Goods Received {outcome.GrDocNo} created from {order.PoNumber}."
+            : $"Scan submitted for {order.PoNumber}. Goods Received API is not enabled for this company yet, so it was recorded locally.";
         return RedirectToPage("/ScanPO", new { tab = "submitted" });
     }
 

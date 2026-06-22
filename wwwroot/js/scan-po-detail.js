@@ -41,6 +41,7 @@
   let scanHistory = [];
   let draftTimer = null;
   let readOnly = isSubmitted;
+  let submitInProgress = false;
 
   const lineRows = () =>
     Array.from(document.querySelectorAll('.scan-lines-table tbody tr[data-line-no]'));
@@ -835,8 +836,13 @@
     });
   }
 
-  if (submitForm && scanCountsInput) {
+  if (submitForm && scanCountsInput && submitBtn) {
     submitForm.addEventListener('submit', (e) => {
+      if (submitInProgress) {
+        e.preventDefault();
+        return;
+      }
+
       const total = totalScans();
       const lines = totalLines();
       const withScan = linesWithScan();
@@ -859,6 +865,11 @@
       }
 
       scanCountsInput.value = JSON.stringify(scanCounts);
+      submitInProgress = true;
+      submitBtn.disabled = true;
+      submitBtn.classList.add('is-busy');
+      submitBtn.textContent = 'Creating GR...';
+
       if (storageKey) {
         try {
           sessionStorage.removeItem(storageKey);
