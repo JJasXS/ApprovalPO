@@ -6,12 +6,14 @@
   const manualInput = document.getElementById('scanManualCode');
   const manualBtn = document.getElementById('scanManualBtn');
   const undoBtn = document.getElementById('scanUndoLastBtn');
+  const resetBtn = document.getElementById('scanResetBtn');
   const cfg = document.getElementById('scanDetailConfig');
   if (!cfg || typeof ScanResolve === 'undefined') return;
 
   const resolveUrl = cfg.dataset.resolveScanUrl || '';
   const scanStateUrl = cfg.dataset.scanStateUrl || '';
   const saveDraftUrl = cfg.dataset.saveDraftUrl || '';
+  const resetScanUrl = cfg.dataset.resetScanUrl || '';
   const docKey = String(cfg.dataset.docKey || new URLSearchParams(location.search).get('docKey') || '');
   const poNumber = cfg.dataset.poNumber || '';
   const isSubmitted = cfg.dataset.isSubmitted === 'true';
@@ -180,7 +182,7 @@
   };
 
   const actionLabel = (action) =>
-    ({ submitted: 'Submitted', reopened: 'Reopened', draft_saved: 'Draft saved' }[action] || action);
+    ({ submitted: 'Submitted', reopened: 'Reopened', draft_saved: 'Draft saved', scan_reset: 'Scan reset' }[action] || action);
 
   const renderAuditTrail = (entries) => {
     const panel = document.getElementById('scanAuditPanel');
@@ -315,6 +317,74 @@
     undoBtn.disabled = !canUndo;
   };
 
+  const updateResetButton = () => {
+    if (!resetBtn || readOnly) return;
+    const hasScans = totalScans() > 0;
+    resetBtn.disabled = !hasScans;
+  };
+
+  const clearLocalScanSession = () => {
+    scanCounts = {};
+    scanHistory = [];
+    if (storageKey) {
+      try {
+        sessionStorage.removeItem(storageKey);
+      } catch (_) { /* ignore */ }
+    }
+    if (offlineKey) {
+      try {
+        localStorage.removeItem(offlineKey);
+      } catch (_) { /* ignore */ }
+    }
+    if (docKey && typeof ScanResolve.clearCachedForDoc === 'function') {
+      ScanResolve.clearCachedForDoc(docKey);
+    }
+    applyAllRowVisuals();
+  };
+
+  const resetScanSession = async () => {
+    if (readOnly) {
+      showScanError('already_submitted');
+      return;
+    }
+    if (totalScans() < 1) {
+      showToast('Nothing to reset.', 'warn');
+      return;
+    }
+    const lines = totalLines();
+    const withScan = linesWithScan();
+    const msg =
+      lines > 0
+        ? `Clear all scans for this PO (${withScan} of ${lines} lines)?`
+        : 'Clear all scans for this PO?';
+    if (!window.confirm(msg)) return;
+
+    clearLocalScanSession();
+
+    if (resetScanUrl && docKey && navigator.onLine) {
+      try {
+        const body = new URLSearchParams();
+        body.set('docKey', docKey);
+        const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+        if (csrfToken) headers['X-CSRF-TOKEN'] = csrfToken;
+        const res = await fetch(resetScanUrl, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers,
+          body: body.toString(),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) {
+          showToast(data.error || 'Could not reset on server.', 'error');
+        }
+      } catch (_) {
+        showToast('Reset locally; server sync failed (offline?).', 'warn');
+      }
+    }
+
+    showToast('Scan session reset.', 'ok');
+  };
+
   const scheduleDraftSave = () => {
     if (readOnly || !saveDraftUrl || !docKey) return;
     clearTimeout(draftTimer);
@@ -397,6 +467,7 @@
     }
     updateUndoButton();
     updateScanButton();
+    updateResetButton();
   };
 
   const updateScanButton = () => {
@@ -745,6 +816,7 @@
   });
 
   undoBtn?.addEventListener('click', () => undoLastScan());
+  resetBtn?.addEventListener('click', () => void resetScanSession());
 
   if (linesTableBody) {
     linesTableBody.addEventListener('click', (e) => {

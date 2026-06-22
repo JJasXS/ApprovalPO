@@ -121,6 +121,7 @@
                  data-resolve-scan-url="@Url.Page("/ScanPODetail", null, new { handler = "ResolveScan" })"
                  data-scan-state-url="@Url.Page("/ScanPODetail", null, new { handler = "ScanState" })"
                  data-save-draft-url="@Url.Page("/ScanPODetail", null, new { handler = "SaveDraft" })"
+                 data-reset-scan-url="@Url.Page("/ScanPODetail", null, new { handler = "ResetScan" })"
                  data-csrf-token="@csrf"
                  data-submit-form-id="scanDetailSubmitForm"
                  data-scan-counts-input-id="scanCountsJson"></div>
@@ -136,7 +137,10 @@
                 </p>
                 @if (!scanSubmitted)
                 {
-                    <button type="button" id="scanUndoLastBtn" class="scan-undo-btn" hidden>Undo last scan</button>
+                    <div class="scan-lines-actions">
+                        <button type="button" id="scanResetBtn" class="scan-reset-btn">Reset scan</button>
+                        <button type="button" id="scanUndoLastBtn" class="scan-undo-btn" hidden>Undo last scan</button>
+                    </div>
                 }
             </div>
 

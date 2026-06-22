@@ -220,6 +220,24 @@ public class ScanPODetailModel : PageModel
         return RedirectToPage("/ScanPODetail", new { docKey });
     }
 
+    public async Task<IActionResult> OnPostResetScanAsync(int docKey, CancellationToken cancellationToken)
+    {
+        if (docKey <= 0)
+            return new JsonResult(new { ok = false, error = "Invalid PO." }, ApprovalJson.CamelCase);
+
+        var order = await _scanQuery.GetApprovedByDocKeyAsync(docKey, cancellationToken).ConfigureAwait(false);
+        if (order is null)
+            return new JsonResult(new { ok = false, error = "PO not found." }, ApprovalJson.CamelCase);
+
+        var state = await _scanSubmits.GetStateAsync(docKey, cancellationToken).ConfigureAwait(false);
+        if (state.IsSubmitted)
+            return new JsonResult(new { ok = false, error = "PO is submitted. Reopen to scan again." }, ApprovalJson.CamelCase);
+
+        var actor = ScanPoAuditHelper.FromUser(User);
+        await _scanSubmits.ClearDraftAsync(docKey, order.PoNumber, actor, cancellationToken).ConfigureAwait(false);
+        return new JsonResult(new { ok = true }, ApprovalJson.CamelCase);
+    }
+
     public async Task<IActionResult> OnPostOcrCaptureAsync(int docKey, string? poNumber, string? ocrText, IFormFile? image, CancellationToken cancellationToken)
     {
         if (image is null || image.Length == 0)

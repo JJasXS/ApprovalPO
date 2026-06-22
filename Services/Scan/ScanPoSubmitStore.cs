@@ -30,6 +30,12 @@ public interface IScanPoSubmitStore
         string poNumber,
         ScanPoAuditActor actor,
         CancellationToken cancellationToken = default);
+
+    Task ClearDraftAsync(
+        int docKey,
+        string poNumber,
+        ScanPoAuditActor actor,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>Persists scan drafts, submissions, and audit trail per tenant (JSON under <c>Data</c>).</summary>
@@ -229,6 +235,38 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
 
             file.Submissions.RemoveAll(s => s.DocKey == docKey);
             AppendAudit(file, docKey, po, "reopened", actor, sub is null ? null : TotalScans(sub.ScanCounts));
+            await WriteFileUnlockedAsync(file, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    public async Task ClearDraftAsync(
+        int docKey,
+        string poNumber,
+        ScanPoAuditActor actor,
+        CancellationToken cancellationToken = default)
+    {
+        if (docKey <= 0)
+            return;
+
+        var po = poNumber?.Trim() ?? "";
+
+        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var file = await ReadFileUnlockedAsync(cancellationToken).ConfigureAwait(false);
+            var draft = file.Drafts.FirstOrDefault(d => d.DocKey == docKey);
+            if (string.IsNullOrEmpty(po) && draft is not null)
+                po = draft.PoNumber;
+
+            if (file.Submissions.Any(s => s.DocKey == docKey))
+                return;
+
+            file.Drafts.RemoveAll(d => d.DocKey == docKey);
+            AppendAudit(file, docKey, po, "scan_reset", actor, draft is null ? null : TotalScans(draft.ScanCounts));
             await WriteFileUnlockedAsync(file, cancellationToken).ConfigureAwait(false);
         }
         finally
