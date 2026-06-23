@@ -30,6 +30,9 @@ foreach (var envPath in new[]
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseWindowsService();
 
+// Configure request size limits to prevent large upload attacks and DoS
+builder.ConfigureRequestSizeLimits();
+
 // Tenant id: use TENANT_CODE from environment (.env) only — always wins over appsettings when set.
 var tenantFromEnv = (Environment.GetEnvironmentVariable("TENANT_CODE") ?? builder.Configuration["TENANT_CODE"])?.Trim();
 var bootstrapFromEnv = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
@@ -218,6 +221,9 @@ var app = builder.Build();
 
 app.UseForwardedHeaders();
 
+// Apply strict request validation (size limits, method validation, malicious user agents)
+app.UseApprovalRequestValidation();
+
 app.UseApprovalSecurityHeaders();
 
 // Development: phone camera needs HTTPS — redirect LAN http → https (same path).
@@ -238,7 +244,8 @@ if (app.Environment.IsDevelopment())
             {
                 var path = ctx.Request.Path.Value ?? "/";
                 var qs = ctx.Request.QueryString.Value ?? "";
-                ctx.Response.Redirect($"https://{host}:{redirectHttpsPort}{path}{qs}");
+                // Use 301 (Permanent) redirect for GET requests - better security and caching
+                ctx.Response.Redirect($"https://{host}:{redirectHttpsPort}{path}{qs}", permanent: true);
                 return;
             }
         }
