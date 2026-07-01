@@ -438,6 +438,44 @@ body {
   padding-top: 8px;
 }
 
+.scan-detail-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.scan-detail-tab {
+  flex: 1;
+  min-height: 40px;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  color: #475569;
+  background: #f8fafc;
+  border: 1px solid var(--scan-border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.scan-detail-tab.is-active {
+  color: #0369a1;
+  background: #f0f9ff;
+  border-color: #7dd3fc;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+}
+
+.scan-receive-hint {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #334155;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 10px;
+}
+
 .scan-detail-meta {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -577,11 +615,58 @@ body {
   cursor: pointer;
 }
 
-.scan-lines-table th.scan-th-status,
+.scan-lines-table th.scan-th-received,
 .scan-lines-table td.scan-line-status {
-  width: 3.25rem;
-  text-align: center;
+  width: 5.5rem;
+  text-align: right;
   vertical-align: middle;
+}
+
+.scan-received-input {
+  width: 4.5rem;
+  max-width: 100%;
+  height: 36px;
+  padding: 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  text-align: right;
+  border: 1px solid var(--scan-border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.scan-received-input:focus {
+  outline: none;
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.35);
+}
+
+.scan-received-input:disabled {
+  opacity: 0.7;
+  background: #f8fafc;
+}
+
+.scan-received-readonly {
+  display: inline-block;
+  min-width: 2.5rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.scan-lines-table tr.scan-line-received .scan-received-input {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.scan-lines-table tr.scan-line-partial .scan-received-input {
+  border-color: #fcd34d;
+  background: #fffbeb;
+}
+
+.scan-lines-table tr.scan-line-over .scan-received-input {
+  border-color: #fca5a5;
+  background: #fef2f2;
 }
 
 .scan-line-tick {

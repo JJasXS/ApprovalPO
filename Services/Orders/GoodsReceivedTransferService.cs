@@ -200,6 +200,26 @@ public sealed class GoodsReceivedTransferService : IGoodsReceivedTransfer
         if (lines is null || lines.Count == 0)
             return po.Lines;
 
+        if (lines.Any(l => l.PoLineNo is int n && n > 0))
+        {
+            var matchedLines = new List<PoLine>();
+            foreach (var req in lines)
+            {
+                if (req.PoLineNo is not int seq || seq <= 0 || req.Quantity <= 0) continue;
+                var poLine = po.Lines.FirstOrDefault(l => l.Seq == seq);
+                if (poLine is null) continue;
+
+                var poQty = decimal.TryParse(poLine.Qty, NumberStyles.Number, CultureInfo.InvariantCulture, out var pq)
+                    ? pq
+                    : 0m;
+                var transferQty = poQty > 0 ? Math.Min(req.Quantity, poQty) : req.Quantity;
+                if (transferQty <= 0) continue;
+                matchedLines.Add(poLine with { Qty = transferQty.ToString(CultureInfo.InvariantCulture) });
+            }
+
+            return matchedLines;
+        }
+
         var byCode = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
         foreach (var line in lines)
         {

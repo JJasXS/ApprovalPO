@@ -57,6 +57,12 @@
             var scanSubmitted = Model.DocKey > 0
                 && ScanSubmits.GetSubmittedDocKeysAsync().ConfigureAwait(false).GetAwaiter().GetResult().Contains(Model.DocKey);
             var today = DateTime.Today.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture);
+            <div class="scan-detail-tabs" role="tablist" aria-label="Scan PO workflow">
+                <button type="button" class="scan-detail-tab is-active" id="scanTabScan" role="tab" aria-selected="true" aria-controls="scanPanelScan">Scan</button>
+                <button type="button" class="scan-detail-tab" id="scanTabReceive" role="tab" aria-selected="false" aria-controls="scanPanelReceive">Received qty</button>
+            </div>
+
+            <div id="scanPanelScan" class="scan-detail-panel" role="tabpanel" aria-labelledby="scanTabScan">
             <div class="scan-detail-meta">
                 <div class="scan-detail-field">
                     <label>PO #</label>
@@ -112,6 +118,15 @@
                     </div>
                 </div>
             </div>
+            </div>
+
+            <div id="scanPanelReceive" class="scan-detail-panel" role="tabpanel" aria-labelledby="scanTabReceive" hidden>
+                <p class="scan-receive-hint">
+                    Enter the <strong>physical quantity received</strong> for each line.
+                    Scanning fills this from the label (e.g. 30); change it if you received less (e.g. 20).
+                    Goods Received is created using <strong>Received</strong> only, not PO qty.
+                </p>
+            </div>
 
             <div id="scanDetailConfig" hidden
                  data-doc-key="@Model.DocKey"
@@ -131,9 +146,9 @@
             <div class="scan-lines-head">
                 <p class="scan-lines-title">Line items (@Model.Lines.Count)</p>
                 <p id="scanSessionSummary" class="scan-session-summary">
-                    <span id="scanLinesProgress">0 of @Model.Lines.Count lines scanned</span>
-                    · Total scans: <strong id="scanSessionTotal">0</strong>
-                    <span class="scan-session-hint">Draft saves to server; submit marks PO complete. Tap ✓ on a line to remove one scan.</span>
+                    <span id="scanLinesProgress">0 of @Model.Lines.Count lines with received qty</span>
+                    · Total received: <strong id="scanSessionTotal">0</strong>
+                    <span class="scan-session-hint">Draft saves to server; submit creates Goods Received from Received qty. Clear Received to undo a line.</span>
                 </p>
                 @if (!scanSubmitted)
                 {
@@ -162,8 +177,8 @@
                                 <th>Item code</th>
                                 <th>Description</th>
                                 <th>Project</th>
-                                <th class="num">Qty</th>
-                                <th class="scan-th-status">Status</th>
+                                <th class="num">PO qty</th>
+                                <th class="num scan-th-received">Received</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -171,13 +186,23 @@
                             @foreach (var line in Model.Lines)
                             {
                                 n++;
-                                <tr data-line-no="@line.LineNo" data-item-code="@line.ItemCode" data-project="@line.Project">
+                                var orderQty = line.Sqty != 0 ? line.Sqty : line.Qty;
+                                <tr data-line-no="@line.LineNo" data-item-code="@line.ItemCode" data-project="@line.Project" data-order-qty="@orderQty.ToString(System.Globalization.CultureInfo.InvariantCulture)">
                                     <td class="scan-line-num">@n</td>
                                     <td class="scan-line-code">@line.ItemCode</td>
                                     <td>@line.Description</td>
                                     <td class="scan-line-project">@(string.IsNullOrWhiteSpace(line.Project) ? "—" : line.Project)</td>
-                                    <td class="num">@((line.Sqty != 0 ? line.Sqty : line.Qty).ToString("N2"))</td>
-                                    <td class="scan-line-status"><span class="scan-line-tick" aria-label="Not scanned"></span></td>
+                                    <td class="num scan-line-order-qty">@orderQty.ToString("N2")</td>
+                                    <td class="num scan-line-status">
+                                        @if (scanSubmitted)
+                                        {
+                                            <span class="scan-received-readonly" data-received-display></span>
+                                        }
+                                        else
+                                        {
+                                            <input type="number" class="scan-received-input" min="0" step="0.01" inputmode="decimal" placeholder="0" aria-label="Quantity received for @line.ItemCode" />
+                                        }
+                                    </td>
                                 </tr>
                             }
                         </tbody>

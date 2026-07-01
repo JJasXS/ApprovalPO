@@ -48,6 +48,25 @@
 
   const lineKey = (row) => `L:${String(row?.dataset?.lineNo || '').trim()}`;
 
+  const orderQty = (row) => {
+    const n = Number(row?.dataset?.orderQty);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  };
+
+  const receivedQty = (row) => {
+    const key = lineKey(row);
+    return scanCounts[key] || 0;
+  };
+
+  const normalizeReceived = (row, raw) => {
+    let n = Number(raw);
+    if (!Number.isFinite(n) || n < 0) n = 0;
+    n = Math.round(n * 100) / 100;
+    const max = orderQty(row);
+    if (max > 0 && n > max) n = max;
+    return n;
+  };
+
   const projectNorm = (s) => String(s ?? '').trim().replace(/\s+/g, '');
 
   const projectMatches = (rowProject, scanProject) => {
@@ -73,10 +92,45 @@
 
     if (lineNo != null) {
       const byNo = candidates.find((r) => String(r.dataset.lineNo) === String(lineNo));
-      if (byNo && (scanCounts[lineKey(byNo)] || 0) === 0) return byNo;
+      if (byNo && receivedQty(byNo) === 0) return byNo;
     }
 
-    return candidates.find((r) => (scanCounts[lineKey(r)] || 0) === 0) || candidates[0];
+    return candidates.find((r) => receivedQty(r) === 0) || candidates[0];
+  };
+
+  const setReceivedQty = (row, rawQty, opts = {}) => {
+    if (readOnly || !row) return 0;
+    const key = lineKey(row);
+    if (!key || key === 'L:') return 0;
+    const prev = scanCounts[key] || 0;
+    const n = normalizeReceived(row, rawQty);
+    if (n <= 0) delete scanCounts[key];
+    else scanCounts[key] = n;
+
+    if (!opts.skipHistory && n !== prev) {
+      scanHistory.push({
+        lineKey: key,
+        code: (row.dataset.itemCode || '').trim(),
+        project: (row.dataset.project || '').trim(),
+        prevQty: prev,
+        count: n,
+      });
+    }
+
+    saveLocalSession();
+    scheduleDraftSave();
+    syncRowVisuals(row);
+
+    if (!opts.quietFlash && n > 0) {
+      row.classList.remove('scan-line-match-flash');
+      void row.offsetWidth;
+      row.classList.add('scan-line-match-flash');
+      setTimeout(() => row.classList.remove('scan-line-match-flash'), 900);
+    }
+
+    if (!opts.noFeedback && n > 0) playMatchFeedback();
+    updateProgress();
+    return n;
   };
 
   const applyParsedBarcode = (local, opts = {}) => {
@@ -87,12 +141,12 @@
     if (!row) return false;
 
     const qtyRaw = local.quantity;
-    const increment =
-      qtyRaw != null && Number(qtyRaw) > 1
-        ? Math.min(9999, Math.floor(Number(qtyRaw)))
-        : 1;
-    recordScan(row, { noFeedback: true, incrementBy: increment });
-    return { row, increment, proj };
+    const qty =
+      qtyRaw != null && Number(qtyRaw) > 0
+        ? normalizeReceived(row, Number(qtyRaw))
+        : orderQty(row) || 1;
+    setReceivedQty(row, qty, { noFeedback: true, skipHistory: opts.fromQueue, ...opts });
+    return { row, qty, proj };
   };
 
   const tryLocalBarcodeScan = (raw, opts = {}) => {
@@ -142,19 +196,15 @@
     }
 
     const qtyRaw = local.quantity;
-    const increment =
-      qtyRaw != null && Number(qtyRaw) > 1
-        ? Math.min(9999, Math.floor(Number(qtyRaw)))
-        : 1;
-    recordScan(row, { noFeedback: opts.fromQueue, incrementBy: increment });
+    const qty =
+      qtyRaw != null && Number(qtyRaw) > 0
+        ? normalizeReceived(row, Number(qtyRaw))
+        : orderQty(row) || 1;
+    setReceivedQty(row, qty, { noFeedback: opts.fromQueue, ...opts });
     if (!opts.silent && !opts.fromQueue) {
       const displayProj = (row.dataset.project || proj || '').trim();
       const locPart = displayProj ? ` @ ${displayProj}` : '';
-      const msg =
-        increment > 1
-          ? `Matched: ${local.itemCode}${locPart} (${increment} qty)`
-          : `Matched: ${local.itemCode}${locPart}`;
-      showToast(msg, 'ok');
+      showToast(`Matched: ${local.itemCode}${locPart} — received ${qty}`, 'ok');
     }
     return { handled: true, ok: true };
   };
@@ -167,10 +217,10 @@
   const totalLines = () => lineRows().length;
 
   const linesWithScan = () =>
-    lineRows().filter((row) => (scanCounts[lineKey(row)] || 0) > 0).length;
+    lineRows().filter((row) => receivedQty(row) > 0).length;
 
   const totalScans = () =>
-    Object.values(scanCounts).reduce((sum, n) => sum + (Number(n) || 0), 0);
+    lineRows().reduce((sum, row) => sum + receivedQty(row), 0);
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -210,9 +260,9 @@
     const hint = document.querySelector('.scan-session-hint');
     if (!hint) return;
     const who = formatActor(state.draftUpdatedByName, state.draftUpdatedByEmail);
-    const undoTip = ' Tap ✓ on a line to remove one scan.';
+    const undoTip = ' Clear Received on a line to remove it.';
     if (!who || who === 'Unknown user') {
-      hint.textContent = `Draft saves to server; submit marks PO complete.${undoTip}`;
+      hint.textContent = `Draft saves to server; submit creates Goods Received from Received qty.${undoTip}`;
       return;
     }
     const when = state.draftUpdatedAtUtc
@@ -356,8 +406,8 @@
     const withScan = linesWithScan();
     const msg =
       lines > 0
-        ? `Clear all scans for this PO (${withScan} of ${lines} lines)?`
-        : 'Clear all scans for this PO?';
+        ? `Clear all received qty for this PO (${withScan} of ${lines} lines)?`
+        : 'Clear all received qty for this PO?';
     if (!window.confirm(msg)) return;
 
     clearLocalScanSession();
@@ -383,7 +433,7 @@
       }
     }
 
-    showToast('Scan session reset.', 'ok');
+    showToast('Received quantities cleared.', 'ok');
   };
 
   const scheduleDraftSave = () => {
@@ -442,7 +492,11 @@
     manualInput?.setAttribute('disabled', 'disabled');
     manualBtn?.setAttribute('disabled', 'disabled');
     undoBtn?.setAttribute('hidden', 'hidden');
+    resetBtn?.setAttribute('hidden', 'hidden');
     submitBtn?.setAttribute('hidden', 'hidden');
+    document.querySelectorAll('.scan-received-input').forEach((el) => {
+      el.setAttribute('disabled', 'disabled');
+    });
     if (reopenForm) reopenForm.hidden = false;
     const hint = document.querySelector('.scan-session-hint');
     if (hint) {
@@ -464,7 +518,7 @@
     if (sessionTotalEl) sessionTotalEl.textContent = String(scans);
     if (linesProgressEl) {
       linesProgressEl.textContent =
-        total > 0 ? `${withScan} of ${total} lines scanned` : '';
+        total > 0 ? `${withScan} of ${total} lines with received qty` : '';
     }
     updateUndoButton();
     updateScanButton();
@@ -477,7 +531,7 @@
     const allDone = requireAllLines && total > 0 && linesWithScan() >= total;
     if (allDone) {
       scanBtn.setAttribute('disabled', 'disabled');
-      scanBtn.setAttribute('title', 'All lines scanned');
+      scanBtn.setAttribute('title', 'All lines have received qty');
     } else {
       scanBtn.removeAttribute('disabled');
       scanBtn.removeAttribute('title');
@@ -490,33 +544,27 @@
       return false;
     }
     if (requireAllLines && totalLines() > 0 && linesWithScan() >= totalLines()) {
-      showToast('All lines already scanned.', 'ok');
+      showToast('All lines already have received qty.', 'ok');
       return false;
     }
     return true;
   };
 
   const syncRowVisuals = (row) => {
-    const key = lineKey(row);
-    const count = scanCounts[key] || 0;
-    const code = (row.dataset.itemCode || '').trim();
-    const tick = row.querySelector('.scan-line-tick');
-    row.classList.toggle('scan-line-scanned', count > 0);
-    if (tick) {
-      tick.textContent = count > 1 ? String(count) : count > 0 ? '✓' : '';
-      tick.classList.toggle('is-done', count > 0);
-      tick.classList.toggle('is-actionable', count > 0 && !readOnly);
-      if (count > 0 && !readOnly) {
-        const proj = (row.dataset.project || '').trim();
-        const label = proj ? `${code} (${proj})` : code;
-        tick.setAttribute('title', `Remove one scan for ${label} (${count} recorded)`);
-        tick.setAttribute('role', 'button');
-        tick.setAttribute('tabindex', '0');
-      } else {
-        tick.removeAttribute('title');
-        tick.removeAttribute('role');
-        tick.removeAttribute('tabindex');
-      }
+    const qty = receivedQty(row);
+    const po = orderQty(row);
+    const input = row.querySelector('.scan-received-input');
+    const readonly = row.querySelector('.scan-received-readonly');
+
+    row.classList.toggle('scan-line-received', qty > 0);
+    row.classList.toggle('scan-line-partial', qty > 0 && po > 0 && qty < po);
+    row.classList.toggle('scan-line-over', po > 0 && qty > po);
+
+    if (input && document.activeElement !== input) {
+      input.value = qty > 0 ? String(qty) : '';
+    }
+    if (readonly) {
+      readonly.textContent = qty > 0 ? String(qty) : '—';
     }
   };
 
@@ -525,60 +573,47 @@
     updateProgress();
   };
 
-  const unscanLine = (row, opts = {}) => {
-    if (readOnly) return false;
-    const key = lineKey(row);
-    const code = (row.dataset.itemCode || '').trim();
-    const n = scanCounts[key] || 0;
-    if (n <= 0) return false;
-
-    if (n === 1) delete scanCounts[key];
-    else scanCounts[key] = n - 1;
-
+  /** Read editable Received inputs into scanCounts (submit must not rely on change/blur alone). */
+  const syncReceivedFromDom = () => {
+    if (readOnly) return;
+    lineRows().forEach((row) => {
+      const input = row.querySelector('.scan-received-input');
+      if (!input) return;
+      const key = lineKey(row);
+      if (!key || key === 'L:') return;
+      const raw = input.value.trim();
+      if (!raw) {
+        delete scanCounts[key];
+        return;
+      }
+      const n = normalizeReceived(row, raw);
+      if (n <= 0) delete scanCounts[key];
+      else scanCounts[key] = n;
+    });
     saveLocalSession();
-    scheduleDraftSave();
-    syncRowVisuals(row);
+    lineRows().forEach(syncRowVisuals);
     updateProgress();
+  };
 
+  const clearReceived = (row, opts = {}) => {
+    if (readOnly) return false;
+    if (receivedQty(row) <= 0) return false;
+    setReceivedQty(row, 0, { skipHistory: true, quietFlash: true, noFeedback: true });
     if (!opts.quiet) {
+      const code = (row.dataset.itemCode || '').trim();
       const proj = (row.dataset.project || '').trim();
       const label = proj ? `${code} (${proj})` : code;
-      showToast(
-        n === 1 ? `Removed scan for ${label}.` : `Removed one scan for ${label} (${n - 1} left).`,
-        'info'
-      );
+      showToast(`Cleared received qty for ${label}.`, 'info');
     }
     return true;
   };
 
   const recordScan = (row, opts = {}) => {
-    if (readOnly) return;
-    const key = lineKey(row);
-    const code = (row.dataset.itemCode || '').trim();
-    if (!key || key === 'L:') return;
-    const increment = Math.max(1, Math.min(9999, Math.floor(Number(opts.incrementBy) || 1)));
-    scanCounts[key] = (scanCounts[key] || 0) + increment;
-    if (!opts.skipHistory) {
-      scanHistory.push({
-        lineKey: key,
-        code,
-        project: (row.dataset.project || '').trim(),
-        count: increment,
-      });
-    }
-    saveLocalSession();
-    scheduleDraftSave();
-    syncRowVisuals(row);
-
-    if (!opts.quietFlash) {
-      row.classList.remove('scan-line-match-flash');
-      void row.offsetWidth;
-      row.classList.add('scan-line-match-flash');
-      setTimeout(() => row.classList.remove('scan-line-match-flash'), 900);
-    }
-
-    if (!opts.noFeedback) playMatchFeedback();
-    updateProgress();
+    const qty =
+      opts.incrementBy != null && Number(opts.incrementBy) > 0
+        ? Number(opts.incrementBy)
+        : orderQty(row) || 1;
+    setReceivedQty(row, qty, opts);
   };
 
   const undoLastScan = () => {
@@ -586,27 +621,16 @@
     while (scanHistory.length > 0) {
       const entry = scanHistory.pop();
       const key = entry?.lineKey;
-      const count = Math.max(1, Math.floor(Number(entry?.count) || 1));
       if (!key) continue;
       const row = lineRows().find((r) => lineKey(r) === key);
-      const current = scanCounts[key] || 0;
-      if (row && current > 0) {
-        const remove = Math.min(count, current);
-        if (remove >= current) delete scanCounts[key];
-        else scanCounts[key] = current - remove;
-        saveLocalSession();
-        scheduleDraftSave();
-        syncRowVisuals(row);
-        updateProgress();
-        const proj = entry?.project || '';
-        const label = proj ? `${entry.code} (${proj})` : entry.code;
-        showToast(
-          remove > 1 ? `Undid last scan (${label}, ${remove} qty).` : `Undid last scan (${label}).`,
-          'info'
-        );
-        updateUndoButton();
-        return;
-      }
+      if (!row) continue;
+      const prev = entry?.prevQty != null ? entry.prevQty : 0;
+      setReceivedQty(row, prev, { skipHistory: true, quietFlash: true, noFeedback: true });
+      const proj = entry?.project || '';
+      const label = proj ? `${entry.code} (${proj})` : entry.code;
+      showToast(`Undid change for ${label}.`, 'info');
+      updateUndoButton();
+      return;
     }
     showToast('Nothing to undo.', 'warn');
     updateUndoButton();
@@ -720,15 +744,15 @@
         : null;
       if (localRow) {
         const qtyRaw = local.quantity ?? resolved.scanQuantity ?? resolved.ScanQuantity;
-        const increment =
-          qtyRaw != null && Number(qtyRaw) > 1
-            ? Math.min(9999, Math.floor(Number(qtyRaw)))
-            : 1;
-        recordScan(localRow, { noFeedback: opts.fromQueue, incrementBy: increment });
+        const qty =
+          qtyRaw != null && Number(qtyRaw) > 0
+            ? normalizeReceived(localRow, Number(qtyRaw))
+            : orderQty(localRow) || 1;
+        setReceivedQty(localRow, qty, { noFeedback: opts.fromQueue });
         if (!opts.silent && !opts.fromQueue) {
           const proj = (localRow.dataset.project || localProject || '').trim();
           const locPart = proj ? ` @ ${proj}` : '';
-          showToast(`Matched: ${local.itemCode}${locPart}`, 'ok');
+          showToast(`Matched: ${local.itemCode}${locPart} — received ${qty}`, 'ok');
         }
         return true;
       }
@@ -756,19 +780,15 @@
     let matchRow = pickScanRow(code, scanProject, lineNo);
     if (matchRow) {
       const qtyRaw = resolved.scanQuantity ?? resolved.ScanQuantity;
-      const increment =
-        qtyRaw != null && Number(qtyRaw) > 1
-          ? Math.min(9999, Math.floor(Number(qtyRaw)))
-          : 1;
-      recordScan(matchRow, { noFeedback: opts.fromQueue, incrementBy: increment });
+      const qty =
+        qtyRaw != null && Number(qtyRaw) > 0
+          ? normalizeReceived(matchRow, Number(qtyRaw))
+          : orderQty(matchRow) || 1;
+      setReceivedQty(matchRow, qty, { noFeedback: opts.fromQueue });
       if (!opts.silent && !opts.fromQueue) {
         const proj = (matchRow.dataset.project || scanProject || '').trim();
         const locPart = proj ? ` @ ${proj}` : '';
-        const msg =
-          increment > 1
-            ? `Matched: ${code}${locPart} (${increment} qty)`
-            : `Matched: ${code}${locPart}`;
-        showToast(msg, 'ok');
+        showToast(`Matched: ${code}${locPart} — received ${qty}`, 'ok');
       }
       return true;
     }
@@ -820,21 +840,53 @@
   resetBtn?.addEventListener('click', () => void resetScanSession());
 
   if (linesTableBody) {
-    linesTableBody.addEventListener('click', (e) => {
-      const tick = e.target.closest('.scan-line-tick.is-actionable');
-      if (!tick || readOnly) return;
-      const row = tick.closest('tr[data-item-code]');
-      if (row) unscanLine(row);
+    linesTableBody.addEventListener('change', (e) => {
+      const input = e.target.closest('.scan-received-input');
+      if (!input || readOnly) return;
+      const row = input.closest('tr[data-item-code]');
+      if (!row) return;
+      const raw = input.value.trim();
+      if (!raw) {
+        clearReceived(row, { quiet: true });
+        return;
+      }
+      setReceivedQty(row, raw);
     });
-    linesTableBody.addEventListener('keydown', (e) => {
-      if (e.key !== 'Enter' && e.key !== ' ') return;
-      const tick = e.target.closest('.scan-line-tick.is-actionable');
-      if (!tick || readOnly) return;
-      e.preventDefault();
-      const row = tick.closest('tr[data-item-code]');
-      if (row) unscanLine(row);
+    let receivedInputTimer = null;
+    linesTableBody.addEventListener('input', (e) => {
+      const input = e.target.closest('.scan-received-input');
+      if (!input || readOnly) return;
+      const row = input.closest('tr[data-item-code]');
+      if (!row) return;
+      const qty = normalizeReceived(row, input.value);
+      row.classList.toggle('scan-line-partial', qty > 0 && orderQty(row) > 0 && qty < orderQty(row));
+      row.classList.toggle('scan-line-received', qty > 0);
+      clearTimeout(receivedInputTimer);
+      receivedInputTimer = setTimeout(() => {
+        const raw = input.value.trim();
+        if (!raw) clearReceived(row, { quiet: true });
+        else setReceivedQty(row, raw, { skipHistory: true });
+      }, 400);
     });
   }
+
+  const scanTabScan = document.getElementById('scanTabScan');
+  const scanTabReceive = document.getElementById('scanTabReceive');
+  const scanPanelScan = document.getElementById('scanPanelScan');
+  const scanPanelReceive = document.getElementById('scanPanelReceive');
+
+  const activateDetailTab = (which) => {
+    const isScan = which === 'scan';
+    scanTabScan?.classList.toggle('is-active', isScan);
+    scanTabReceive?.classList.toggle('is-active', !isScan);
+    scanTabScan?.setAttribute('aria-selected', String(isScan));
+    scanTabReceive?.setAttribute('aria-selected', String(!isScan));
+    if (scanPanelScan) scanPanelScan.hidden = !isScan;
+    if (scanPanelReceive) scanPanelReceive.hidden = isScan;
+  };
+
+  scanTabScan?.addEventListener('click', () => activateDetailTab('scan'));
+  scanTabReceive?.addEventListener('click', () => activateDetailTab('receive'));
 
   if (submitForm && scanCountsInput && submitBtn) {
     submitForm.addEventListener('submit', (e) => {
@@ -843,20 +895,22 @@
         return;
       }
 
+      syncReceivedFromDom();
+
       const total = totalScans();
       const lines = totalLines();
       const withScan = linesWithScan();
 
       if (total < 1) {
         e.preventDefault();
-        showToast('Scan at least one line before submit.', 'error');
+        showToast('Enter received qty for at least one line before submit.', 'error');
         return;
       }
 
-      let msg = `Submit with ${withScan} of ${lines} lines scanned (${total} scan${total !== 1 ? 's' : ''})?`;
+      let msg = `Create Goods Received with ${total} total qty across ${withScan} line(s)?`;
       if (requireAllLines && withScan < lines) {
         msg =
-          `Only ${withScan} of ${lines} lines scanned.\n\nSubmit anyway?`;
+          `Only ${withScan} of ${lines} lines have received qty.\n\nSubmit anyway?`;
       }
 
       if (!window.confirm(msg)) {

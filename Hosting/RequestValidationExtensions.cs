@@ -79,9 +79,6 @@ public static class RequestValidationExtensions
             
             // Maximum request header size (default 32 KB)
             options.Limits.MaxRequestHeadersTotalSize = 64 * 1024;
-            
-            // HTTP/2 stream size
-            options.Limits.MaxStreamSize = 5 * 1024 * 1024;
         });
 
         return builder;

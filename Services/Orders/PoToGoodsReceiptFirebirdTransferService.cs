@@ -84,7 +84,7 @@ public sealed class PoToGoodsReceiptFirebirdTransferService
             var existingQty = await FetchExistingTransferQtyMapAsync(
                 conn, tx, poDocKey, detailIds, xtransCols, cancellationToken).ConfigureAwait(false);
 
-            var partialByCode = BuildPartialRequestMap(lines);
+            var partialPlan = PartialTransferPlan.FromLines(lines);
             var transfers = new List<(Dictionary<string, object?> Source, int PoDtlKey, decimal Qty)>();
             foreach (var line in poLines)
             {
@@ -102,13 +102,12 @@ public sealed class PoToGoodsReceiptFirebirdTransferService
                 if (remaining <= 0) continue;
 
                 decimal transferQty;
-                if (partialByCode is not null)
+                if (partialPlan is not null)
                 {
-                    var itemCode = Clean(line.GetValueOrDefault("ITEMCODE"));
-                    if (string.IsNullOrEmpty(itemCode) || !partialByCode.TryGetValue(itemCode, out var requested))
+                    var itemCode = Clean(line.GetValueOrDefault("ITEMCODE")) ?? "";
+                    var seq = GetInt(line, "SEQ");
+                    if (!partialPlan.TryTakeLine(seq, itemCode, remaining, out transferQty))
                         continue;
-                    transferQty = Money(Math.Min(requested, remaining));
-                    if (transferQty <= 0) continue;
                 }
                 else
                 {
@@ -120,7 +119,7 @@ public sealed class PoToGoodsReceiptFirebirdTransferService
 
             if (transfers.Count == 0)
             {
-                return partialByCode is not null
+                return partialPlan is not null
                     ? GrTransferResult.Failure("No scanned items matched transferable PO lines with remaining quantity.")
                     : GrTransferResult.Failure("No outstanding PO quantity remains to receive (or lines are not transferable).");
             }
@@ -550,23 +549,68 @@ public sealed class PoToGoodsReceiptFirebirdTransferService
 
     private static int EncodeStatus(int numericDraft) => numericDraft;
 
-    private static Dictionary<string, decimal>? BuildPartialRequestMap(IReadOnlyList<GrTransferLineRequest>? lines)
+    private sealed class PartialTransferPlan
     {
-        if (lines is null || lines.Count == 0)
-            return null;
+        public Dictionary<int, decimal> ByLineNo { get; } = new();
+        public Dictionary<string, decimal> ByItemCode { get; } = new(StringComparer.OrdinalIgnoreCase);
 
-        var map = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
-        foreach (var line in lines)
+        public static PartialTransferPlan? FromLines(IReadOnlyList<GrTransferLineRequest>? lines)
         {
-            var code = (line.ItemCode ?? "").Trim();
-            if (code.Length == 0 || line.Quantity <= 0) continue;
-            if (map.TryGetValue(code, out var existing))
-                map[code] = Money(existing + line.Quantity);
-            else
-                map[code] = Money(line.Quantity);
+            if (lines is null || lines.Count == 0)
+                return null;
+
+            var plan = new PartialTransferPlan();
+            foreach (var line in lines)
+            {
+                var code = (line.ItemCode ?? "").Trim();
+                if (code.Length == 0 || line.Quantity <= 0) continue;
+
+                if (line.PoLineNo is int poLine && poLine > 0)
+                {
+                    if (plan.ByLineNo.TryGetValue(poLine, out var existingLine))
+                        plan.ByLineNo[poLine] = Money(existingLine + line.Quantity);
+                    else
+                        plan.ByLineNo[poLine] = Money(line.Quantity);
+                    continue;
+                }
+
+                if (plan.ByItemCode.TryGetValue(code, out var existingCode))
+                    plan.ByItemCode[code] = Money(existingCode + line.Quantity);
+                else
+                    plan.ByItemCode[code] = Money(line.Quantity);
+            }
+
+            return plan.ByLineNo.Count + plan.ByItemCode.Count > 0 ? plan : null;
         }
 
-        return map.Count == 0 ? null : map;
+        public bool TryTakeLine(int seq, string itemCode, decimal remaining, out decimal transferQty)
+        {
+            transferQty = 0;
+            if (remaining <= 0) return false;
+
+            if (seq > 0 && ByLineNo.TryGetValue(seq, out var byLine) && byLine > 0)
+            {
+                transferQty = Money(Math.Min(byLine, remaining));
+                if (transferQty <= 0) return false;
+                var left = byLine - transferQty;
+                if (left <= 0) ByLineNo.Remove(seq);
+                else ByLineNo[seq] = left;
+                return true;
+            }
+
+            if (ByLineNo.Count > 0)
+                return false;
+
+            if (string.IsNullOrEmpty(itemCode) || !ByItemCode.TryGetValue(itemCode, out var byCode) || byCode <= 0)
+                return false;
+
+            transferQty = Money(Math.Min(byCode, remaining));
+            if (transferQty <= 0) return false;
+            var codeLeft = byCode - transferQty;
+            if (codeLeft <= 0) ByItemCode.Remove(itemCode);
+            else ByItemCode[itemCode] = codeLeft;
+            return true;
+        }
     }
 
     private static Task<bool> GlobalDtlKeyInUseAsync(

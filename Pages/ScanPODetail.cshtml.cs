@@ -193,7 +193,7 @@ public class ScanPODetailModel : PageModel
         var counts = TryParseScanCounts(scanCountsJson);
         if (counts.Count == 0)
         {
-            TempData["ScanSubmitError"] = "No scanned lines were received. Please scan again before submitting.";
+            TempData["ScanSubmitError"] = "Enter received qty for at least one line before submitting.";
             return RedirectToPage("/ScanPODetail", new { docKey });
         }
 
@@ -201,7 +201,7 @@ public class ScanPODetailModel : PageModel
         var transferLines = TransferLinesFromScanCounts(counts, poLines);
         if (transferLines.Count == 0)
         {
-            TempData["ScanSubmitError"] = "Scanned items could not be matched to this PO for GR transfer.";
+            TempData["ScanSubmitError"] = "Received quantities could not be matched to this PO for Goods Received.";
             return RedirectToPage("/ScanPODetail", new { docKey });
         }
 
@@ -595,7 +595,13 @@ public class ScanPODetailModel : PageModel
                 var code = (line.ItemCode ?? "").Trim();
                 if (code.Length == 0)
                     continue;
-                fromLines.Add(new Services.Orders.GrTransferLineRequest(code, n));
+                var poQty = line.Sqty != 0 ? line.Sqty : line.Qty;
+                var received = (decimal)n;
+                if (poQty > 0)
+                    received = Math.Min(received, poQty);
+                if (received <= 0)
+                    continue;
+                fromLines.Add(new Services.Orders.GrTransferLineRequest(code, received, line.LineNo));
             }
 
             if (fromLines.Count > 0)
@@ -653,12 +659,7 @@ public class ScanPODetailModel : PageModel
             foreach (var (code, el) in raw)
             {
                 if (string.IsNullOrWhiteSpace(code)) continue;
-                var n = el.ValueKind switch
-                {
-                    JsonValueKind.Number when el.TryGetInt32(out var i) => i,
-                    JsonValueKind.String when int.TryParse(el.GetString(), out var parsed) => parsed,
-                    _ => 0
-                };
+                var n = ParseScanCountElement(el);
                 if (n > 0)
                     counts[code.Trim()] = n;
             }
@@ -668,5 +669,21 @@ public class ScanPODetailModel : PageModel
         {
             return new Dictionary<string, int>();
         }
+    }
+
+    private static int ParseScanCountElement(JsonElement el)
+    {
+        decimal d = el.ValueKind switch
+        {
+            JsonValueKind.Number when el.TryGetDecimal(out var n) => n,
+            JsonValueKind.String when decimal.TryParse(
+                el.GetString(),
+                System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var parsed) => parsed,
+            _ => 0
+        };
+        if (d <= 0) return 0;
+        return (int)Math.Round(d, MidpointRounding.AwayFromZero);
     }
 }
