@@ -1,59 +1,99 @@
 @page
 @model ApprovalPO.Pages.LoginModel
 @{
-    ViewData["Title"] = "Login";
+    ViewData["Title"] = "Sign in";
 }
 
-<link rel="stylesheet" href="~/css/login.css" asp-append-version="true" />
+@section Styles {
+    <link rel="stylesheet" href="~/css/login.css" asp-append-version="true" />
+}
 
-<div class="login-container">
-    <input type="hidden" id="returnUrlField" name="ReturnUrl" value="@(Model.ReturnUrl ?? "")" />
+<div class="landing-shell">
+    <div class="landing-page" id="landingPage">
 
-    <div class="login-brand">
-        <img src="~/eapproval_logo.png" alt="eApproval" class="login-logo" asp-append-version="true" />
-    </div>
+        <aside class="landing-aside" aria-label="Welcome">
+            <div class="landing-aside-inner">
+                <img src="~/eapproval_logo.png"
+                     alt="ProAcc e-Approval"
+                     class="landing-logo"
+                     asp-append-version="true" />
+            </div>
+        </aside>
 
-    <h2>Sign in with OTP</h2>
-    
-    <div id="idGroup">
-        <div class="hp-field" aria-hidden="true">
-            <label for="companyWebsite">Company website</label>
-            <input type="text" id="companyWebsite" name="companyWebsite" tabindex="-1" autocomplete="off" data-lpignore="true" inputmode="none" />
-        </div>
-       
-        <input type="email" id="loginId" name="loginId" autocomplete="username" inputmode="email" placeholder="you@company.com" />
+        <section class="landing-main">
+            <div class="landing-container">
+                <input type="hidden" id="returnUrlField" name="ReturnUrl" value="@(Model.ReturnUrl ?? "")" />
 
-        <button id="sendBtn" type="button">Send OTP</button>
-    </div>
+                <div id="idGroup" class="landing-step is-active">
+                    <h2 class="step-title">Welcome</h2>
+                    <p class="step-subtitle">Enter your email to receive a one-time password.</p>
 
-    <div id="otpGroup" class="otp-wrap" style="display:none;">
-        <input type="hidden" id="loginIdHidden" />
+                    <div id="messageEmail" class="step-error" style="display:none;" role="status"></div>
 
-        <label class="field-label" for="otp0">6-digit OTP</label>
-        <div class="otp-boxes" id="otpBoxes" role="group" aria-label="One time passcode digits">
-            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp" id="otp0" autocomplete="one-time-code" data-lpignore="true" aria-label="Digit 1" />
-            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp" id="otp1" autocomplete="one-time-code" data-lpignore="true" aria-label="Digit 2" />
-            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp" id="otp2" autocomplete="one-time-code" data-lpignore="true" aria-label="Digit 3" />
-            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp" id="otp3" autocomplete="one-time-code" data-lpignore="true" aria-label="Digit 4" />
-            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp" id="otp4" autocomplete="one-time-code" data-lpignore="true" aria-label="Digit 5" />
-            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp" id="otp5" autocomplete="one-time-code" data-lpignore="true" aria-label="Digit 6" />
-        </div>
+                    <div class="hp-field" aria-hidden="true">
+                        <label for="companyWebsite">Company website</label>
+                        <input type="text" id="companyWebsite" name="companyWebsite" tabindex="-1" autocomplete="off" data-lpignore="true" inputmode="none" />
+                    </div>
 
-        <button id="verifyBtn" type="button">Verify OTP</button>
-    </div>
+                    <div class="form-group">
+                        <label for="loginId">Email Address</label>
+                        <input type="email"
+                               id="loginId"
+                               name="loginId"
+                               class="step-input"
+                               autocomplete="username"
+                               inputmode="email"
+                               placeholder="your@email.com" />
+                    </div>
 
-    <div id="message" class="msg" role="status"></div>
+                    <button id="sendBtn" type="button" class="step-submit">Send OTP</button>
 
-    <div class="install-cta">
-        <button type="button" id="installTrigger" class="install-link" aria-haspopup="dialog" aria-expanded="false">
-            <span class="install-icon" aria-hidden="true">?</span>
-            Install app
-        </button>
-    </div>
+                    <div class="landing-meta">
+                        <div>Managed by ProAcc System Consulting.</div>
+                        <div class="landing-version">V 1.1</div>
+                        <button type="button"
+                                id="installTrigger"
+                                class="install-link"
+                                aria-haspopup="dialog"
+                                aria-expanded="false">
+                            Install app
+                        </button>
+                    </div>
+                </div>
 
-    <div class="login-footer-credit">
-        <p>Powered by ProAcc System Intelligent Tool</p>
-        <p>V 1.1</p>
+                <div id="otpGroup" class="landing-step">
+                    <h2 class="step-title">Verify your email</h2>
+                    <p class="step-subtitle">
+                        Enter the 6-digit code sent to<br />
+                        <span class="step-email-display" id="emailDisplay"></span>
+                    </p>
+
+                    <div id="messageOtp" class="step-error" style="display:none;" role="status"></div>
+
+                    <input type="hidden" id="loginIdHidden" />
+
+                    <div class="form-group">
+                        <label class="otp-label" for="otp0">Enter OTP</label>
+                        <div class="otp-boxes" id="otpBoxes" role="group" aria-label="One time passcode digits">
+                            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp otp-digit" id="otp0" autocomplete="one-time-code" data-lpignore="true" aria-label="Digit 1" />
+                            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp otp-digit" id="otp1" autocomplete="one-time-code" data-lpignore="true" aria-label="Digit 2" />
+                            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp otp-digit" id="otp2" autocomplete="one-time-code" data-lpignore="true" aria-label="Digit 3" />
+                            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp otp-digit" id="otp3" autocomplete="one-time-code" data-lpignore="true" aria-label="Digit 4" />
+                            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp otp-digit" id="otp4" autocomplete="one-time-code" data-lpignore="true" aria-label="Digit 5" />
+                            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="otp otp-digit" id="otp5" autocomplete="one-time-code" data-lpignore="true" aria-label="Digit 6" />
+                        </div>
+                    </div>
+
+                    <button id="verifyBtn" type="button" class="step-submit">Verify</button>
+
+                    <div class="otp-footer">
+                        <a href="#" class="otp-back" id="backToEmail">&larr; Back to email</a>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
     </div>
 </div>
 
@@ -83,7 +123,7 @@
             <div class="install-section">
                 <div class="install-badge">iOS · Safari</div>
                 <ol>
-                    <li>Tap <strong>Share</strong>.</li>
+                    <li>Tap Share.</li>
                     <li>
                         Choose
                         <button type="button" id="installFromIosBtn" class="install-inline-btn">
@@ -99,12 +139,22 @@
     </div>
 </div>
 
+@section Scripts {
 <script>
 (() => {
-    const msg = (t, isError) => {
-        const el = document.getElementById('message');
-        el.textContent = t || '';
-        el.classList.toggle('msg--error', !!isError);
+    const msgEmail = (t) => {
+        const el = document.getElementById('messageEmail');
+        if (!el) return;
+        if (!t) { el.style.display = 'none'; el.textContent = ''; return; }
+        el.style.display = 'block';
+        el.textContent = t;
+    };
+    const msgOtp = (t) => {
+        const el = document.getElementById('messageOtp');
+        if (!el) return;
+        if (!t) { el.style.display = 'none'; el.textContent = ''; return; }
+        el.style.display = 'block';
+        el.textContent = t;
     };
 
     const sendBtn = document.getElementById('sendBtn');
@@ -115,6 +165,23 @@
     const idGroup = document.getElementById('idGroup');
     const otpGroup = document.getElementById('otpGroup');
     const otpBoxes = document.getElementById('otpBoxes');
+    const landingPage = document.getElementById('landingPage');
+    const emailDisplay = document.getElementById('emailDisplay');
+
+    const showEmailStep = () => {
+        idGroup.classList.add('is-active');
+        otpGroup.classList.remove('is-active');
+        landingPage?.classList.remove('landing-page--otp');
+    };
+
+    const showOtpStep = (email) => {
+        loginHidden.value = email;
+        if (emailDisplay) emailDisplay.textContent = email;
+        idGroup.classList.remove('is-active');
+        otpGroup.classList.add('is-active');
+        landingPage?.classList.add('landing-page--otp');
+        otpInputs[0]?.focus();
+    };
 
     const otpString = () => otpInputs.map((input) => (input.value || '').replace(/\D/g, '').slice(0, 1)).join('');
 
@@ -148,14 +215,14 @@
             const loginId = (loginHidden.value || '').trim();
             const otp = otpString();
             if (!loginId) {
-                msg('Email missing. Refresh and try again.', true);
+                msgOtp('Email missing. Refresh and try again.');
                 return;
             }
             if (otp.length !== 6 || !/^\d{6}$/.test(otp)) {
-                msg('OTP must be exactly 6 digits.', true);
+                msgOtp('OTP must be exactly 6 digits.');
                 return;
             }
-            msg('');
+            msgOtp('');
             const fd = new FormData();
             fd.append('LoginId', loginId);
             fd.append('Otp', otp);
@@ -171,28 +238,29 @@
             if (!res.ok || !data.success) {
                 let t = data.message || 'Verification failed.';
                 if (data.diagnostic) t += '\n\n' + data.diagnostic;
-                msg(t, true);
-                otpInputs.forEach((input) => { input.value = ''; });
+                msgOtp(t);
+                otpInputs.forEach((input) => { input.value = ''; input.classList.remove('is-filled'); });
                 otpInputs[0]?.focus();
                 return;
             }
             window.location.href = data.redirectUrl || '@Url.Page("/PurchaseOrders")';
         } catch {
-            msg('Network error.', true);
+            msgOtp('Network error.');
         } finally {
             verifyInFlight = false;
             verifyBtn.disabled = false;
-            verifyBtn.textContent = 'Verify OTP';
+            verifyBtn.textContent = 'Verify';
         }
     };
 
     const runSendOtp = async () => {
         const loginId = (loginIdEl.value || '').trim();
         if (!loginId) {
-            msg('Please enter your work email.', true);
+            msgEmail('Please enter your work email.');
             return;
         }
-        msg('');
+        msgEmail('');
+        msgOtp('');
         sendBtn.disabled = true;
         sendBtn.textContent = 'Sending...';
         try {
@@ -208,26 +276,34 @@
             if (!res.ok || !data.success) {
                 let t = data.message || 'Could not send OTP.';
                 if (data.diagnostic) t += '\n\n' + data.diagnostic;
-                msg(t, true);
+                msgEmail(t);
                 return;
             }
-            msg(data.message || '');
-            loginHidden.value = loginId;
-            idGroup.style.display = 'none';
-            otpGroup.style.display = 'block';
-            otpInputs.forEach((input) => { input.value = ''; });
+            showOtpStep(loginId);
+            if (data.message) msgOtp(data.message);
+            otpInputs.forEach((input) => { input.value = ''; input.classList.remove('is-filled'); });
             const d = (data.devOtp || '').toString().trim();
             if (/^\d{6}$/.test(d)) {
-                for (let i = 0; i < 6; i++) otpInputs[i].value = d[i];
+                for (let i = 0; i < 6; i++) {
+                    otpInputs[i].value = d[i];
+                    otpInputs[i].classList.add('is-filled');
+                }
             }
             otpInputs[0]?.focus();
         } catch {
-            msg('Network error.', true);
+            msgEmail('Network error.');
         } finally {
             sendBtn.disabled = false;
             sendBtn.textContent = 'Send OTP';
         }
     };
+
+    document.getElementById('backToEmail')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        msgOtp('');
+        otpInputs.forEach((input) => { input.value = ''; input.classList.remove('is-filled'); });
+        showEmailStep();
+    });
 
     sendBtn.addEventListener('click', () => void runSendOtp());
 
@@ -249,6 +325,7 @@
                 e.preventDefault();
                 otpInputs[idx - 1].focus();
                 otpInputs[idx - 1].value = '';
+                otpInputs[idx - 1].classList.remove('is-filled');
             }
             return;
         }
@@ -263,6 +340,7 @@
         if (digit) {
             e.preventDefault();
             el.value = digit;
+            el.classList.add('is-filled');
             if (idx < otpInputs.length - 1) {
                 otpInputs[idx + 1].focus();
             } else {
@@ -276,6 +354,7 @@
         input.addEventListener('input', () => {
             const digits = (input.value || '').replace(/\D/g, '');
             input.value = digits.slice(-1);
+            input.classList.toggle('is-filled', !!input.value);
             if (input.value && idx < arr.length - 1) {
                 arr[idx + 1].focus();
             }
@@ -288,7 +367,10 @@
             const digits = text.replace(/\D/g, '').slice(0, 6);
             if (!digits) return;
             digits.split('').forEach((ch, i) => {
-                if (arr[i]) arr[i].value = ch;
+                if (arr[i]) {
+                    arr[i].value = ch;
+                    arr[i].classList.add('is-filled');
+                }
             });
             const next = Math.min(digits.length, arr.length - 1);
             arr[next].focus();
@@ -327,8 +409,7 @@
     };
 
     const updateInstallVisibility = () => {
-        const showInstall = !isInstalled;
-        trigger.hidden = !showInstall;
+        trigger.hidden = isInstalled;
     };
 
     const standaloneDisplay = window.matchMedia('(display-mode: standalone)').matches;
@@ -408,25 +489,22 @@
         }
     };
 
-    const handleBeforeInstallPrompt = (event) => {
+    window.addEventListener('beforeinstallprompt', (event) => {
         event.preventDefault();
         deferredPrompt = event;
         canInstall = true;
         updateInstallVisibility();
-    };
+    });
 
-    const handleAppInstalled = () => {
+    window.addEventListener('appinstalled', () => {
         isInstalled = true;
         canInstall = false;
         deferredPrompt = null;
         closeModal();
         updateInstallVisibility();
-    };
+    });
 
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    window.addEventListener('appinstalled', handleAppInstalled);
-
-    trigger.addEventListener('click', handleInstallClick);
+    trigger.addEventListener('click', () => handleInstallClick());
     installFromModalBtn?.addEventListener('click', () => handleInstallClick(true, 'android'));
     installFromIosBtn?.addEventListener('click', () => handleInstallClick(false, 'ios'));
     closeTargets.forEach((el) => el.addEventListener('click', closeModal));
@@ -438,3 +516,4 @@
     });
 })();
 </script>
+}
