@@ -108,6 +108,8 @@ html, body {
   max-width: 200px;
   max-height: 72px;
   object-fit: contain;
+  background: transparent;
+  mix-blend-mode: multiply;
 }
 
 .login-container h2 {

@@ -172,6 +172,7 @@ builder.Services.AddSingleton<WebPushSubscriptionFileStore>();
 builder.Services.AddSingleton<WebPushPendingCursorStore>();
 builder.Services.AddHostedService<PendingOrderWebPushWorker>();
 
+builder.Services.AddControllers();
 var razorPages = builder.Services.AddRazorPages(options =>
 {
     // All pages under /Pages require authentication unless explicitly allowed below.
@@ -284,6 +285,7 @@ app.Use(async (ctx, next) =>
 
 app.UseAuthorization();
 app.MapRazorPages();
+app.MapControllers();
 // Legacy bookmark / old JS: /ScanPO/Detail?docKey= → /ScanPODetail?docKey=
 app.MapGet("/ScanPO/Detail", (HttpContext ctx) =>
 {
