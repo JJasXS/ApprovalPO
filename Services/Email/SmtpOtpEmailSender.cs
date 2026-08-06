@@ -123,7 +123,7 @@ public sealed class SmtpOtpEmailSender : IOtpEmailSender
             message.Subject = "Your approval login code";
             message.Body = new TextPart("plain")
             {
-                Text = $"Your one-time code is: {otpCode}\n\nIt expires in a few minutes."
+                Text = $"Your one-time code is: {otpCode}\n\nIt expires in 120 seconds."
             };
 
             using var client = new SmtpClient();

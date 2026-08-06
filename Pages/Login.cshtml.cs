@@ -89,9 +89,20 @@ public class LoginModel : PageModel
         if (MapSyUserBlockMessage(sy.Status) != null)
             return JsonSyUserFailure(sy);
 
-        var (ok, message, otpPlain) = _otpStore.TryBeginSend(LoginId);
-        if (!ok || string.IsNullOrEmpty(otpPlain))
-            return new JsonResult(new { success = false, message });
+        var begin = _otpStore.TryBeginSend(LoginId);
+        if (!begin.Ok || string.IsNullOrEmpty(begin.OtpPlainForDev))
+        {
+            return new JsonResult(new
+            {
+                success = false,
+                message = begin.Message,
+                cooldownRemainingSeconds = begin.CooldownRemainingSeconds,
+                expiresAtUnix = begin.ExpiresAtUnix > 0 ? begin.ExpiresAtUnix : (long?)null,
+                resendCooldownSeconds = _approval.OtpResendCooldownSeconds > 0 ? _approval.OtpResendCooldownSeconds : 30
+            }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        }
+
+        var otpPlain = begin.OtpPlainForDev;
 
         if (_approval.DebugOtpToConsole)
         {
@@ -116,12 +127,15 @@ public class LoginModel : PageModel
                 err);
         }
 
+        var resendCooldown = _approval.OtpResendCooldownSeconds > 0 ? _approval.OtpResendCooldownSeconds : 30;
         var payload = new Dictionary<string, object?>
         {
             ["success"] = true,
             ["message"] = sent
-                ? "OTP sent to your email."
-                : "OTP generated (email not delivered — use the code shown below)."
+                ? "OTP sent successfully"
+                : "OTP generated (email not delivered — use the code shown below).",
+            ["expiresAtUnix"] = begin.ExpiresAtUnix,
+            ["resendCooldownSeconds"] = resendCooldown
         };
 
         if (_env.IsDevelopment())

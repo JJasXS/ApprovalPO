@@ -208,6 +208,17 @@ html, body {
   word-break: break-word;
 }
 
+.step-success {
+  color: #1f6b3a;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 14px;
+  padding: 9px 12px;
+  background: rgba(46, 160, 90, 0.12);
+  border-radius: 8px;
+  border: 1px solid rgba(46, 160, 90, 0.28);
+}
+
 .otp-label {
   text-align: center;
 }
@@ -216,6 +227,11 @@ html, body {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   gap: 8px;
+}
+
+.otp-boxes.is-locked {
+  pointer-events: none;
+  opacity: 0.55;
 }
 
 .otp-digit,
@@ -250,9 +266,56 @@ html, body {
   border-color: var(--ice-accent);
 }
 
+.otp-digit:disabled,
+.otp-boxes input.otp:disabled {
+  cursor: not-allowed;
+  background: #e8eef3;
+}
+
+.otp-hint {
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--ice-text-muted);
+  text-align: center;
+  font-weight: 600;
+}
+
+.otp-hint.is-expired {
+  color: #b33a3a;
+}
+
 .otp-footer {
   margin-top: 18px;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.otp-resend {
+  border: 0;
+  background: none;
+  color: var(--ice-accent);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 8px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.otp-resend:hover:not(:disabled) {
+  color: var(--ice-accent-hover);
+  background: var(--ice-accent-soft);
+}
+
+.otp-resend:disabled {
+  color: var(--ice-text-muted);
+  cursor: not-allowed;
+  text-decoration: none;
+  opacity: 0.85;
 }
 
 .otp-back {

@@ -3,7 +3,7 @@ using Microsoft.Extensions.Options;
 
 namespace ApprovalPO.Services.Auth;
 
-/// <summary>In-memory OTP with expiry, send rate limit, and verify lockout.</summary>
+/// <summary>In-memory OTP with expiry, resend cooldown, send rate limit, and verify lockout.</summary>
 public class OtpSessionStore
 {
     private readonly IOptions<ApprovalOptions> _options;
@@ -19,17 +19,37 @@ public class OtpSessionStore
         public readonly object LockObj = new();
         public string? Otp;
         public DateTimeOffset? ExpiresAt;
+        public DateTimeOffset? LastSentAt;
         public int FailedVerifications;
         public DateTimeOffset? LockedUntil;
         public readonly List<DateTimeOffset> SendTimestamps = new();
     }
 
-    public (bool Ok, string Message, string? OtpPlainForDev) TryBeginSend(string loginId)
+    public readonly record struct BeginSendResult(
+        bool Ok,
+        string Message,
+        string? OtpPlainForDev,
+        long ExpiresAtUnix,
+        int CooldownRemainingSeconds);
+
+    private static int EffectiveExpirySeconds(ApprovalOptions opt)
+    {
+        if (opt.OtpExpirySeconds > 0)
+            return opt.OtpExpirySeconds;
+        if (opt.OtpExpiryMinutes > 0)
+            return opt.OtpExpiryMinutes * 60;
+        return 120;
+    }
+
+    public BeginSendResult TryBeginSend(string loginId)
     {
         var opt = _options.Value;
         var key = Normalize(loginId);
         if (string.IsNullOrEmpty(key))
-            return (false, "Login id is required.", null);
+            return new BeginSendResult(false, "Login id is required.", null, 0, 0);
+
+        var lifetimeSeconds = EffectiveExpirySeconds(opt);
+        var cooldownSeconds = opt.OtpResendCooldownSeconds > 0 ? opt.OtpResendCooldownSeconds : 30;
 
         lock (_global)
         {
@@ -50,23 +70,54 @@ public class OtpSessionStore
                 else if (entry.LockedUntil.HasValue && entry.LockedUntil.Value > now)
                 {
                     var mins = Math.Ceiling((entry.LockedUntil.Value - now).TotalMinutes);
-                    return (false, $"Too many attempts. Try again in {(int)mins} minute(s).", null);
+                    return new BeginSendResult(false, $"Too many attempts. Try again in {(int)mins} minute(s).", null, 0, 0);
+                }
+
+                if (entry.LastSentAt.HasValue)
+                {
+                    var since = (int)(now - entry.LastSentAt.Value).TotalSeconds;
+                    if (since < cooldownSeconds)
+                    {
+                        var wait = cooldownSeconds - since;
+                        if (wait < 1) wait = 1;
+                        var existingExpiresUnix = entry.ExpiresAt.HasValue
+                            ? entry.ExpiresAt.Value.ToUnixTimeSeconds()
+                            : 0L;
+                        return new BeginSendResult(
+                            false,
+                            $"Please wait {wait}s before requesting another OTP.",
+                            null,
+                            existingExpiresUnix,
+                            wait);
+                    }
                 }
 
                 if (opt.OtpMaxSendsPerWindow > 0)
                 {
                     PruneSends(entry, now, opt.OtpRateLimitWindowMinutes);
                     if (entry.SendTimestamps.Count >= opt.OtpMaxSendsPerWindow)
-                        return (false, $"Too many OTP requests. Wait up to {opt.OtpRateLimitWindowMinutes} minutes and try again.", null);
+                        return new BeginSendResult(
+                            false,
+                            $"Too many OTP requests. Wait up to {opt.OtpRateLimitWindowMinutes} minutes and try again.",
+                            null,
+                            0,
+                            0);
                 }
 
                 var otp = Random.Shared.Next(100000, 1000000).ToString();
                 entry.Otp = otp;
-                entry.ExpiresAt = now.AddMinutes(opt.OtpExpiryMinutes);
+                entry.ExpiresAt = now.AddSeconds(lifetimeSeconds);
+                entry.LastSentAt = now;
                 entry.FailedVerifications = 0;
                 if (opt.OtpMaxSendsPerWindow > 0)
                     entry.SendTimestamps.Add(now);
-                return (true, "OTP generated.", otp);
+
+                return new BeginSendResult(
+                    true,
+                    "OTP generated.",
+                    otp,
+                    entry.ExpiresAt.Value.ToUnixTimeSeconds(),
+                    0);
             }
         }
     }

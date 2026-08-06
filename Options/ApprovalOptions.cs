@@ -13,7 +13,14 @@ public class ApprovalOptions
     /// <summary>PO amount at or above triggers extra confirm before approve.</summary>
     public decimal HighValueAmountThreshold { get; set; } = 5000m;
 
-    public int OtpExpiryMinutes { get; set; } = 5;
+    /// <summary>OTP lifetime in seconds (preferred). Default 120.</summary>
+    public int OtpExpirySeconds { get; set; } = 120;
+
+    /// <summary>Legacy minutes fallback when <see cref="OtpExpirySeconds"/> is 0.</summary>
+    public int OtpExpiryMinutes { get; set; }
+
+    /// <summary>Minimum seconds between OTP sends for the same email. Default 30.</summary>
+    public int OtpResendCooldownSeconds { get; set; } = 30;
 
     public int OtpRateLimitWindowMinutes { get; set; } = 15;
 
