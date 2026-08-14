@@ -68,7 +68,7 @@ body {
   top: 0;
   z-index: 120;
   padding: max(var(--po-space-2), var(--po-safe-top)) max(var(--po-space-3), var(--po-safe-right))
-    var(--po-space-4) max(var(--po-space-3), var(--po-safe-left));
+    var(--po-space-2) max(var(--po-space-3), var(--po-safe-left));
   background: var(--po-surface);
   color: var(--po-text);
   border-bottom: 1px solid var(--po-border);
@@ -291,9 +291,9 @@ body {
   transition: margin-top 0.2s ease;
 }
 
-/* Breathing room below sticky hero when filters/tabs strip is visible (not collapsed). */
+/* Keep list flush under filters/tabs. */
 .po-main__inner:has(.po-table-wrap__head:not(.is-collapsed)) {
-  margin-top: var(--po-space-4);
+  margin-top: 0;
 }
 
 .po-pane {
@@ -634,7 +634,7 @@ select.po-filter-input {
 /* ——— Table region ——— */
 
 .po-table-wrap__head {
-  padding: 8px 0 0;
+  padding: 8px 0 10px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -642,12 +642,9 @@ select.po-filter-input {
   position: sticky;
   top: var(--po-header-height);
   z-index: 80;
-  /* Solid, crisp sticky surface (no haze over content) */
   background: #fff;
-  padding-bottom: var(--po-space-2);
   box-shadow: none;
   border-bottom: 1px solid var(--po-border);
-  /* Force a new stacking context to avoid WebKit bleed-through */
   isolation: isolate;
 }
 
@@ -658,8 +655,8 @@ select.po-filter-input {
   left: 50%;
   transform: translateX(-50%);
   width: 100vw;
-  top: -14px;
-  bottom: -14px;
+  top: 0;
+  bottom: 0;
   background: #fff;
   pointer-events: none;
   z-index: -1;
@@ -682,7 +679,7 @@ select.po-filter-input {
   background: transparent;
   border-radius: 0;
   overflow: visible;
-  min-height: 200px;
+  min-height: 0;
   width: 100%;
   z-index: 1;
 }
@@ -709,7 +706,7 @@ select.po-filter-input {
 
 .po-table thead {
   position: relative;
-  z-index: 30;
+  z-index: 2;
 }
 
 .po-table thead th {
@@ -721,8 +718,7 @@ select.po-filter-input {
   letter-spacing: 0.06em;
   color: var(--po-text-muted);
   border: none;
-  position: sticky;
-  top: calc(var(--po-header-height) + var(--po-table-wrap-head-height));
+  position: static;
   background: var(--po-surface-bright);
   border-bottom: 1px solid var(--po-border);
 }
@@ -1657,7 +1653,7 @@ tr.items-row--xfer-bad .items-check .po-check input:focus-visible + .po-check__b
   }
 
   .po-table thead {
-    display: none;
+    display: none !important;
   }
 
   .po-table tbody tr.po-row {
