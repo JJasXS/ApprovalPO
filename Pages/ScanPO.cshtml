@@ -25,7 +25,7 @@
                     <polyline points="15 18 9 12 15 6"/>
                 </svg>
             </a>
-            <partial name="_ScanModuleTabs" model='"scan"' />
+            <h1 class="scan-header-title">Scanning PO</h1>
         </div>
         <div class="scan-header-actions">
             <div class="scan-menu-wrap">
@@ -35,13 +35,15 @@
                 <div id="scanMenuPanel" class="scan-menu-panel" hidden>
                     <div class="scan-menu-user">@userName</div>
                     <a asp-page="/Dashboard" class="scan-menu-link">&#8592; Back to home</a>
-                    <a asp-page="/ReceivedGoods" class="scan-menu-link">Good Received</a>
                     <form method="post" asp-page="/Logout" style="margin:0;padding:0">
                         <button type="submit" class="scan-menu-link scan-menu-link--danger">Sign out</button>
                     </form>
                 </div>
             </div>
         </div>
+    </div>
+    <div class="scan-header-tabs">
+        <partial name="_ScanModuleTabs" model='"scan"' />
     </div>
 </header>
 
