@@ -1,7 +1,7 @@
 @page "/ReceivedGoods"
 @model ApprovalPO.Pages.ReceivedGoodsModel
 @{
-    ViewData["Title"] = "Received goods";
+    ViewData["Title"] = "Good Received";
     ViewData["AppName"] = "Approval PO";
     var listJsonUrl = Url.Page("/ReceivedGoods", null, new { handler = "ListJson" })!;
     var detailPageUrl = "/ScanReceivedDetail";
@@ -25,13 +25,9 @@
                     <polyline points="15 18 9 12 15 6"/>
                 </svg>
             </a>
-            <div>
-                <h1 class="scan-header-title">Received goods</h1>
-                <p class="scan-header-subtitle">Goods receipts (PH_GR) — tap a row for line items, receive &amp; return qty</p>
-            </div>
+            <partial name="_ScanModuleTabs" model='"received"' />
         </div>
         <div class="scan-header-actions">
-            <a asp-page="/ScanPO" class="scan-module-link" title="Open Scan PO">Scan PO</a>
             <div class="scan-menu-wrap">
                 <button class="scan-menu-btn" id="scanMenuBtn" type="button" aria-expanded="false" aria-controls="scanMenuPanel" aria-label="Open menu">
                     <span></span><span></span><span></span>

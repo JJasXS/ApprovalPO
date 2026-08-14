@@ -31,13 +31,35 @@ public sealed class TenantDbConnectionResolver
         _httpFactory = httpFactory;
     }
 
-    public async Task<string> GetConnectionStringForTenantAsync(string tenantCode, CancellationToken cancellationToken = default)
+    /// <summary>Drops the cached AWS tenant payload so the next resolve re-fetches from the tenant-config API.</summary>
+    public void InvalidateTenant(string tenantCode)
+    {
+        tenantCode = (tenantCode ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(tenantCode))
+            return;
+        _cache.TryRemove(tenantCode, out _);
+    }
+
+    /// <summary>
+    /// Re-fetches tenant config from AWS (connection string, dashboard module flags, roles, email, sqlApi)
+    /// and replaces the in-memory cache entry.
+    /// </summary>
+    public Task<string> RefreshTenantConfigAsync(string tenantCode, CancellationToken cancellationToken = default) =>
+        GetConnectionStringForTenantAsync(tenantCode, cancellationToken, forceRefresh: true);
+
+    public Task<string> GetConnectionStringForTenantAsync(string tenantCode, CancellationToken cancellationToken = default) =>
+        GetConnectionStringForTenantAsync(tenantCode, cancellationToken, forceRefresh: false);
+
+    private async Task<string> GetConnectionStringForTenantAsync(
+        string tenantCode,
+        CancellationToken cancellationToken,
+        bool forceRefresh)
     {
         tenantCode = (tenantCode ?? "").Trim();
         if (string.IsNullOrWhiteSpace(tenantCode))
             throw new InvalidOperationException("Tenant code is required.");
 
-        if (_cache.TryGetValue(tenantCode, out var cached))
+        if (!forceRefresh && _cache.TryGetValue(tenantCode, out var cached))
             return cached.ConnectionString;
 
         var baseUrl = (_configuration["TenantBootstrap:AwsApiBaseUrl"] ?? "").Trim();

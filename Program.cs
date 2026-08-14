@@ -171,6 +171,7 @@ builder.Services.AddSingleton<IOtpEmailSender, SmtpOtpEmailSender>();
 builder.Services.AddSingleton<WebPushSubscriptionFileStore>();
 builder.Services.AddSingleton<WebPushPendingCursorStore>();
 builder.Services.AddHostedService<PendingOrderWebPushWorker>();
+builder.Services.AddHostedService<TenantConfigRefreshWorker>();
 
 builder.Services.AddControllers();
 var razorPages = builder.Services.AddRazorPages(options =>

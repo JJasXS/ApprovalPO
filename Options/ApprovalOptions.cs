@@ -94,4 +94,24 @@ public class ApprovalOptions
     /// How often the browser polls for new <strong>pending</strong> orders when desktop alerts are on. Seconds, clamped between 30 and 600; default 120.
     /// </summary>
     public int PendingNotifyPollSeconds { get; set; } = 120;
+
+    /// <summary>
+    /// How often to re-fetch AWS tenant-config (module true/false flags, roles, DB host, etc.).
+    /// Seconds; <c>0</c> disables. Clamped between 60 and 3600 when enabled; default 300 (5 minutes).
+    /// </summary>
+    public int TenantConfigRefreshSeconds { get; set; } = 300;
+
+    public int TenantConfigRefreshSecondsClamped
+    {
+        get
+        {
+            if (TenantConfigRefreshSeconds <= 0)
+                return 0;
+            if (TenantConfigRefreshSeconds < 60)
+                return 60;
+            if (TenantConfigRefreshSeconds > 3600)
+                return 3600;
+            return TenantConfigRefreshSeconds;
+        }
+    }
 }

@@ -17,7 +17,7 @@ Get-Content -LiteralPath $EnvPath | ForEach-Object {
     }
 }
 
-$need = @('TENANT_CODE', 'AWS_REGION', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY')
+$need = @('TENANT_CODE', 'FIREBIRD_PASSWORD', 'AWS_REGION', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY')
 $bad = @()
 foreach ($k in $need) {
     if (-not $map.ContainsKey($k) -or [string]::IsNullOrWhiteSpace($map[$k])) {
@@ -30,5 +30,5 @@ if ($bad.Count -gt 0) {
     exit 3
 }
 
-Write-Host ("OK: TENANT_CODE=" + $map['TENANT_CODE'] + "  AWS_REGION=" + $map['AWS_REGION'] + "  AWS keys: present")
+Write-Host ("OK: TENANT_CODE=" + $map['TENANT_CODE'] + "  AWS_REGION=" + $map['AWS_REGION'] + "  FIREBIRD_PASSWORD + AWS keys: present")
 exit 0

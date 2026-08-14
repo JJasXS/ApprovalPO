@@ -10,6 +10,7 @@ REM Log: C:\Temp\ApprovalPO-deploy.log
 REM
 REM Required .env keys:
 REM   TENANT_CODE
+REM   FIREBIRD_PASSWORD
 REM   AWS_REGION
 REM   AWS_ACCESS_KEY_ID
 REM   AWS_SECRET_ACCESS_KEY
@@ -68,13 +69,14 @@ REM ============================================================================
 REM STEP 0 -- Enter .env FIRST (Notepad). Deploy starts only after Save + Close.
 REM =============================================================================
 echo ========== STEP 0 / ENV ==========
-echo Fill these 4 values, Save, then CLOSE Notepad:
+echo Fill these values, Save, then CLOSE Notepad:
 echo   TENANT_CODE=...
+echo   FIREBIRD_PASSWORD=...
 echo   AWS_REGION=ap-southeast-1
 echo   AWS_ACCESS_KEY_ID=...
 echo   AWS_SECRET_ACCESS_KEY=...
 echo.
-echo Tip: AWS keys are usually the same for every client; only TENANT_CODE changes.
+echo Tip: AWS keys are usually the same for every client; TENANT_CODE / FIREBIRD_PASSWORD change per site.
 echo.
 call :log STEP0 notepad env
 
@@ -87,13 +89,14 @@ if exist "%APP_DIR%\.env" (
 ) else if exist "C:\Temp\ApprovalPO.env.backup" (
   copy /Y "C:\Temp\ApprovalPO.env.backup" "%ENV_PREP%" >nul
   echo Prefill: copied from C:\Temp\ApprovalPO.env.backup
-) else if exist "C:\Apps\ApprovalPO\publish_new\.env" (
-  copy /Y "C:\Apps\ApprovalPO\publish_new\.env" "%ENV_PREP%" >nul
-  echo Prefill: copied from publish_new\.env
+) else if exist "C:\Users\sqlsupport\ApprovalPO\.env" (
+  copy /Y "C:\Users\sqlsupport\ApprovalPO\.env" "%ENV_PREP%" >nul
+  echo Prefill: copied from repo .env
 ) else (
   (
-    echo # ApprovalPO / e-Approval - required for OTP email via AWS Secrets Manager
+    echo # ApprovalPO / e-Approval
     echo TENANT_CODE=
+    echo FIREBIRD_PASSWORD=
     echo AWS_REGION=ap-southeast-1
     echo AWS_ACCESS_KEY_ID=
     echo AWS_SECRET_ACCESS_KEY=
@@ -119,7 +122,7 @@ if not exist "%ENV_VALIDATOR%" (
 powershell -NoProfile -ExecutionPolicy Bypass -File "%ENV_VALIDATOR%" -EnvPath "%ENV_PREP%"
 if errorlevel 1 (
   echo.
-  echo .env is incomplete. Fix the 4 values and run this script again.
+  echo .env is incomplete. Fix the values and run this script again.
   call :log ERROR env validate failed
   goto :fail
 )
