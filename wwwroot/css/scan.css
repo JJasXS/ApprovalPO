@@ -320,7 +320,8 @@ body {
 }
 
 .scan-table-wrap {
-  overflow-x: auto;
+  overflow-x: clip;
+  overflow-y: visible;
   border-radius: 14px;
   border: 1px solid var(--scan-border);
   background: var(--scan-surface-bright);

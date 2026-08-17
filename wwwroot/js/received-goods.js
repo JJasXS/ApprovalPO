@@ -117,6 +117,14 @@
 
   const hasMore = () => visibleCount < getFiltered().length;
 
+  const pageCanScroll = () =>
+    document.documentElement.scrollHeight > window.innerHeight + 8;
+
+  const sentinelInRange = () => {
+    if (!listSentinel) return false;
+    return listSentinel.getBoundingClientRect().top < window.innerHeight + 80;
+  };
+
   const setInitialVisible = (filtered) => {
     loadingMore = false;
     if (filtered.length === 0) {
@@ -138,6 +146,7 @@
 
     visibleCount = fit;
     updateResultCount(fit, filtered.length);
+    fillUntilScrollable();
   };
 
   const loadMore = () => {
@@ -153,11 +162,22 @@
     loadingMore = false;
   };
 
+  const fillUntilScrollable = () => {
+    let steps = 0;
+    while (hasMore() && steps < 30) {
+      if (pageCanScroll() && !sentinelInRange()) break;
+      const before = visibleCount;
+      loadMore();
+      if (visibleCount === before) break;
+      steps += 1;
+    }
+  };
+
   if (listSentinel && 'IntersectionObserver' in window) {
     const observer = new IntersectionObserver(
       (entries) => {
         if (!entries.some((e) => e.isIntersecting)) return;
-        if (hasMore()) loadMore();
+        fillUntilScrollable();
       },
       { root: null, rootMargin: '80px', threshold: 0 }
     );
