@@ -21,8 +21,7 @@
   const emptyState = document.getElementById('scanEmpty');
   const resultCount = document.getElementById('scanResultCount');
   const searchInput = document.getElementById('scanSearch');
-  const loadMoreBtn = document.getElementById('scanLoadMoreBtn');
-  const listFooter = document.querySelector('.scan-list-footer');
+  const listSentinel = document.getElementById('scanListSentinel');
   const listHint = document.getElementById('scanListHint');
   const tabToScan = document.getElementById('scanTabToScan');
   const tabSubmitted = document.getElementById('scanTabSubmitted');
@@ -148,32 +147,20 @@
 
   const rowHtml = (item) => rowHtmlPo(item);
 
+  let loadingMore = false;
+
   const contentBottom = () => {
-    let bottom = 0;
     const rows = tbody?.querySelectorAll('tr.scan-row');
-    if (rows?.length) {
-      bottom = rows[rows.length - 1].getBoundingClientRect().bottom;
-    }
-    if (loadMoreBtn && !loadMoreBtn.hidden) {
-      bottom = Math.max(bottom, loadMoreBtn.getBoundingClientRect().bottom);
-    } else if (listFooter) {
-      bottom = Math.max(bottom, listFooter.getBoundingClientRect().top);
-    }
-    return bottom;
+    if (!rows?.length) return 0;
+    return rows[rows.length - 1].getBoundingClientRect().bottom;
   };
 
-  const viewportLimit = (reserveMoreBtn) => {
-    const moreH =
-      reserveMoreBtn && loadMoreBtn
-        ? loadMoreBtn.offsetHeight + 6
-        : 0;
-    return window.innerHeight - VIEWPORT_PAD - moreH;
-  };
+  const viewportLimit = () => window.innerHeight - VIEWPORT_PAD;
 
-  const countRowsThatFit = (filtered, reserveMoreBtn) => {
+  const countRowsThatFit = (filtered) => {
     if (!tbody || filtered.length === 0) return 0;
 
-    const limit = viewportLimit(reserveMoreBtn);
+    const limit = viewportLimit();
     tbody.innerHTML = '';
     let fit = 0;
 
@@ -188,21 +175,6 @@
     }
 
     return fit;
-  };
-
-  const updateLoadMore = (shown, total) => {
-    if (!loadMoreBtn) return;
-    const remaining = total - shown;
-    if (remaining <= 0) {
-      loadMoreBtn.hidden = true;
-      return;
-    }
-    loadMoreBtn.hidden = false;
-    loadMoreBtn.textContent = 'More';
-    loadMoreBtn.setAttribute(
-      'aria-label',
-      `Load ${Math.min(MORE_STEP, remaining)} more (${remaining} remaining)`
-    );
   };
 
   const updateResultCount = (shown, total) => {
@@ -226,25 +198,20 @@
     return shown;
   };
 
+  const hasMore = () => visibleCount < getFiltered().length;
+
   const setInitialVisible = (filtered) => {
+    loadingMore = false;
     if (filtered.length === 0) {
       visibleCount = 0;
       if (tbody) tbody.innerHTML = '';
       if (emptyState) emptyState.hidden = false;
-      updateLoadMore(0, 0);
       updateResultCount(0, 0);
       return;
     }
     if (emptyState) emptyState.hidden = true;
 
-    if (loadMoreBtn) loadMoreBtn.hidden = true;
-
-    let fit = countRowsThatFit(filtered, false);
-
-    if (fit < filtered.length) {
-      if (loadMoreBtn) loadMoreBtn.hidden = false;
-      fit = countRowsThatFit(filtered, true);
-    }
+    let fit = countRowsThatFit(filtered);
 
     if (fit < 1 && filtered.length > 0) {
       fit = 1;
@@ -254,25 +221,31 @@
     }
 
     visibleCount = fit;
-    updateLoadMore(fit, filtered.length);
     updateResultCount(fit, filtered.length);
   };
 
   const loadMore = () => {
+    if (loadingMore) return;
     const filtered = getFiltered();
     const prev = visibleCount;
+    if (prev >= filtered.length || !tbody) return;
+    loadingMore = true;
     visibleCount = Math.min(filtered.length, visibleCount + MORE_STEP);
-    if (visibleCount === prev || !tbody) return;
-
     const chunk = filtered.slice(prev, visibleCount);
     tbody.insertAdjacentHTML('beforeend', chunk.map(rowHtml).join(''));
-
-    updateLoadMore(visibleCount, filtered.length);
     updateResultCount(visibleCount, filtered.length);
+    loadingMore = false;
   };
 
-  if (loadMoreBtn) {
-    loadMoreBtn.addEventListener('click', loadMore);
+  if (listSentinel && 'IntersectionObserver' in window) {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        if (hasMore()) loadMore();
+      },
+      { root: null, rootMargin: '80px', threshold: 0 }
+    );
+    observer.observe(listSentinel);
   }
 
   let resizeTimer;
@@ -303,7 +276,6 @@
       if (tbody) {
         tbody.innerHTML = `<tr><td colspan="2" class="scan-empty">Failed to load orders: ${esc(e.message)}</td></tr>`;
       }
-      if (loadMoreBtn) loadMoreBtn.hidden = true;
     }
   };
 
