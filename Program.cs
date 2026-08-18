@@ -44,6 +44,11 @@ var fbPassFromEnv = (Environment.GetEnvironmentVariable("FIREBIRD_PASSWORD")
 if (!string.IsNullOrEmpty(fbPassFromEnv))
     bootstrapFromEnv["TenantBootstrap:FirebirdPassword"] = fbPassFromEnv;
 
+var apiUrlFromEnv = (Environment.GetEnvironmentVariable("TENANT_BOOTSTRAP_API_URL")
+    ?? Environment.GetEnvironmentVariable("TenantBootstrap__AwsApiBaseUrl"))?.Trim();
+if (!string.IsNullOrEmpty(apiUrlFromEnv))
+    bootstrapFromEnv["TenantBootstrap:AwsApiBaseUrl"] = apiUrlFromEnv;
+
 if (bootstrapFromEnv.Count > 0)
     builder.Configuration.AddInMemoryCollection(bootstrapFromEnv);
 
