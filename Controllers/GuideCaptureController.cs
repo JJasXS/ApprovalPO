@@ -17,20 +17,17 @@ namespace ApprovalPO.Controllers;
 public sealed class GuideCaptureController : ControllerBase
 {
     private readonly ISyUserLoginValidator _syUser;
-    private readonly IUserRoleResolver _roleResolver;
     private readonly TenantDbConnectionResolver _tenantResolver;
     private readonly IConfiguration _configuration;
     private readonly ILogger<GuideCaptureController> _logger;
 
     public GuideCaptureController(
         ISyUserLoginValidator syUser,
-        IUserRoleResolver roleResolver,
         TenantDbConnectionResolver tenantResolver,
         IConfiguration configuration,
         ILogger<GuideCaptureController> logger)
     {
         _syUser = syUser;
-        _roleResolver = roleResolver;
         _tenantResolver = tenantResolver;
         _configuration = configuration;
         _logger = logger;
@@ -49,6 +46,8 @@ public sealed class GuideCaptureController : ControllerBase
         if (string.IsNullOrWhiteSpace(email))
             email = (_configuration["Approval:GuideCaptureEmail"] ?? "").Trim();
         if (string.IsNullOrWhiteSpace(email))
+            email = await TryPickSyUserEmailAsync(cancellationToken).ConfigureAwait(false) ?? "";
+        if (string.IsNullOrWhiteSpace(email))
             email = await TryPickAdminEmailAsync(cancellationToken).ConfigureAwait(false) ?? "";
 
         SyUserEmailLookupResult? sy = null;
@@ -66,6 +65,8 @@ public sealed class GuideCaptureController : ControllerBase
         if (string.IsNullOrWhiteSpace(email))
         {
             email = await TryPickSyUserEmailAsync(cancellationToken).ConfigureAwait(false) ?? "";
+            if (string.IsNullOrWhiteSpace(email))
+                email = await TryPickAdminEmailAsync(cancellationToken).ConfigureAwait(false) ?? "";
             if (!string.IsNullOrWhiteSpace(email))
                 sy = await _syUser.LookupByEmailAsync(email, cancellationToken).ConfigureAwait(false);
         }
@@ -87,15 +88,10 @@ public sealed class GuideCaptureController : ControllerBase
             new(ClaimTypes.Email, email),
             new(ClaimTypes.Name, displayName),
         };
+        SyUserApprovalMapper.AddProfileClaims(claims, sy);
 
-        var roles = await _roleResolver.ResolveRolesForEmailAsync(email, cancellationToken).ConfigureAwait(false);
-        foreach (var role in roles)
-        {
-            if (!string.IsNullOrWhiteSpace(role))
-                claims.Add(new Claim(ClaimTypes.Role, role));
-        }
-
-        if (!roles.Any(r => string.Equals(r, ApprovalRoles.Admin, StringComparison.OrdinalIgnoreCase)))
+        if (!claims.Any(c => c.Type == ClaimTypes.Role
+                             && string.Equals(c.Value, ApprovalRoles.Admin, StringComparison.OrdinalIgnoreCase)))
             claims.Add(new Claim(ClaimTypes.Role, ApprovalRoles.Admin));
 
         await HttpContext.SignInAsync(

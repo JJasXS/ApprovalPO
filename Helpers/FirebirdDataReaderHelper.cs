@@ -62,6 +62,24 @@ public static class FirebirdDataReaderHelper
         return 0m;
     }
 
+    public static decimal? GetDecimalNullable(DbDataReader reader, params string[] columnNames)
+    {
+        foreach (var name in columnNames)
+        {
+            var ord = TryGetOrdinal(reader, name);
+            if (ord < 0)
+                continue;
+            if (reader.IsDBNull(ord))
+                return null;
+            var v = reader.GetValue(ord);
+            if (v is decimal d)
+                return d;
+            return Convert.ToDecimal(v, CultureInfo.InvariantCulture);
+        }
+
+        return null;
+    }
+
     public static DateTime? GetDateTime(DbDataReader reader, params string[] columnNames)
     {
         foreach (var name in columnNames)

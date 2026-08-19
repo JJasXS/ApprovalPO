@@ -40,5 +40,9 @@ public class DashboardModel : PageModel
             RoleLabel = "Admin";
         else if (User.IsInRole(ApprovalRoles.Maintenance))
             RoleLabel = "Maintenance";
+
+        var level = User.FindFirst(ApprovalClaimTypes.AppLevel)?.Value;
+        if (!string.IsNullOrWhiteSpace(level) && RoleLabel.Length > 0)
+            RoleLabel = $"{RoleLabel} · L{level}";
     }
 }

@@ -6,6 +6,12 @@
   const setLineTransferableUrl = cfgEl?.dataset.setLineTransferableUrl || '';
   const csrfToken = cfgEl?.dataset.csrfToken || '';
   const highValueThreshold = parseFloat(String(cfgEl?.dataset.highValueThreshold || '5000'), 10) || 5000;
+  const canApproveRole = String(cfgEl?.dataset.canApprove || '').toLowerCase() === 'true';
+  const appFromRaw = String(cfgEl?.dataset.appFrom || '').trim();
+  const appToRaw = String(cfgEl?.dataset.appTo || '').trim();
+  const hasAppRange = appFromRaw.length > 0 && appToRaw.length > 0;
+  const appFrom = hasAppRange ? Number.parseFloat(appFromRaw) : Number.NaN;
+  const appTo = hasAppRange ? Number.parseFloat(appToRaw) : Number.NaN;
 
   const modal = document.getElementById('reviewModal');
   const reviewBody = document.getElementById('reviewBody');
@@ -572,23 +578,41 @@
     const approved = status === 'Approved';
     const rejected = status === 'Rejected';
     const cancelled = status === 'Cancelled';
-    const canApprove = pending || rejected || cancelled;
-    const canReject = pending || approved;
+    const inRange = amountInApprovalRange(parseAmount(tr));
+    const canApprove = (pending || rejected || cancelled) && inRange;
+    const canReject = (pending || approved) && inRange;
 
     modalApproveBtn.disabled = !canApprove;
-    modalApproveBtn.style.display = canApprove ? '' : 'none';
-    modalApproveBtn.title = '';
+    modalApproveBtn.style.display = pending || rejected || cancelled ? '' : 'none';
+    modalApproveBtn.title = inRange ? '' : rangeDeniedMessage();
 
     if (modalRejectBtnEl) {
       modalRejectBtnEl.textContent = approved ? 'Cancel approval' : 'Reject';
       modalRejectBtnEl.disabled = !canReject;
-      modalRejectBtnEl.style.display = canReject ? '' : 'none';
+      modalRejectBtnEl.style.display = pending || approved ? '' : 'none';
+      modalRejectBtnEl.title = inRange ? '' : rangeDeniedMessage();
     }
 
     updateModalNav();
   };
 
   const parseAmount = (tr) => Number.parseFloat(String(tr.dataset.amount || '0')) || 0;
+
+  const formatRm = (n) =>
+    `RM ${Number(n).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const amountInApprovalRange = (amt) => {
+    if (!canApproveRole || !hasAppRange || Number.isNaN(appFrom) || Number.isNaN(appTo)) return false;
+    return amt >= appFrom && amt <= appTo;
+  };
+
+  const rangeDeniedMessage = () => {
+    if (!canApproveRole)
+      return 'You are not authorized to change approval status for this document.';
+    if (!hasAppRange || Number.isNaN(appFrom) || Number.isNaN(appTo))
+      return 'Your approval range is not set. Contact your administrator.';
+    return `This document is outside your approval range (${formatRm(appFrom)} – ${formatRm(appTo)}).`;
+  };
 
   const showUndo = (msg, revertFn) => {
     if (!undoToast || !undoToastMsg || !undoBtn) return;
@@ -655,6 +679,10 @@
 
   const runApprove = (tr) => {
     const amt = parseAmount(tr);
+    if (!amountInApprovalRange(amt)) {
+      showToast(rangeDeniedMessage());
+      return;
+    }
     const doApprove = async () => {
       const prev = {
         status: tr.dataset.status,
@@ -704,6 +732,10 @@
       showToast('Reject is only available for pending or approved orders.');
       return;
     }
+    if (!amountInApprovalRange(parseAmount(tr))) {
+      showToast(rangeDeniedMessage());
+      return;
+    }
     void (async () => {
       const prev = {
         status: tr.dataset.status,
@@ -726,15 +758,20 @@
 
   const updateRowButtons = (tr) => {
     const status = rowListStatus(tr);
+    const inRange = amountInApprovalRange(parseAmount(tr));
     const approveBtn = tr.querySelector('.btn-approve');
     const rejectBtn = tr.querySelector('.btn-reject');
     if (approveBtn) {
-      approveBtn.style.display = status === 'Pending' || status === 'Cancelled' || status === 'Rejected' ? '' : 'none';
-      approveBtn.disabled = status === 'Approved';
+      const showApprove = status === 'Pending' || status === 'Cancelled' || status === 'Rejected';
+      approveBtn.style.display = showApprove ? '' : 'none';
+      approveBtn.disabled = !showApprove || !inRange;
+      approveBtn.title = inRange ? '' : rangeDeniedMessage();
     }
     if (rejectBtn) {
-      rejectBtn.style.display = status === 'Pending' || status === 'Approved' ? '' : 'none';
-      rejectBtn.disabled = status === 'Cancelled' || status === 'Rejected';
+      const showReject = status === 'Pending' || status === 'Approved';
+      rejectBtn.style.display = showReject ? '' : 'none';
+      rejectBtn.disabled = !showReject || !inRange;
+      rejectBtn.title = inRange ? '' : rangeDeniedMessage();
     }
   };
 
@@ -973,21 +1010,31 @@
         r.querySelector('.row-select')?.checked
     );
     if (selected.length === 0) return;
-    const anyHigh = selected.some((r) => parseAmount(r) >= highValueThreshold);
-    const lines = selected
+    const inRange = selected.filter((r) => amountInApprovalRange(parseAmount(r)));
+    const skipped = selected.length - inRange.length;
+    if (inRange.length === 0) {
+      showToast(rangeDeniedMessage());
+      return;
+    }
+    const anyHigh = inRange.some((r) => parseAmount(r) >= highValueThreshold);
+    const lines = inRange
       .map(
         (r) =>
           `${escapeHtml(r.dataset.po)} — ${parseAmount(r).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}`
       )
       .join('<br/>');
+    const skipNote =
+      skipped > 0
+        ? `<p class="modal__note">${skipped} selected order(s) are outside your approval range and will be skipped.</p>`
+        : '';
     openConfirm(
       'Bulk approve',
-      `<p>Approve <strong>${selected.length}</strong> purchase order(s)?</p><div class="bulk-list">${lines}</div>${
+      `<p>Approve <strong>${inRange.length}</strong> purchase order(s)?</p><div class="bulk-list">${lines}</div>${skipNote}${
         anyHigh
           ? '<p class="modal__note">Includes high-value PO(s). Only use bulk approve if your process allows it.</p>'
           : ''
       }`,
-      () => void bulkApproveConfirmed(selected)
+      () => void bulkApproveConfirmed(inRange)
     );
   });
 

@@ -22,7 +22,6 @@ public class LoginModel : PageModel
     private readonly LoginIpThrottle _ipThrottle;
     private readonly IOtpEmailSender _emailSender;
     private readonly ISyUserLoginValidator _syUser;
-    private readonly IUserRoleResolver _roleResolver;
     private readonly ApprovalOptions _approval;
     private readonly IWebHostEnvironment _env;
     private readonly ILogger<LoginModel> _logger;
@@ -32,7 +31,6 @@ public class LoginModel : PageModel
         LoginIpThrottle ipThrottle,
         IOtpEmailSender emailSender,
         ISyUserLoginValidator syUser,
-        IUserRoleResolver roleResolver,
         IOptions<ApprovalOptions> approval,
         IWebHostEnvironment env,
         ILogger<LoginModel> logger)
@@ -41,7 +39,6 @@ public class LoginModel : PageModel
         _ipThrottle = ipThrottle;
         _emailSender = emailSender;
         _syUser = syUser;
-        _roleResolver = roleResolver;
         _approval = approval.Value;
         _env = env;
         _logger = logger;
@@ -200,13 +197,7 @@ public class LoginModel : PageModel
             new Claim(ClaimTypes.Email, LoginId),
             new Claim(ClaimTypes.Name, displayName),
         };
-
-        var roles = await _roleResolver.ResolveRolesForEmailAsync(LoginId, cancellationToken).ConfigureAwait(false);
-        foreach (var role in roles)
-        {
-            if (!string.IsNullOrWhiteSpace(role))
-                claims.Add(new Claim(ClaimTypes.Role, role));
-        }
+        SyUserApprovalMapper.AddProfileClaims(claims, sy);
 
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
         var principal = new ClaimsPrincipal(identity);

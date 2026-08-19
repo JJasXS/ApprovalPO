@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using ApprovalPO.Models;
 using ApprovalPO.Options;
 using ApprovalPO.Services;
+using ApprovalPO.Services.Auth;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Options;
@@ -35,18 +36,27 @@ public class SalesOrdersModel : PageModel
 
     private readonly IOptions<ApprovalOptions> _approval;
     private readonly ISalesOrderCatalog _orders;
+    private readonly IApprovalAuthority _authority;
 
     public SalesOrdersModel(
         IOptions<ApprovalOptions> approval,
-        ISalesOrderCatalog orders)
+        ISalesOrderCatalog orders,
+        IApprovalAuthority authority)
     {
         _approval = approval;
         _orders = orders;
+        _authority = authority;
     }
 
     public IReadOnlyList<SalesOrderRow> Orders { get; private set; } = Array.Empty<SalesOrderRow>();
 
     public decimal HighValueThreshold => _approval.Value.HighValueAmountThreshold;
+
+    public decimal? AppFrom => SyUserApprovalMapper.ReadDecimalClaim(User, ApprovalClaimTypes.AppFrom);
+
+    public decimal? AppTo => SyUserApprovalMapper.ReadDecimalClaim(User, ApprovalClaimTypes.AppTo);
+
+    public bool CanApprove => SyUserApprovalMapper.CanApproveFromClaims(User);
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
@@ -92,6 +102,15 @@ public class SalesOrdersModel : PageModel
 
         if (!TryNormalizeListStatus(body.ListStatus, out var normalized))
             return new JsonResult(new { ok = false, error = "ListStatus must be Pending, Approved, Cancelled, or Rejected." }, JsonCamel) { StatusCode = StatusCodes.Status400BadRequest };
+
+        var amount = await _orders.GetHeaderAmountAsync(body.DocKey, cancellationToken).ConfigureAwait(false);
+        var found = ApprovalAmountGate.RequireHeaderAmount(amount);
+        if (!found.Allowed)
+            return new JsonResult(new { ok = false, error = found.ErrorMessage ?? "Document not found." }, JsonCamel) { StatusCode = StatusCodes.Status404NotFound };
+
+        var decision = await _authority.AuthorizeListStatusChangeAsync(User, amount.Value, cancellationToken).ConfigureAwait(false);
+        if (!decision.Allowed)
+            return new JsonResult(new { ok = false, error = decision.ErrorMessage ?? "Not allowed." }, JsonCamel) { StatusCode = StatusCodes.Status403Forbidden };
 
         var (ok, err) = await _orders.TrySetHeaderListStatusAsync(body.DocKey, normalized, cancellationToken).ConfigureAwait(false);
         if (!ok)

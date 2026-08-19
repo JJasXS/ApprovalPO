@@ -27,7 +27,10 @@
      data-web-push-subscribe-url="/api/web-push/subscribe"
      data-web-push-unsubscribe-url="/api/web-push/unsubscribe"
      data-csrf-token="@csrf"
-     data-high-value-threshold="@Model.HighValueThreshold.ToString(System.Globalization.CultureInfo.InvariantCulture)"></div>
+     data-high-value-threshold="@Model.HighValueThreshold.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+     data-can-approve="@(Model.CanApprove ? "true" : "false")"
+     data-app-from="@(Model.AppFrom?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "")"
+     data-app-to="@(Model.AppTo?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "")"></div>
 
 <main class="po-main">
     <header class="po-header po-header--hero">

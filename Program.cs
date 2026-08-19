@@ -155,6 +155,7 @@ builder.Services.AddHttpClient<ApprovalPO.Services.Ocr.IOpenAiVisionService, App
     client.Timeout = TimeSpan.FromSeconds(seconds <= 0 ? 120 : seconds);
 });
 builder.Services.AddScoped<IUserRoleResolver, UserRoleResolver>();
+builder.Services.AddScoped<IApprovalAuthority, ApprovalAuthority>();
 builder.Services.AddScoped<IModuleAccessService, ModuleAccessService>();
 
 builder.Services.Configure<Microsoft.AspNetCore.Antiforgery.AntiforgeryOptions>(options =>

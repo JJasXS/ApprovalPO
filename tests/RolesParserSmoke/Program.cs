@@ -1,5 +1,6 @@
-// Standalone .NET 8 smoke tests for the role-resolution logic introduced
-// for Admin vs Maintenance separation. Run with:
+// Standalone .NET 8 smoke tests for the leftover Dynamo userRoles JSON parser.
+// Login no longer uses these lists; roles come from SY_USER.UDF_APPROLE.
+// Run with:
 //     dotnet run --project tests\RolesParserSmoke
 //
 // Exits with code 0 on success, 1 on any assertion failure.
@@ -48,15 +49,14 @@ var roles2 = new TenantUserRoles
     Admin = new[] { "hybrid@acme.com" },
     Maintenance = new[] { "hybrid@acme.com" }
 };
-Assert("hybrid Admin+Maintenance", roles2.ResolveRolesFor("hybrid@acme.com"), "Admin", "Maintenance");
+Assert("hybrid Admin+Maintenance (admin wins)", roles2.ResolveRolesFor("hybrid@acme.com"), "Admin");
 
 var roles3 = new TenantUserRoles
 {
     Admin = new[] { "boss@acme.com" },
-    Maintenance = Array.Empty<string>(),
-    DefaultRoleForUnlisted = ApprovalRoles.Admin  // tenant can override default if they prefer
+    Maintenance = Array.Empty<string>()
 };
-Assert("custom fallback = Admin", roles3.ResolveRolesFor("stranger@acme.com"), "Admin");
+Assert("unlisted still Maintenance (parser leftover)", roles3.ResolveRolesFor("stranger@acme.com"), "Maintenance");
 
 // ---------------------------------------------------------------
 // 2) Tenant-JSON parser (private; exercised via reflection)

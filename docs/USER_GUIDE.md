@@ -22,7 +22,7 @@ Approve purchase and sales orders, scan POs into goods received, and run mainten
 ## Dashboard
 
 1. After sign-in you see What would you like to do?
-2. Your role chip (Admin / Maintenance) and name appear in the header.
+2. Your role chip (Admin / Maintenance, plus approval level when set) and name appear in the header.
 3. Open a module card: Purchase Approval, Sales Approval, Scanning PO, Received goods, or Maintenance Scanner.
 4. Use Sign out in the header when finished.
 
@@ -35,7 +35,7 @@ Approve purchase and sales orders, scan POs into goods received, and run mainten
 1. From the Dashboard, open Purchase Approval.
 2. Use tabs: Pending, Approved, Cancelled, or Rejected.
 3. Click Review on an order to open the detail sheet.
-4. Approve or Reject the order (or use Select all + Bulk approve for several pending orders).
+4. Approve or Reject the order (or use Select all + Bulk approve for several pending orders). Approve, reject, and bulk approve only work for documents whose amount is inside your SQL Accounting approval range (`UDF_APPFROM` to `UDF_APPTO`, inclusive). Orders outside that range show a message and stay unchanged.
 5. Use Sales Approval in the header to switch modules, or Menu for Back to home / Sign out.
 
 ![Purchase orders](images/user-guide/04-purchase-orders.png)
@@ -49,7 +49,7 @@ Approve purchase and sales orders, scan POs into goods received, and run mainten
 1. From the Dashboard, open Sales Approval (or switch from Purchase Approval).
 2. Filter with Pending / Approved / Cancelled / Rejected tabs.
 3. Click Review on an order to see lines and details.
-4. Approve or Reject as needed.
+4. Approve or Reject as needed. The same amount-range limit as Purchase Approval applies.
 
 ![Sales orders](images/user-guide/06-sales-orders.png)
 

@@ -8,6 +8,9 @@ public interface ISalesOrderCatalog
 
     Task<IReadOnlyList<SalesOrderLineRow>> GetSalesOrderLinesAsync(int docKey, CancellationToken cancellationToken = default);
 
+    /// <summary>Header <c>SL_SO.DOCAMT</c> for the given <paramref name="docKey"/>; null when the row is missing.</summary>
+    Task<decimal?> GetHeaderAmountAsync(int docKey, CancellationToken cancellationToken = default);
+
     /// <summary>Writes <c>SL_SO.UDF_SOSTATUS</c>: <c>Pending</c> / <c>Approved</c> / <c>Cancelled</c> / <c>Rejected</c>.</summary>
     Task<(bool Success, string? ErrorMessage)> TrySetHeaderListStatusAsync(int docKey, string listStatus, CancellationToken cancellationToken = default);
 

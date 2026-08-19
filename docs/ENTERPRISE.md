@@ -281,33 +281,31 @@ Per-user access is layered on top of the per-tenant `dashboardModules` flags. Tw
 | `Admin` | Dashboard, PurchaseOrders, SalesOrders, ScanPO, ScanPODetail, ScanReceivedDetail, MaintenanceScanner |
 | `Maintenance` | Dashboard (Scanner card only), MaintenanceScanner |
 
-Roles are added to the session cookie as `ClaimTypes.Role` claims during OTP verify (`Pages/Login.cshtml.cs`). Enforcement happens in two places:
+Roles and approval amount limits are read from Firebird `SY_USER` at OTP verify (`Pages/Login.cshtml.cs`):
 
-1. **Routing** — `Program.cs` registers two policies via `AddAuthorization` and binds them to pages with `Conventions.AuthorizePage`:
-   * `AdminOnly` — required on `/PurchaseOrders`, `/SalesOrders`, `/ScanPO`, `/ScanPODetail`, `/ScanReceivedDetail`. Maintenance users that paste these URLs are bounced to `/Login` by the cookie scheme's `AccessDeniedPath`.
-   * `MaintenanceAccess` — required on `/MaintenanceScanner`; satisfied by either role.
-2. **Dashboard UI** — `Pages/Dashboard.cshtml.cs` hides every admin card for users without the `Admin` role, and hides the Maintenance Scanner card for users without either role.
+| Column | Use |
+|---|---|
+| `UDF_APPROLE` | Maps to cookie role: `Maintenance` / `Maint` / `Scanner` → Maintenance; any other non-blank value (including `Admin`, `Approver`, `Manager`) → Admin; blank → Maintenance |
+| `UDF_APPLEVEL` | Stored on the cookie and shown on the dashboard chip; does not override the amount range |
+| `UDF_APPFROM` / `UDF_APPTO` | Inclusive amount range. Admin users may Approve / Reject / Cancel a PO or SO only when `FROM <= DOCAMT <= TO` |
 
-The role assignment lives in the **tenant configuration JSON** (same payload as `database`, `email`, `dashboardModules`). When the block is absent the system stays in **legacy mode** — every signed-in user gets `Admin`, so existing deployments do not lose access on first deploy.
+The server re-reads these columns on each header status POST (do not trust the client amount). Missing FROM or TO, or a Maintenance role, denies the change with HTTP 403.
 
-```json
-{
-  "database": { "...": "..." },
-  "dashboardModules": { "maintenanceScanner": true, "purchaseApproval": true, "salesApproval": true, "scanPO": true, "receivedGoods": true },
-  "userRoles": {
-    "admin":       ["boss@acme.com", "approver@acme.com"],
-    "maintenance": ["technician1@acme.com", "fitter@acme.com"]
-  }
-}
-```
+Suggested ranges (stored on the user row, not hardcoded in C#):
 
-* Emails are matched case-insensitively after trim.
-* Each list also accepts a DynamoDB `L`/`S` shape (`{ "L": [ { "S": "a@x.com" } ] }`) and a comma-separated string (`"a@x.com, b@x.com"`).
-* An email in `maintenance` (and not in `admin`) is treated as **`isAdmin = false`** and sees only Maintenance Scanner.
-* `admin` or unlisted (`isAdmin = true` or null) sees all enabled modules.
-* If a user appears in both lists, `admin` wins.
+- Level 1: FROM `0`, TO `10000`
+- Level 2: FROM `10000`, TO `100000`
+- Level 3: FROM `100000`, TO a large ceiling
 
-Roles are resolved by `Services/UserRoleResolver.cs` (DI: `IUserRoleResolver`). The unit-level smoke test for the parser + resolver lives at `tests/RolesParserSmoke/` — run it with `dotnet build tests\RolesParserSmoke\RolesParserSmoke.csproj && tests\RolesParserSmoke\bin\Debug\net8.0\ApprovalPO.Tests.RolesParser.exe`. The end-to-end HTTP regression for the role split is `scripts/Test-RoleSeparation.ps1`.
+RM 10,000 and RM 100,000 are allowed for a user if that number is inside their FROM/TO. Adjacent levels overlap at the shared boundary unless the next band starts at `10000.01` / `100000.01`.
+
+Enforcement:
+
+1. **Routing** — `Program.cs` `MaintenanceAccess` on `/MaintenanceScanner`. PO/SO pages are authenticated; tenant `adminDashboardModules` / `maintenanceDashboardModules` still hide modules.
+2. **Status POST** — `IApprovalAuthority` gates `OnPostSetTransferableAsync` on PurchaseOrders and SalesOrders.
+3. **Dashboard UI** — role chip from cookie claims; Admin without a range still sees the list but Approve is disabled.
+
+Dynamo `userRoles` email lists are no longer used for login or approval. The tenant payload still parses `userRoles` so old AWS JSON does not break; GuideCapture may use that list only as a last-resort screenshot email. The parser smoke test is `tests/RolesParserSmoke/`. Amount-boundary tests are `tests/ApprovalAuthoritySmoke/`. The HTTP regression script is `scripts/Test-RoleSeparation.ps1`.
 
 ## 5.3 Web Push Endpoints
 

@@ -13,7 +13,7 @@ It was built so tenant Firebird connection details can be loaded at runtime from
 ## Key Features
 
 - Email OTP sign-in against SQL Accounting `SY_USER` records
-- Role-based access (Admin / Maintenance and policy handlers under `Authorization/`)
+- Role-based access (Admin / Maintenance from `SY_USER.UDF_APPROLE`, with PO/SO approve limited to `UDF_APPFROM`–`UDF_APPTO`)
 - Purchase order review, approve, reject, and bulk approve
 - Sales order approval with the same pending/approved/cancelled/rejected tabs
 - Scan PO into goods received (camera barcode flow)

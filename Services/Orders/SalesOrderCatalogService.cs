@@ -128,6 +128,24 @@ public sealed class SalesOrderCatalogService : ISalesOrderCatalog
 
 
 
+    public async Task<decimal?> GetHeaderAmountAsync(int docKey, CancellationToken cancellationToken = default)
+
+    {
+
+        if (docKey <= 0)
+
+            return null;
+
+
+
+        await using var conn = await _tenantResolver.OpenConnectionAsync(_configuration, "load SL_SO amount", cancellationToken).ConfigureAwait(false);
+
+        return await DocumentHeaderAmount.ReadAsync(conn, "SL_SO", docKey, cancellationToken).ConfigureAwait(false);
+
+    }
+
+
+
     public async Task<(bool Success, string? ErrorMessage)> TrySetHeaderListStatusAsync(
 
         int docKey,

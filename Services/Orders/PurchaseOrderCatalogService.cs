@@ -87,6 +87,17 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
         return list;
     }
 
+    public async Task<decimal?> GetHeaderAmountAsync(int docKey, CancellationToken cancellationToken = default)
+    {
+        if (docKey <= 0)
+            return null;
+
+        await using var conn = await _tenantResolver
+            .OpenConnectionAsync(_configuration, "load PH_PO amount", cancellationToken)
+            .ConfigureAwait(false);
+        return await DocumentHeaderAmount.ReadAsync(conn, "PH_PO", docKey, cancellationToken).ConfigureAwait(false);
+    }
+
     /// <inheritdoc />
     public async Task<(bool Success, string? ErrorMessage)> TrySetHeaderListStatusAsync(
         int docKey,

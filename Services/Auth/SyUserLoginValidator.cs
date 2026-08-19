@@ -19,14 +19,31 @@ public sealed class SyUserEmailLookupResult
 {
     public SyUserEmailLookupStatus Status { get; init; }
     public string? DisplayName { get; init; }
+    public string? AppRole { get; init; }
+    public decimal? AppLevel { get; init; }
+    public decimal? AppFrom { get; init; }
+    public decimal? AppTo { get; init; }
 
     /// <summary>Technical detail for logs / Development API responses only.</summary>
     public string? Diagnostic { get; init; }
 
     public static SyUserEmailLookupResult Skipped() => new() { Status = SyUserEmailLookupStatus.Skipped };
 
-    public static SyUserEmailLookupResult Ok(string? displayName) =>
-        new() { Status = SyUserEmailLookupStatus.Ok, DisplayName = displayName };
+    public static SyUserEmailLookupResult Ok(
+        string? displayName,
+        string? appRole = null,
+        decimal? appLevel = null,
+        decimal? appFrom = null,
+        decimal? appTo = null) =>
+        new()
+        {
+            Status = SyUserEmailLookupStatus.Ok,
+            DisplayName = displayName,
+            AppRole = string.IsNullOrWhiteSpace(appRole) ? null : appRole.Trim(),
+            AppLevel = appLevel,
+            AppFrom = appFrom,
+            AppTo = appTo,
+        };
 
     public static SyUserEmailLookupResult NotFound() => new() { Status = SyUserEmailLookupStatus.NotFound };
 
@@ -127,25 +144,12 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
         CancellationToken cancellationToken)
     {
         var includeIsActive = true;
-        for (var attempt = 0; attempt < 2; attempt++)
+        var includeApprovalUdfs = true;
+        for (var attempt = 0; attempt < 4; attempt++)
         {
             try
             {
-                var sql = includeIsActive
-                    ? $"""
-                      SELECT FIRST 1
-                        TRIM(NAME) AS DISP_NAME,
-                        ISACTIVE
-                      FROM SY_USER
-                      WHERE {EmailWhere}
-                      """
-                    : $"""
-                      SELECT FIRST 1
-                        TRIM(NAME) AS DISP_NAME
-                      FROM SY_USER
-                      WHERE {EmailWhere}
-                      """;
-
+                var sql = BuildLookupSql(includeIsActive, includeApprovalUdfs);
                 await using var cmd = new FbCommand(sql, conn);
                 cmd.Parameters.AddWithValue("@Email", email);
 
@@ -153,25 +157,17 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
                 if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                     return SyUserEmailLookupResult.NotFound();
 
-                var nameOrdinal = reader.GetOrdinal("DISP_NAME");
-                var displayName = reader.IsDBNull(nameOrdinal) ? "" : reader.GetString(nameOrdinal).Trim();
-
-                var active = true;
-                if (includeIsActive)
-                {
-                    var activeOrdinal = reader.GetOrdinal("ISACTIVE");
-                    active = ParseIsActive(reader.IsDBNull(activeOrdinal) ? null : reader.GetValue(activeOrdinal));
-                }
-
-                if (!active)
-                    return SyUserEmailLookupResult.Inactive();
-
-                return SyUserEmailLookupResult.Ok(string.IsNullOrEmpty(displayName) ? null : displayName);
+                return MapLookupRow(reader, includeIsActive, includeApprovalUdfs);
             }
-            catch (Exception ex) when (includeIsActive && IsLikelyMissingIsActiveColumn(ex))
+            catch (Exception ex) when (includeIsActive && IsLikelyMissingColumn(ex, "ISACTIVE"))
             {
                 _logger.LogInformation(ex, "SY_USER without ISACTIVE retry for email lookup.");
                 includeIsActive = false;
+            }
+            catch (Exception ex) when (includeApprovalUdfs && IsLikelyMissingApprovalUdf(ex))
+            {
+                _logger.LogInformation(ex, "SY_USER without approval UDF columns retry for email lookup.");
+                includeApprovalUdfs = false;
             }
             catch (Exception ex)
             {
@@ -182,10 +178,76 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
         return SyUserEmailLookupResult.DatabaseUnavailable("SY_USER lookup could not be completed.");
     }
 
-    private static bool IsLikelyMissingIsActiveColumn(Exception ex)
+    private static string BuildLookupSql(bool includeIsActive, bool includeApprovalUdfs)
+    {
+        var extra = "";
+        if (includeIsActive)
+            extra += ", ISACTIVE";
+        if (includeApprovalUdfs)
+            extra += ", TRIM(CAST(UDF_APPROLE AS VARCHAR(80))) AS UDF_APPROLE, UDF_APPLEVEL, UDF_APPFROM, UDF_APPTO";
+
+        return $"""
+            SELECT FIRST 1
+              TRIM(NAME) AS DISP_NAME{extra}
+            FROM SY_USER
+            WHERE {EmailWhere}
+            """;
+    }
+
+    private static SyUserEmailLookupResult MapLookupRow(
+        System.Data.Common.DbDataReader reader,
+        bool includeIsActive,
+        bool includeApprovalUdfs)
+    {
+        var displayName = (FirebirdDataReaderHelper.GetString(reader, "DISP_NAME") ?? "").Trim();
+
+        if (includeIsActive)
+        {
+            var activeOrdinal = FirebirdDataReaderHelper.TryGetOrdinal(reader, "ISACTIVE");
+            var activeValue = activeOrdinal < 0 || reader.IsDBNull(activeOrdinal)
+                ? null
+                : reader.GetValue(activeOrdinal);
+            if (!ParseIsActive(activeValue))
+                return SyUserEmailLookupResult.Inactive();
+        }
+
+        string? appRole = null;
+        decimal? appLevel = null;
+        decimal? appFrom = null;
+        decimal? appTo = null;
+        if (includeApprovalUdfs)
+        {
+            appRole = FirebirdDataReaderHelper.GetString(reader, "UDF_APPROLE");
+            appLevel = FirebirdDataReaderHelper.GetDecimalNullable(reader, "UDF_APPLEVEL");
+            appFrom = FirebirdDataReaderHelper.GetDecimalNullable(reader, "UDF_APPFROM");
+            appTo = FirebirdDataReaderHelper.GetDecimalNullable(reader, "UDF_APPTO");
+        }
+
+        return SyUserEmailLookupResult.Ok(
+            string.IsNullOrEmpty(displayName) ? null : displayName,
+            appRole,
+            appLevel,
+            appFrom,
+            appTo);
+    }
+
+    private static bool IsLikelyMissingApprovalUdf(Exception ex) =>
+        IsLikelyMissingColumn(ex, "UDF_APPROLE", "UDF_APPLEVEL", "UDF_APPFROM", "UDF_APPTO");
+
+    private static bool IsLikelyMissingColumn(Exception ex, params string[] columnNames)
     {
         var m = ex.Message;
-        if (!m.Contains("ISACTIVE", StringComparison.OrdinalIgnoreCase))
+        var mentionsColumn = false;
+        foreach (var name in columnNames)
+        {
+            if (m.Contains(name, StringComparison.OrdinalIgnoreCase))
+            {
+                mentionsColumn = true;
+                break;
+            }
+        }
+
+        if (!mentionsColumn)
             return false;
 
         return m.Contains("-206", StringComparison.Ordinal)
