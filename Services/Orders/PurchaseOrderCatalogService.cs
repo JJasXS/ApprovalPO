@@ -138,6 +138,7 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
         int docKey,
         string listStatus,
         string? approverEmail = null,
+        int approverUserLevel = 0,
         CancellationToken cancellationToken = default)
     {
         if (docKey <= 0)
@@ -183,7 +184,7 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
             if (statusText == ApprovalListStatusHelper.ApprovedDb)
             {
                 return await TryRecordApprovalAsync(
-                    conn, poCols, statusCol, docKey, approverEmail, cancellationToken).ConfigureAwait(false);
+                    conn, poCols, statusCol, docKey, approverEmail, approverUserLevel, cancellationToken).ConfigureAwait(false);
             }
 
             var clearSlots = statusText is ApprovalListStatusHelper.RejectedDb
@@ -213,6 +214,7 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
         string statusCol,
         int docKey,
         string? approverEmail,
+        int approverUserLevel,
         CancellationToken cancellationToken)
     {
         var email = (approverEmail ?? "").Trim();
@@ -227,39 +229,48 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
                     ?? new PoApprovalSlots();
 
         var required = ApprovalLevelWorkflow.RequiredLevels(amount.Value);
-        var nextLevel = ApprovalLevelWorkflow.NextRequiredLevel(slots);
-        if (nextLevel <= 0)
+
+        // Determine which empty slots to fill: all slots 1..userLevel that are still blank.
+        // A higher-level approver covers all lower levels automatically.
+        var effectiveLevel = approverUserLevel >= 1 && approverUserLevel <= 3
+            ? approverUserLevel
+            : 1;
+        var slotsToFill = ApprovalLevelWorkflow.SlotsToFill(slots, effectiveLevel).ToList();
+
+        if (slotsToFill.Count == 0 && ApprovalLevelWorkflow.CompletedLevels(slots) >= required)
             return (false, "This purchase order already has all required approvals.", null);
 
-        var slotCol = SlotEmailColumn(nextLevel);
-        var slotDtCol = SlotDateColumn(nextLevel);
-        if (!poCols.Contains(slotCol) || !poCols.Contains(slotDtCol))
-            return (false, "Approval slot columns are missing on PH_PO.", null);
+        var now = DateTime.UtcNow;
 
-        var completed = ApprovalLevelWorkflow.CompletedLevels(slots) + 1;
+        // Build SET clause for all slots to fill.
+        var setClauses = new List<string> { $"{statusCol} = @S" };
+        foreach (var lvl in slotsToFill)
+        {
+            var ec = SlotEmailColumn(lvl);
+            var dc = SlotDateColumn(lvl);
+            if (poCols.Contains(ec)) setClauses.Add($"{ec} = @E{lvl}");
+            if (poCols.Contains(dc)) setClauses.Add($"{dc} = @T{lvl}");
+        }
+
+        var completed = ApprovalLevelWorkflow.CompletedLevelsAfterSign(slots, effectiveLevel);
         var isFinal = completed >= required;
         var dbStatus = isFinal ? ApprovalListStatusHelper.ApprovedDb : ApprovalListStatusHelper.PendingDb;
 
-        var sql = $"""
-            UPDATE PH_PO
-            SET {statusCol} = @S,
-                {slotCol} = @E,
-                {slotDtCol} = @T
-            WHERE DOCKEY = @D
-            """;
-
+        var sql = $"UPDATE PH_PO SET {string.Join(", ", setClauses)} WHERE DOCKEY = @D";
         await using var cmd = new FbCommand(sql, conn);
         cmd.Parameters.Add("@S", FbDbType.VarChar, 20).Value = dbStatus;
-        cmd.Parameters.Add("@E", FbDbType.VarChar, 80).Value = email;
-        cmd.Parameters.Add("@T", FbDbType.TimeStamp).Value = DateTime.UtcNow;
+        foreach (var lvl in slotsToFill)
+        {
+            cmd.Parameters.Add($"@E{lvl}", FbDbType.VarChar, 80).Value = email;
+            cmd.Parameters.Add($"@T{lvl}", FbDbType.TimeStamp).Value = now;
+        }
         cmd.Parameters.Add("@D", FbDbType.Integer).Value = docKey;
 
         var n = await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         if (n == 0)
             return (false, "No row was updated (DOCKEY not found).", null);
 
-        var waitLevel = isFinal ? 0 : completed + 1;
-        var message = ApprovalLevelWorkflow.BuildProgressMessage(completed, required, waitLevel, isFinal);
+        var message = ApprovalLevelWorkflow.BuildProgressMessage(completed, required, 0, isFinal);
         return (true, null, new HeaderStatusChangeResult
         {
             CompletedLevels = completed,

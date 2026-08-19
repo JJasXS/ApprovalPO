@@ -12,10 +12,15 @@ public interface IPurchaseOrderCatalog
     Task<decimal?> GetHeaderAmountAsync(int docKey, CancellationToken cancellationToken = default);
 
     /// <summary>Writes <c>PH_PO.UDF_POSTATUS</c> from list tab: <c>Pending</c> / <c>Approved</c> / <c>Cancelled</c> / <c>Rejected</c>.</summary>
+    /// <param name="approverUserLevel">
+    /// For Approved status: the approver's level (1-3). A level-N approver fills all empty slots 1..N,
+    /// so higher levels cover lower ones automatically.
+    /// </param>
     Task<(bool Success, string? ErrorMessage, HeaderStatusChangeResult? Result)> TrySetHeaderListStatusAsync(
         int docKey,
         string listStatus,
         string? approverEmail = null,
+        int approverUserLevel = 0,
         CancellationToken cancellationToken = default);
 
     /// <summary>Reads partial approval slots for a PO header.</summary>

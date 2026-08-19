@@ -3,8 +3,8 @@ using ApprovalPO.Models;
 namespace ApprovalPO.Services.Auth;
 
 /// <summary>
-/// Sequential multi-level PO approval: L1 MANAGER, L2 HOD/PUR, L3 DIRECTOR.
-/// Required levels scale with amount bands aligned to SY_USER TO limits.
+/// Multi-level PO approval: L1 MANAGER, L2 HOD/PUR, L3 DIRECTOR.
+/// Any authorised level may sign in any order; all required levels must sign before final approval.
 /// </summary>
 public static class ApprovalLevelWorkflow
 {
@@ -20,12 +20,44 @@ public static class ApprovalLevelWorkflow
         return 0;
     }
 
+    /// <summary>Counts how many level slots have been signed, regardless of order.</summary>
     public static int CompletedLevels(PoApprovalSlots slots)
     {
-        if (string.IsNullOrWhiteSpace(slots.Level1Email)) return 0;
-        if (string.IsNullOrWhiteSpace(slots.Level2Email)) return 1;
-        if (string.IsNullOrWhiteSpace(slots.Level3Email)) return 2;
-        return 3;
+        var count = 0;
+        if (!string.IsNullOrWhiteSpace(slots.Level1Email)) count++;
+        if (!string.IsNullOrWhiteSpace(slots.Level2Email)) count++;
+        if (!string.IsNullOrWhiteSpace(slots.Level3Email)) count++;
+        return count;
+    }
+
+    /// <summary>
+    /// Returns the completed level count after a user at <paramref name="userLevel"/> signs.
+    /// A higher-level approver implicitly covers all slots up to their own level,
+    /// so e.g. level 3 signing a 3-slot PO completes all 3 at once.
+    /// </summary>
+    public static int CompletedLevelsAfterSign(PoApprovalSlots slots, int userLevel)
+    {
+        // Collect which slots will be filled: existing slots + all slots up to userLevel.
+        var filled = new bool[4]; // index 1-3
+        if (!string.IsNullOrWhiteSpace(slots.Level1Email)) filled[1] = true;
+        if (!string.IsNullOrWhiteSpace(slots.Level2Email)) filled[2] = true;
+        if (!string.IsNullOrWhiteSpace(slots.Level3Email)) filled[3] = true;
+        for (var i = 1; i <= userLevel && i <= 3; i++)
+            filled[i] = true;
+        return filled[1] ? (filled[2] ? (filled[3] ? 3 : 2) : 1) : 0;
+    }
+
+    /// <summary>
+    /// Returns the set of slot indices (1-3) that should be written when a user at
+    /// <paramref name="userLevel"/> approves. Skips slots that already have an email.
+    /// </summary>
+    public static IEnumerable<int> SlotsToFill(PoApprovalSlots slots, int userLevel)
+    {
+        for (var lvl = 1; lvl <= userLevel && lvl <= 3; lvl++)
+        {
+            if (string.IsNullOrWhiteSpace(slots.EmailAtLevel(lvl)))
+                yield return lvl;
+        }
     }
 
     public static int NextRequiredLevel(PoApprovalSlots slots)
@@ -68,6 +100,6 @@ public static class ApprovalLevelWorkflow
     {
         if (isFinal)
             return $"All {required} approval level(s) complete.";
-        return $"Level {completed} recorded ({completed}/{required}). Waiting for {LevelLabel(nextLevel)}.";
+        return $"Approval recorded ({completed}/{required}). Waiting for remaining level(s).";
     }
 }

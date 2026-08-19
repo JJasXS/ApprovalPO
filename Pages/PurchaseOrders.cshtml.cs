@@ -143,6 +143,7 @@ public class PurchaseOrdersModel : PageModel
             return new JsonResult(new { ok = false, error = found.ErrorMessage ?? "Document not found." }, JsonCamel) { StatusCode = StatusCodes.Status404NotFound };
 
         var approverEmail = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value?.Trim();
+        var approverLevel = (int?)AppLevel ?? 0;
         HeaderStatusChangeResult? changeResult = null;
 
         if (string.Equals(normalized, "Approved", StringComparison.OrdinalIgnoreCase))
@@ -155,7 +156,7 @@ public class PurchaseOrdersModel : PageModel
                 return new JsonResult(new { ok = false, error = decision.ErrorMessage ?? "Not allowed." }, JsonCamel) { StatusCode = StatusCodes.Status403Forbidden };
 
             var (okApprove, errApprove, result) = await _orders.TrySetHeaderListStatusAsync(
-                body.DocKey, normalized, approverEmail, cancellationToken).ConfigureAwait(false);
+                body.DocKey, normalized, approverEmail, approverLevel, cancellationToken).ConfigureAwait(false);
             if (!okApprove)
                 return new JsonResult(new { ok = false, error = errApprove ?? "Update failed." }, JsonCamel) { StatusCode = StatusCodes.Status409Conflict };
 
@@ -174,7 +175,7 @@ public class PurchaseOrdersModel : PageModel
         if (!decisionOther.Allowed)
             return new JsonResult(new { ok = false, error = decisionOther.ErrorMessage ?? "Not allowed." }, JsonCamel) { StatusCode = StatusCodes.Status403Forbidden };
 
-        var (ok, err, _) = await _orders.TrySetHeaderListStatusAsync(body.DocKey, normalized, approverEmail, cancellationToken).ConfigureAwait(false);
+        var (ok, err, _) = await _orders.TrySetHeaderListStatusAsync(body.DocKey, normalized, approverEmail, 0, cancellationToken).ConfigureAwait(false);
         if (!ok)
             return new JsonResult(new { ok = false, error = err ?? "Update failed." }, JsonCamel) { StatusCode = StatusCodes.Status409Conflict };
 

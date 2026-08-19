@@ -60,18 +60,17 @@ public sealed class ApprovalAuthority : IApprovalAuthority
         if (userLevel <= 0)
             return ApprovalAuthorityDecision.Deny("Your approval level is not set. Contact your administrator.");
 
-        // Prevent the same person approving twice at the same slot level.
+        // Prevent the same person approving twice at their own level slot.
         var existingAtLevel = currentSlots.EmailAtLevel(userLevel);
         if (ApprovalLevelWorkflow.EmailMatches(existingAtLevel, ctx.Email))
             return ApprovalAuthorityDecision.Deny("You have already approved at this level.");
 
-        // Higher-level approvers can approve without waiting for lower levels —
-        // record sign-off at the user's own level slot and treat it as final.
+        // A higher-level approver covers all slots up to their own level.
+        // e.g. Level 3 signing a 3-level PO fills slots 1, 2, 3 → final immediately.
         var required = ApprovalLevelWorkflow.RequiredLevels(amount);
-        var completed = ApprovalLevelWorkflow.CompletedLevels(currentSlots);
-        var newCompleted = completed + 1;
-        var isFinal = true; // any authorised approver makes it final
-        var message = $"Approved by {ApprovalLevelWorkflow.LevelLabel(userLevel)}.";
+        var newCompleted = ApprovalLevelWorkflow.CompletedLevelsAfterSign(currentSlots, userLevel);
+        var isFinal = newCompleted >= required;
+        var message = ApprovalLevelWorkflow.BuildProgressMessage(newCompleted, required, 0, isFinal);
         return ApprovalAuthorityDecision.AllowWorkflow(newCompleted, required, isFinal, message);
     }
 
