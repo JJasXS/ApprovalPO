@@ -17,6 +17,8 @@ public static class PhPoSqlBuilder
         var (transferableExpr, pqStatusExpr) =
             ApprovalListStatusHelper.BuildStatusSelectExpressions(PickStatusColumn(poCols));
 
+        var approvalCols = BuildApprovalSelectColumns(poCols);
+
         return $"""
             SELECT FIRST 200
               DOCKEY,
@@ -27,9 +29,33 @@ public static class PhPoSqlBuilder
               COALESCE(DOCDATE, CURRENT_DATE) AS ORDERDATE,
               {transferableExpr} AS TRANSFERABLEINT,
               {pqStatusExpr} AS PQSTATUS
+              {approvalCols}
             FROM PH_PO
             ORDER BY DOCDATE DESC NULLS LAST, DOCNO DESC
             """;
+    }
+
+    private static string BuildApprovalSelectColumns(HashSet<string> poCols)
+    {
+        var parts = new List<string>();
+        foreach (var (name, alias) in new (string Col, string Alias)[]
+        {
+            ("UDF_POAPPL1", "APPROVALLEVEL1"),
+            ("UDF_POAPPL1DT", "APPROVALLEVEL1AT"),
+            ("UDF_POAPPL2", "APPROVALLEVEL2"),
+            ("UDF_POAPPL2DT", "APPROVALLEVEL2AT"),
+            ("UDF_POAPPL3", "APPROVALLEVEL3"),
+            ("UDF_POAPPL3DT", "APPROVALLEVEL3AT"),
+        })
+        {
+            if (!poCols.Contains(name))
+                continue;
+            parts.Add(name.EndsWith("DT", StringComparison.Ordinal)
+                ? $"{name} AS {alias}"
+                : $"TRIM(COALESCE(CAST({name} AS VARCHAR(80)), '')) AS {alias}");
+        }
+
+        return parts.Count == 0 ? "" : ",\n              " + string.Join(",\n              ", parts);
     }
 
     /// <summary>Detail lines for <c>PH_PODTL</c>; includes <c>PROJECT</c> when the column exists.</summary>

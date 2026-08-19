@@ -7,8 +7,22 @@ public sealed class ApprovalAuthorityDecision
 {
     public required bool Allowed { get; init; }
     public string? ErrorMessage { get; init; }
+    public bool IsFinalApproval { get; init; }
+    public int CompletedLevels { get; init; }
+    public int RequiredLevels { get; init; }
+    public string? SuccessMessage { get; init; }
 
     public static ApprovalAuthorityDecision Allow() => new() { Allowed = true };
+
+    public static ApprovalAuthorityDecision AllowWorkflow(int completed, int required, bool isFinal, string? message) =>
+        new()
+        {
+            Allowed = true,
+            CompletedLevels = completed,
+            RequiredLevels = required,
+            IsFinalApproval = isFinal,
+            SuccessMessage = message
+        };
 
     public static ApprovalAuthorityDecision Deny(string message) =>
         new() { Allowed = false, ErrorMessage = message };

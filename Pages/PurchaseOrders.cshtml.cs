@@ -4,6 +4,7 @@ using ApprovalPO.Models;
 using ApprovalPO.Options;
 using ApprovalPO.Services;
 using ApprovalPO.Services.Auth;
+using ApprovalPO.Services.Orders;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -83,6 +84,10 @@ public class PurchaseOrdersModel : PageModel
 
     public decimal? AppTo => SyUserApprovalMapper.ReadDecimalClaim(User, ApprovalClaimTypes.AppTo);
 
+    public decimal? AppLevel => SyUserApprovalMapper.ReadDecimalClaim(User, ApprovalClaimTypes.AppLevel);
+
+    public string? UserEmail => User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value?.Trim();
+
     public bool CanApprove => SyUserApprovalMapper.CanApproveFromClaims(User);
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
@@ -137,11 +142,39 @@ public class PurchaseOrdersModel : PageModel
         if (!found.Allowed)
             return new JsonResult(new { ok = false, error = found.ErrorMessage ?? "Document not found." }, JsonCamel) { StatusCode = StatusCodes.Status404NotFound };
 
-        var decision = await _authority.AuthorizeListStatusChangeAsync(User, amount.Value, cancellationToken).ConfigureAwait(false);
-        if (!decision.Allowed)
-            return new JsonResult(new { ok = false, error = decision.ErrorMessage ?? "Not allowed." }, JsonCamel) { StatusCode = StatusCodes.Status403Forbidden };
+        var approverEmail = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value?.Trim();
+        HeaderStatusChangeResult? changeResult = null;
 
-        var (ok, err) = await _orders.TrySetHeaderListStatusAsync(body.DocKey, normalized, cancellationToken).ConfigureAwait(false);
+        if (string.Equals(normalized, "Approved", StringComparison.OrdinalIgnoreCase))
+        {
+            var slots = await _orders.GetApprovalSlotsAsync(body.DocKey, cancellationToken).ConfigureAwait(false)
+                        ?? new PoApprovalSlots();
+            var decision = await _authority.AuthorizePartialApproveAsync(User, amount.Value, slots, cancellationToken)
+                .ConfigureAwait(false);
+            if (!decision.Allowed)
+                return new JsonResult(new { ok = false, error = decision.ErrorMessage ?? "Not allowed." }, JsonCamel) { StatusCode = StatusCodes.Status403Forbidden };
+
+            var (okApprove, errApprove, result) = await _orders.TrySetHeaderListStatusAsync(
+                body.DocKey, normalized, approverEmail, cancellationToken).ConfigureAwait(false);
+            if (!okApprove)
+                return new JsonResult(new { ok = false, error = errApprove ?? "Update failed." }, JsonCamel) { StatusCode = StatusCodes.Status409Conflict };
+
+            changeResult = result;
+            return new JsonResult(new
+            {
+                ok = true,
+                completedLevels = changeResult?.CompletedLevels ?? decision.CompletedLevels,
+                requiredLevels = changeResult?.RequiredLevels ?? decision.RequiredLevels,
+                isFinal = changeResult?.IsFinal ?? decision.IsFinalApproval,
+                message = changeResult?.Message ?? decision.SuccessMessage
+            }, JsonCamel);
+        }
+
+        var decisionOther = await _authority.AuthorizeListStatusChangeAsync(User, amount.Value, cancellationToken).ConfigureAwait(false);
+        if (!decisionOther.Allowed)
+            return new JsonResult(new { ok = false, error = decisionOther.ErrorMessage ?? "Not allowed." }, JsonCamel) { StatusCode = StatusCodes.Status403Forbidden };
+
+        var (ok, err, _) = await _orders.TrySetHeaderListStatusAsync(body.DocKey, normalized, approverEmail, cancellationToken).ConfigureAwait(false);
         if (!ok)
             return new JsonResult(new { ok = false, error = err ?? "Update failed." }, JsonCamel) { StatusCode = StatusCodes.Status409Conflict };
 

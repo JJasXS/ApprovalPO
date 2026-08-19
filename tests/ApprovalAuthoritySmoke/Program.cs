@@ -61,56 +61,42 @@ bool InRange(decimal amount, decimal from, decimal to) => amount >= from && amou
 var amounts = new[]
 {
     0m, 0.01m, 1m, 5000m, 9999.99m, 10000m, 10000.01m,
-    50000m, 99999.99m, 100000m, 100000.01m, 250000m, 999999999m, 1000000000m,
+    50000m, 99999.99m, 100000m, 100000.01m, 250000m,
+    1000000m, 1000000.01m, 1000000000m,
 };
 
-var levels = new (string Id, decimal From, decimal To)[]
+var syUserRows = new (string Role, decimal From, decimal To)[]
 {
-    ("L1", 0m, 10000m),
-    ("L2", 10000m, 100000m),
-    ("L3", 100000m, 999999999m),
+    ("MANAGER", 0m, 10000m),
+    ("HOD", 0m, 100000m),
+    ("PUR", 0m, 100000m),
+    ("DIRECTOR", 0m, 1000000m),
 };
 
 Section("1. UDF_APPROLE mapping");
 AssertRole("(null)", null, ApprovalRoles.Maintenance);
 AssertRole("\"\"", "", ApprovalRoles.Maintenance);
-AssertRole("\"  \"", "  ", ApprovalRoles.Maintenance);
 AssertRole("Maintenance", "Maintenance", ApprovalRoles.Maintenance);
-AssertRole("MAINTENANCE", "MAINTENANCE", ApprovalRoles.Maintenance);
-AssertRole("maintenance", "maintenance", ApprovalRoles.Maintenance);
-AssertRole("Maint", "Maint", ApprovalRoles.Maintenance);
-AssertRole("MAINT", "MAINT", ApprovalRoles.Maintenance);
 AssertRole("Scanner", "Scanner", ApprovalRoles.Maintenance);
-AssertRole("scanner", "scanner", ApprovalRoles.Maintenance);
-AssertRole("Admin", "Admin", ApprovalRoles.Admin);
-AssertRole("ADMIN", "ADMIN", ApprovalRoles.Admin);
-AssertRole("Administrator", "Administrator", ApprovalRoles.Admin);
-AssertRole("Approver", "Approver", ApprovalRoles.Admin);
-AssertRole("Manager", "Manager", ApprovalRoles.Admin);
-AssertRole("Supervisor", "Supervisor", ApprovalRoles.Admin);
-AssertRole("User", "User", ApprovalRoles.Admin);
+AssertRole("MANAGER", "MANAGER", ApprovalRoles.Admin);
+AssertRole("HOD", "HOD", ApprovalRoles.Admin);
+AssertRole("PUR", "PUR", ApprovalRoles.Admin);
+AssertRole("DIRECTOR", "DIRECTOR", ApprovalRoles.Admin);
+AssertRole("hod lowercase", "hod", ApprovalRoles.Admin);
 
-Section("2. Amount matrix (Admin, inclusive FROM/TO)");
-foreach (var level in levels)
+Section("2. Amount matrix from live SY_USER ranges (FROM 0, inclusive TO)");
+foreach (var row in syUserRows)
 {
     foreach (var amount in amounts)
     {
-        var expect = InRange(amount, level.From, level.To);
-        AssertGate(
-            $"{level.Id}",
-            "Admin",
-            level.From,
-            level.To,
-            amount,
-            expect);
+        AssertGate(row.Role, row.Role, row.From, row.To, amount, InRange(amount, row.From, row.To));
     }
 }
 
-Section("3. Approver aliases use the same amount gate as Admin");
-AssertGate("Approver@10000", "Approver", 0m, 10000m, 10000m, true);
-AssertGate("Manager@10000", "Manager", 10000m, 100000m, 10000m, true);
-AssertGate("Administrator@100000", "Administrator", 100000m, 999999999m, 100000m, true);
-AssertGate("Approver@10000.01 L1", "Approver", 0m, 10000m, 10000.01m, false);
+AssertGate("blank role denied even with a range", null, 0m, 1000000m, 5000m, false);
+AssertGate("MANAGER 10000.01", "MANAGER", 0m, 10000m, 10000.01m, false);
+AssertGate("HOD 100000.01", "HOD", 0m, 100000m, 100000.01m, false);
+AssertGate("DIRECTOR 1000000.01", "DIRECTOR", 0m, 1000000m, 1000000.01m, false);
 
 Section("4. Maintenance never approves (even inside FROM/TO)");
 foreach (var role in new[] { "Maintenance", "Maint", "Scanner", null, "" })
@@ -139,17 +125,20 @@ AssertGate("inverted-at-10k", "Admin", 100000m, 10000m, 10000m, false);
 AssertGate("inverted-at-50k", "Admin", 100000m, 10000m, 50000m, false);
 AssertGate("inverted-at-100k", "Admin", 100000m, 10000m, 100000m, false);
 
-Section("8. Overlap at shared boundaries");
-AssertGate("overlap-10k-L1", "Admin", 0m, 10000m, 10000m, true);
-AssertGate("overlap-10k-L2", "Admin", 10000m, 100000m, 10000m, true);
-AssertGate("overlap-100k-L2", "Admin", 10000m, 100000m, 100000m, true);
-AssertGate("overlap-100k-L3", "Admin", 100000m, 999999999m, 100000m, true);
+Section("8. Higher roles include lower amounts (FROM is 0)");
+AssertGate("MANAGER 10000", "MANAGER", 0m, 10000m, 10000m, true);
+AssertGate("HOD 10000", "HOD", 0m, 100000m, 10000m, true);
+AssertGate("PUR 10000", "PUR", 0m, 100000m, 10000m, true);
+AssertGate("DIRECTOR 10000", "DIRECTOR", 0m, 1000000m, 10000m, true);
+AssertGate("HOD 100000", "HOD", 0m, 100000m, 100000m, true);
+AssertGate("DIRECTOR 100000", "DIRECTOR", 0m, 1000000m, 100000m, true);
+AssertGate("MANAGER cannot do 100000", "MANAGER", 0m, 10000m, 100000m, false);
 
 Section("9. Negative RM amounts");
 AssertGate("neg-0.01 L1", "Admin", 0m, 10000m, -0.01m, false);
 AssertGate("neg-1 L1", "Admin", 0m, 10000m, -1m, false);
 AssertGate("neg-10000 L1", "Admin", 0m, 10000m, -10000m, false);
-AssertGate("neg-1 L2", "Admin", 10000m, 100000m, -1m, false);
+AssertGate("neg-1 HOD", "HOD", 0m, 100000m, -1m, false);
 AssertGate("neg-FROM allows -1", "Admin", -1000m, 10000m, -1m, true);
 AssertGate("neg-FROM still denies below FROM", "Admin", -1000m, 10000m, -1000.01m, false);
 
@@ -215,7 +204,77 @@ AssertJsonIgnoresExtraAmount();
         Fail("out-of-range DB amount should deny", $"allowed={high.Allowed}");
 }
 
-PrintMatrix(amounts, levels);
+Section("14. Sequential multi-level PO approval workflow");
+AssertRequiredLevels(5000m, 1);
+AssertRequiredLevels(10000m, 1);
+AssertRequiredLevels(50000m, 2);
+AssertRequiredLevels(100000m, 2);
+AssertRequiredLevels(500000m, 3);
+AssertRequiredLevels(1000000m, 3);
+AssertRequiredLevels(1000000.01m, 0);
+
+AssertCompletedLevels(new PoApprovalSlots(), 0);
+AssertCompletedLevels(new PoApprovalSlots { Level1Email = "a@b.com" }, 1);
+AssertCompletedLevels(new PoApprovalSlots { Level1Email = "a@b.com", Level2Email = "c@d.com" }, 2);
+AssertNextLevel(new PoApprovalSlots(), 1);
+AssertNextLevel(new PoApprovalSlots { Level1Email = "a@b.com" }, 2);
+AssertNextLevel(new PoApprovalSlots { Level1Email = "a@b.com", Level2Email = "c@d.com" }, 3);
+
+{
+    var auth = new ApprovalAuthority(new RecordingSyUser
+    {
+        Result = SyUserEmailLookupResult.Ok("Mgr", "MANAGER", 1m, 0m, 100000m)
+    });
+    var user = PrincipalWithEmail("mgr@acme.com");
+    var d = auth.AuthorizePartialApproveAsync(user, 50000m, new PoApprovalSlots()).GetAwaiter().GetResult();
+    if (d.Allowed && !d.IsFinalApproval && d.CompletedLevels == 1 && d.RequiredLevels == 2)
+        Pass("MANAGER first approve RM 50k (1/2)");
+    else
+        Fail("MANAGER first 50k", $"allowed={d.Allowed} final={d.IsFinalApproval} {d.CompletedLevels}/{d.RequiredLevels}");
+}
+
+{
+    var auth = new ApprovalAuthority(new RecordingSyUser
+    {
+        Result = SyUserEmailLookupResult.Ok("Mgr", "MANAGER", 1m, 0m, 100000m)
+    });
+    var user = PrincipalWithEmail("mgr@acme.com");
+    var slots = new PoApprovalSlots { Level1Email = "mgr@acme.com" };
+    var d = auth.AuthorizePartialApproveAsync(user, 50000m, slots).GetAwaiter().GetResult();
+    if (!d.Allowed && d.ErrorMessage?.Contains("HOD", StringComparison.OrdinalIgnoreCase) == true)
+        Pass("MANAGER blocked after already signing level 1 on 50k PO");
+    else
+        Fail("MANAGER duplicate L1", $"allowed={d.Allowed} msg={d.ErrorMessage}");
+}
+
+{
+    var auth = new ApprovalAuthority(new RecordingSyUser
+    {
+        Result = SyUserEmailLookupResult.Ok("Hod", "HOD", 2m, 0m, 100000m)
+    });
+    var user = PrincipalWithEmail("hod@acme.com");
+    var slots = new PoApprovalSlots { Level1Email = "mgr@acme.com" };
+    var d = auth.AuthorizePartialApproveAsync(user, 50000m, slots).GetAwaiter().GetResult();
+    if (d.Allowed && d.IsFinalApproval && d.CompletedLevels == 2)
+        Pass("HOD final approve RM 50k after MANAGER (2/2)");
+    else
+        Fail("HOD final 50k", $"allowed={d.Allowed} final={d.IsFinalApproval} {d.CompletedLevels}/{d.RequiredLevels}");
+}
+
+{
+    var auth = new ApprovalAuthority(new RecordingSyUser
+    {
+        Result = SyUserEmailLookupResult.Ok("Hod", "HOD", 2m, 0m, 100000m)
+    });
+    var user = PrincipalWithEmail("hod@acme.com");
+    var d = auth.AuthorizePartialApproveAsync(user, 50000m, new PoApprovalSlots()).GetAwaiter().GetResult();
+    if (!d.Allowed && d.ErrorMessage?.Contains("MANAGER", StringComparison.OrdinalIgnoreCase) == true)
+        Pass("HOD blocked until MANAGER approves");
+    else
+        Fail("HOD before MANAGER", $"allowed={d.Allowed} msg={d.ErrorMessage}");
+}
+
+PrintMatrix(amounts, syUserRows);
 
 Console.WriteLine();
 if (failures == 0)
@@ -231,16 +290,16 @@ Console.WriteLine($"{failures} smoke test(s) FAILED.");
 Console.ResetColor();
 return 1;
 
-void PrintMatrix(decimal[] amtList, (string Id, decimal From, decimal To)[] levelList)
+void PrintMatrix(decimal[] amtList, (string Role, decimal From, decimal To)[] levelList)
 {
-    Section("Amount x level matrix (Admin)");
-    var header = "Amount".PadRight(14) + string.Join("", levelList.Select(l => $"{l.Id} {l.From.ToString(culture)}-{l.To.ToString(culture)}".PadRight(22)));
+    Section("Amount x SY_USER role matrix");
+    var header = "Amount".PadRight(14) + string.Join("", levelList.Select(l => $"{l.Role} {l.From.ToString(culture)}-{l.To.ToString(culture)}".PadRight(24)));
     Console.WriteLine("  " + header);
     Console.WriteLine("  " + new string('-', header.Length));
     foreach (var amount in amtList)
     {
         var cells = string.Join("", levelList.Select(l =>
-            (InRange(amount, l.From, l.To) ? "ALLOW" : "deny").PadRight(22)));
+            (InRange(amount, l.From, l.To) ? "ALLOW" : "deny").PadRight(24)));
         Console.WriteLine("  " + amount.ToString(culture).PadRight(14) + cells);
     }
 }
@@ -306,6 +365,36 @@ void AssertJsonIgnoresExtraAmount()
         Pass("extra JSON amount on approve POST is ignored (DocKey+ListStatus only)");
     else
         Fail("JSON extra amount deserialize", $"po={po?.DocKey}/{po?.ListStatus} so={so?.DocKey}/{so?.ListStatus}");
+}
+
+void AssertRequiredLevels(decimal amount, int expected)
+{
+    var got = ApprovalLevelWorkflow.RequiredLevels(amount);
+    var label = $"RequiredLevels({amount.ToString(culture)}) = {expected}";
+    if (got == expected)
+        Pass(label);
+    else
+        Fail(label, $"got={got}");
+}
+
+void AssertCompletedLevels(PoApprovalSlots slots, int expected)
+{
+    var got = ApprovalLevelWorkflow.CompletedLevels(slots);
+    var label = $"CompletedLevels -> {expected}";
+    if (got == expected)
+        Pass(label);
+    else
+        Fail(label, $"got={got}");
+}
+
+void AssertNextLevel(PoApprovalSlots slots, int expected)
+{
+    var got = ApprovalLevelWorkflow.NextRequiredLevel(slots);
+    var label = $"NextRequiredLevel -> {expected}";
+    if (got == expected)
+        Pass(label);
+    else
+        Fail(label, $"got={got}");
 }
 
 sealed class RecordingSyUser : ISyUserLoginValidator

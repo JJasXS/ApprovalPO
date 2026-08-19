@@ -36,6 +36,8 @@ Approve purchase and sales orders, scan POs into goods received, and run mainten
 2. Use tabs: Pending, Approved, Cancelled, or Rejected.
 3. Click Review on an order to open the detail sheet.
 4. Approve or Reject the order (or use Select all + Bulk approve for several pending orders). Approve, reject, and bulk approve only work for documents whose amount is inside your SQL Accounting approval range (`UDF_APPFROM` to `UDF_APPTO`, inclusive). Orders outside that range show a message and stay unchanged.
+
+   **Multi-level approval:** Higher-value POs need more sign-offs in order (MANAGER → HOD/PUR → DIRECTOR). The Pending tab shows progress such as **Pending (1/3)** until all required levels have approved; only then does the PO move to Approved. You can only approve when it is your level's turn.
 5. Use Sales Approval in the header to switch modules, or Menu for Back to home / Sign out.
 
 ![Purchase orders](images/user-guide/04-purchase-orders.png)

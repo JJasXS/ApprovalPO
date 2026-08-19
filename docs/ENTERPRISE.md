@@ -188,9 +188,23 @@ The review screen or modal shows purchase order header information and purchase 
 
 ## 4.3 Approval Action
 
-When a pending purchase order is approved, the system updates PH_PO.UDF_POSTATUS to APPROVED.
+Purchase orders use **sequential multi-level approval** based on document amount:
 
-The UI can also support bulk approve for selected pending purchase orders.
+| PO amount | Required sign-offs |
+|---|---|
+| ≤ RM 10,000 | Level 1 (MANAGER) only |
+| ≤ RM 100,000 | Level 1 then Level 2 (HOD or PUR) |
+| ≤ RM 1,000,000 | Level 1, Level 2, then Level 3 (DIRECTOR) |
+
+When a user approves:
+
+1. The server records their email and timestamp in `PH_PO.UDF_POAPPL1` / `UDF_POAPPL2` / `UDF_POAPPL3` (and matching `*DT` columns).
+2. If more levels are still required, `UDF_POSTATUS` stays **PENDING** and the list shows progress such as **Pending (1/3)**.
+3. When the final required level approves, `UDF_POSTATUS` becomes **APPROVED** and the PO moves to the Approved tab.
+
+Each approver must be within their SY_USER amount range (`UDF_APPFROM`–`UDF_APPTO`) and must be the **next** required level in sequence. Reject clears all partial sign-offs.
+
+The UI supports bulk approve for selected pending purchase orders (skipping rows that are not at the user's level).
 
 ## 4.4 Cancel Approval Or Reject Behavior
 
@@ -218,10 +232,12 @@ flowchart TD
     C --> G[Rejected]
     D --> H[Review PO Details]
     H --> I{Decision}
-    I --> J[Approve]
+    I --> J[Approve at current level]
+    J --> L{All required levels done?}
+    L -->|No| M[Stay Pending show n/m]
+    L -->|Yes| N[Update PH_PO Status Approved]
     I --> K[Cancel Approval]
-    J --> L[Update PH_PO Status Approved]
-    K --> M[Update PH_PO Status Cancelled]
+    K --> O[Update PH_PO Status Cancelled clear slots]
     H --> N[Update Line Transferable If Pending]
 ```
 
@@ -289,15 +305,16 @@ Roles and approval amount limits are read from Firebird `SY_USER` at OTP verify 
 | `UDF_APPLEVEL` | Stored on the cookie and shown on the dashboard chip; does not override the amount range |
 | `UDF_APPFROM` / `UDF_APPTO` | Inclusive amount range. Admin users may Approve / Reject / Cancel a PO or SO only when `FROM <= DOCAMT <= TO` |
 
-The server re-reads these columns on each header status POST (do not trust the client amount). Missing FROM or TO, or a Maintenance role, denies the change with HTTP 403.
+The server re-reads these columns on each header status POST (do not trust the client amount). Missing FROM or TO, or a Maintenance role, denies the change with HTTP 403. `UDF_APPLEVEL` is display-only.
 
-Suggested ranges (stored on the user row, not hardcoded in C#):
+Ranges live on each `SY_USER` row. Current tenant example (FROM is 0, so a higher role can still approve smaller amounts):
 
-- Level 1: FROM `0`, TO `10000`
-- Level 2: FROM `10000`, TO `100000`
-- Level 3: FROM `100000`, TO a large ceiling
+- `MANAGER` level 1: FROM `0`, TO `10000`
+- `HOD` / `PUR` level 2: FROM `0`, TO `100000`
+- `DIRECTOR` level 3: FROM `0`, TO `1000000`
+- Blank `UDF_APPROLE`: Maintenance, cannot approve
 
-RM 10,000 and RM 100,000 are allowed for a user if that number is inside their FROM/TO. Adjacent levels overlap at the shared boundary unless the next band starts at `10000.01` / `100000.01`.
+RM 10,000 is allowed for MANAGER, HOD, PUR, and DIRECTOR. RM 100,000 is allowed for HOD, PUR, and DIRECTOR, not MANAGER. RM 1,000,000 is allowed for DIRECTOR only.
 
 Enforcement:
 
@@ -361,6 +378,8 @@ Common fields include:
 6. DOCDATE for order date.
 
 7. UDF_POSTATUS for approval status.
+
+8. UDF_POAPPL1 / UDF_POAPPL1DT, UDF_POAPPL2 / UDF_POAPPL2DT, UDF_POAPPL3 / UDF_POAPPL3DT for sequential partial approvals (approver email + timestamp per level).
 
 ## 6.3 Purchase Order Line Data
 

@@ -1,0 +1,73 @@
+using ApprovalPO.Models;
+
+namespace ApprovalPO.Services.Auth;
+
+/// <summary>
+/// Sequential multi-level PO approval: L1 MANAGER, L2 HOD/PUR, L3 DIRECTOR.
+/// Required levels scale with amount bands aligned to SY_USER TO limits.
+/// </summary>
+public static class ApprovalLevelWorkflow
+{
+    public const decimal BandLevel1Max = 10_000m;
+    public const decimal BandLevel2Max = 100_000m;
+    public const decimal BandLevel3Max = 1_000_000m;
+
+    public static int RequiredLevels(decimal amount)
+    {
+        if (amount <= BandLevel1Max) return 1;
+        if (amount <= BandLevel2Max) return 2;
+        if (amount <= BandLevel3Max) return 3;
+        return 0;
+    }
+
+    public static int CompletedLevels(PoApprovalSlots slots)
+    {
+        if (string.IsNullOrWhiteSpace(slots.Level1Email)) return 0;
+        if (string.IsNullOrWhiteSpace(slots.Level2Email)) return 1;
+        if (string.IsNullOrWhiteSpace(slots.Level3Email)) return 2;
+        return 3;
+    }
+
+    public static int NextRequiredLevel(PoApprovalSlots slots)
+    {
+        if (string.IsNullOrWhiteSpace(slots.Level1Email)) return 1;
+        if (string.IsNullOrWhiteSpace(slots.Level2Email)) return 2;
+        if (string.IsNullOrWhiteSpace(slots.Level3Email)) return 3;
+        return 0;
+    }
+
+    public static int ResolveUserLevel(decimal? appLevel, string? appRole)
+    {
+        if (appLevel is >= 1 and <= 3)
+            return (int)appLevel.Value;
+        return MapRoleToLevel(appRole);
+    }
+
+    public static int MapRoleToLevel(string? appRole)
+    {
+        var r = (appRole ?? "").Trim();
+        if (r.Equals("MANAGER", StringComparison.OrdinalIgnoreCase)) return 1;
+        if (r.Equals("HOD", StringComparison.OrdinalIgnoreCase)
+            || r.Equals("PUR", StringComparison.OrdinalIgnoreCase)) return 2;
+        if (r.Equals("DIRECTOR", StringComparison.OrdinalIgnoreCase)) return 3;
+        return 0;
+    }
+
+    public static string LevelLabel(int level) => level switch
+    {
+        1 => "MANAGER",
+        2 => "HOD/PUR",
+        3 => "DIRECTOR",
+        _ => "approver"
+    };
+
+    public static bool EmailMatches(string? a, string? b) =>
+        string.Equals((a ?? "").Trim(), (b ?? "").Trim(), StringComparison.OrdinalIgnoreCase);
+
+    public static string BuildProgressMessage(int completed, int required, int nextLevel, bool isFinal)
+    {
+        if (isFinal)
+            return $"All {required} approval level(s) complete.";
+        return $"Level {completed} recorded ({completed}/{required}). Waiting for {LevelLabel(nextLevel)}.";
+    }
+}

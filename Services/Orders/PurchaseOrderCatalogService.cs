@@ -2,6 +2,7 @@ using System.Data.Common;
 using ApprovalPO.Helpers;
 using ApprovalPO.Models;
 using ApprovalPO.Options;
+using ApprovalPO.Services.Auth;
 using FirebirdSql.Data.FirebirdClient;
 using Microsoft.Extensions.Options;
 
@@ -73,6 +74,8 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
         {
             await PhPoSchemaBootstrap.EnsureUdfPoStatusColumnAsync(conn, cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
+            await PhPoSchemaBootstrap.EnsurePoApprovalSlotColumnsAsync(conn, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
             var poCols = await FirebirdSchemaHelper.GetColumnNamesAsync(conn, "PH_PO", cancellationToken).ConfigureAwait(false);
             sql = PhPoSqlBuilder.BuildPurchaseOrdersSql(poCols);
         }
@@ -98,63 +101,172 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
         return await DocumentHeaderAmount.ReadAsync(conn, "PH_PO", docKey, cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<PoApprovalSlots?> GetApprovalSlotsAsync(int docKey, CancellationToken cancellationToken = default)
+    {
+        if (docKey <= 0)
+            return null;
+
+        if (!TenantConfigurationHelper.TryGetTenantCode(_configuration, out _, out _))
+            return null;
+
+        await using var conn = await _tenantResolver
+            .OpenConnectionAsync(_configuration, "load PH_PO approval slots", cancellationToken)
+            .ConfigureAwait(false);
+
+        await PhPoSchemaBootstrap.EnsurePoApprovalSlotColumnsAsync(conn, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
+        var poCols = await FirebirdSchemaHelper.GetColumnNamesAsync(conn, "PH_PO", cancellationToken).ConfigureAwait(false);
+        if (!HasApprovalSlotColumns(poCols))
+            return new PoApprovalSlots();
+
+        var select = BuildApprovalSlotSelectList(poCols);
+        await using var cmd = new FbCommand(
+            $"SELECT {select} FROM PH_PO WHERE DOCKEY = @D",
+            conn);
+        cmd.Parameters.Add("@D", FbDbType.Integer).Value = docKey;
+
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            return null;
+
+        return MapApprovalSlots(reader);
+    }
+
     /// <inheritdoc />
-    public async Task<(bool Success, string? ErrorMessage)> TrySetHeaderListStatusAsync(
+    public async Task<(bool Success, string? ErrorMessage, HeaderStatusChangeResult? Result)> TrySetHeaderListStatusAsync(
         int docKey,
         string listStatus,
+        string? approverEmail = null,
         CancellationToken cancellationToken = default)
     {
         if (docKey <= 0)
-            return (false, "Invalid document key.");
+            return (false, "Invalid document key.", null);
 
         var statusText = ApprovalListStatusHelper.ParseListStatusToDb(listStatus);
         if (statusText is null)
-            return (false, "ListStatus must be Pending, Approved, Cancelled, or Rejected.");
+            return (false, "ListStatus must be Pending, Approved, Cancelled, or Rejected.", null);
 
         if (!TenantConfigurationHelper.TryGetTenantCode(_configuration, out _, out var tenantError))
-            return (false, tenantError);
+            return (false, tenantError, null);
 
         try
         {
             await using var conn = await _tenantResolver.OpenConnectionAsync(_configuration, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            var statusCol = PhPoSqlBuilder.PickStatusColumn(
-                await FirebirdSchemaHelper.GetColumnNamesAsync(conn, "PH_PO", cancellationToken).ConfigureAwait(false));
+            var poCols = await FirebirdSchemaHelper.GetColumnNamesAsync(conn, "PH_PO", cancellationToken).ConfigureAwait(false);
+            var statusCol = PhPoSqlBuilder.PickStatusColumn(poCols);
             if (statusCol is null)
             {
                 if (!await PhPoSchemaBootstrap.EnsureUdfPoStatusColumnAsync(conn, cancellationToken: cancellationToken)
                         .ConfigureAwait(false))
                 {
                     return (false,
-                        "PH_PO.UDF_POSTATUS is not on this database and could not be created automatically. Add VARCHAR(40) column UDF_POSTATUS to PH_PO, or run eQuotation db_initializer.");
+                        "PH_PO.UDF_POSTATUS is not on this database and could not be created automatically. Add VARCHAR(40) column UDF_POSTATUS to PH_PO, or run eQuotation db_initializer.",
+                        null);
                 }
 
-                statusCol = PhPoSqlBuilder.PickStatusColumn(
-                    await FirebirdSchemaHelper.GetColumnNamesAsync(conn, "PH_PO", cancellationToken).ConfigureAwait(false));
+                poCols = await FirebirdSchemaHelper.GetColumnNamesAsync(conn, "PH_PO", cancellationToken).ConfigureAwait(false);
+                statusCol = PhPoSqlBuilder.PickStatusColumn(poCols);
                 if (statusCol is null)
                 {
                     return (false,
-                        "PH_PO.UDF_POSTATUS was not found after schema ensure. Contact your administrator.");
+                        "PH_PO.UDF_POSTATUS was not found after schema ensure. Contact your administrator.",
+                        null);
                 }
             }
 
-            await using var cmd = new FbCommand(
-                $"UPDATE PH_PO SET {statusCol} = @S WHERE DOCKEY = @D",
-                conn);
+            await PhPoSchemaBootstrap.EnsurePoApprovalSlotColumnsAsync(conn, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+            poCols = await FirebirdSchemaHelper.GetColumnNamesAsync(conn, "PH_PO", cancellationToken).ConfigureAwait(false);
 
+            if (statusText == ApprovalListStatusHelper.ApprovedDb)
+            {
+                return await TryRecordApprovalAsync(
+                    conn, poCols, statusCol, docKey, approverEmail, cancellationToken).ConfigureAwait(false);
+            }
+
+            var clearSlots = statusText is ApprovalListStatusHelper.RejectedDb
+                or ApprovalListStatusHelper.CancelledDb
+                or ApprovalListStatusHelper.PendingDb;
+
+            var sql = BuildHeaderStatusUpdateSql(statusCol, poCols, clearSlots);
+            await using var cmd = new FbCommand(sql, conn);
             cmd.Parameters.Add("@S", FbDbType.VarChar, 20).Value = statusText;
             cmd.Parameters.Add("@D", FbDbType.Integer).Value = docKey;
 
             var n = await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             if (n == 0)
-                return (false, "No row was updated (DOCKEY not found or UDF_POSTATUS column mismatch).");
+                return (false, "No row was updated (DOCKEY not found or UDF_POSTATUS column mismatch).", null);
 
-            return (true, null);
+            return (true, null, null);
         }
         catch (Exception ex)
         {
-            return (false, ex.Message);
+            return (false, ex.Message, null);
         }
+    }
+
+    private async Task<(bool Success, string? ErrorMessage, HeaderStatusChangeResult? Result)> TryRecordApprovalAsync(
+        FbConnection conn,
+        HashSet<string> poCols,
+        string statusCol,
+        int docKey,
+        string? approverEmail,
+        CancellationToken cancellationToken)
+    {
+        var email = (approverEmail ?? "").Trim();
+        if (email.Length == 0)
+            return (false, "Approver email is required.", null);
+
+        var amount = await DocumentHeaderAmount.ReadAsync(conn, "PH_PO", docKey, cancellationToken).ConfigureAwait(false);
+        if (amount is null)
+            return (false, "Document not found.", null);
+
+        var slots = await ReadApprovalSlotsForDocAsync(conn, poCols, docKey, cancellationToken).ConfigureAwait(false)
+                    ?? new PoApprovalSlots();
+
+        var required = ApprovalLevelWorkflow.RequiredLevels(amount.Value);
+        var nextLevel = ApprovalLevelWorkflow.NextRequiredLevel(slots);
+        if (nextLevel <= 0)
+            return (false, "This purchase order already has all required approvals.", null);
+
+        var slotCol = SlotEmailColumn(nextLevel);
+        var slotDtCol = SlotDateColumn(nextLevel);
+        if (!poCols.Contains(slotCol) || !poCols.Contains(slotDtCol))
+            return (false, "Approval slot columns are missing on PH_PO.", null);
+
+        var completed = ApprovalLevelWorkflow.CompletedLevels(slots) + 1;
+        var isFinal = completed >= required;
+        var dbStatus = isFinal ? ApprovalListStatusHelper.ApprovedDb : ApprovalListStatusHelper.PendingDb;
+
+        var sql = $"""
+            UPDATE PH_PO
+            SET {statusCol} = @S,
+                {slotCol} = @E,
+                {slotDtCol} = @T
+            WHERE DOCKEY = @D
+            """;
+
+        await using var cmd = new FbCommand(sql, conn);
+        cmd.Parameters.Add("@S", FbDbType.VarChar, 20).Value = dbStatus;
+        cmd.Parameters.Add("@E", FbDbType.VarChar, 80).Value = email;
+        cmd.Parameters.Add("@T", FbDbType.TimeStamp).Value = DateTime.UtcNow;
+        cmd.Parameters.Add("@D", FbDbType.Integer).Value = docKey;
+
+        var n = await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        if (n == 0)
+            return (false, "No row was updated (DOCKEY not found).", null);
+
+        var waitLevel = isFinal ? 0 : completed + 1;
+        var message = ApprovalLevelWorkflow.BuildProgressMessage(completed, required, waitLevel, isFinal);
+        return (true, null, new HeaderStatusChangeResult
+        {
+            CompletedLevels = completed,
+            RequiredLevels = required,
+            IsFinal = isFinal,
+            Message = message
+        });
     }
 
     /// <inheritdoc />
@@ -245,6 +357,10 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
         var rawStatus = (FirebirdDataReaderHelper.GetString(reader, "PQSTATUS", "POSTATUS", "STATUS", "UDF_POSTATUS") ?? "").Trim();
         // PH_PO.STATUS is often an integer workflow code — never use it for tabs unless it matches our labels.
         var status = ApprovalListStatusHelper.NormalizeTabStatus(rawStatus, transferable);
+        var slots = MapApprovalSlots(reader);
+        var required = ApprovalLevelWorkflow.RequiredLevels(amount);
+        var completed = ApprovalLevelWorkflow.CompletedLevels(slots);
+        var nextLevel = status == "Pending" ? ApprovalLevelWorkflow.NextRequiredLevel(slots) : 0;
 
         return new PurchaseOrderRow
         {
@@ -256,8 +372,110 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
             Description = description.Trim(),
             OrderDate = orderDate,
             Transferable = transferable,
+            ApprovalLevel1 = slots.Level1Email,
+            ApprovalLevel1At = slots.Level1At,
+            ApprovalLevel2 = slots.Level2Email,
+            ApprovalLevel2At = slots.Level2At,
+            ApprovalLevel3 = slots.Level3Email,
+            ApprovalLevel3At = slots.Level3At,
+            RequiredLevels = required,
+            CompletedLevels = completed,
+            NextLevel = nextLevel,
         };
     }
+
+    private static bool HasApprovalSlotColumns(HashSet<string> poCols) =>
+        poCols.Contains("UDF_POAPPL1");
+
+    private static string BuildApprovalSlotSelectList(HashSet<string> poCols)
+    {
+        var parts = new List<string>();
+        foreach (var col in new[] { "UDF_POAPPL1", "UDF_POAPPL1DT", "UDF_POAPPL2", "UDF_POAPPL2DT", "UDF_POAPPL3", "UDF_POAPPL3DT" })
+        {
+            if (poCols.Contains(col))
+                parts.Add(col);
+        }
+
+        return parts.Count == 0 ? "DOCKEY" : string.Join(", ", parts);
+    }
+
+    private static async Task<PoApprovalSlots?> ReadApprovalSlotsForDocAsync(
+        FbConnection conn,
+        HashSet<string> poCols,
+        int docKey,
+        CancellationToken cancellationToken)
+    {
+        if (!HasApprovalSlotColumns(poCols))
+            return new PoApprovalSlots();
+
+        var select = BuildApprovalSlotSelectList(poCols);
+        await using var cmd = new FbCommand($"SELECT {select} FROM PH_PO WHERE DOCKEY = @D", conn);
+        cmd.Parameters.Add("@D", FbDbType.Integer).Value = docKey;
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            return null;
+
+        return MapApprovalSlots(reader);
+    }
+
+    private static PoApprovalSlots MapApprovalSlots(DbDataReader reader)
+    {
+        string? Email(string primary, string udf) =>
+            NullIfBlank(FirebirdDataReaderHelper.GetString(reader, primary, udf));
+
+        DateTime? At(string primary, string udf) =>
+            FirebirdDataReaderHelper.GetDateTime(reader, primary, udf);
+
+        return new PoApprovalSlots
+        {
+            Level1Email = Email("APPROVALLEVEL1", "UDF_POAPPL1"),
+            Level1At = At("APPROVALLEVEL1AT", "UDF_POAPPL1DT"),
+            Level2Email = Email("APPROVALLEVEL2", "UDF_POAPPL2"),
+            Level2At = At("APPROVALLEVEL2AT", "UDF_POAPPL2DT"),
+            Level3Email = Email("APPROVALLEVEL3", "UDF_POAPPL3"),
+            Level3At = At("APPROVALLEVEL3AT", "UDF_POAPPL3DT"),
+        };
+    }
+
+    private static string? NullIfBlank(string? value)
+    {
+        var v = (value ?? "").Trim();
+        return v.Length == 0 ? null : v;
+    }
+
+    private static string BuildHeaderStatusUpdateSql(string statusCol, HashSet<string> poCols, bool clearSlots)
+    {
+        if (!clearSlots || !HasApprovalSlotColumns(poCols))
+            return $"UPDATE PH_PO SET {statusCol} = @S WHERE DOCKEY = @D";
+
+        return $"""
+            UPDATE PH_PO
+            SET {statusCol} = @S,
+                UDF_POAPPL1 = NULL,
+                UDF_POAPPL1DT = NULL,
+                UDF_POAPPL2 = NULL,
+                UDF_POAPPL2DT = NULL,
+                UDF_POAPPL3 = NULL,
+                UDF_POAPPL3DT = NULL
+            WHERE DOCKEY = @D
+            """;
+    }
+
+    private static string SlotEmailColumn(int level) => level switch
+    {
+        1 => "UDF_POAPPL1",
+        2 => "UDF_POAPPL2",
+        3 => "UDF_POAPPL3",
+        _ => throw new ArgumentOutOfRangeException(nameof(level))
+    };
+
+    private static string SlotDateColumn(int level) => level switch
+    {
+        1 => "UDF_POAPPL1DT",
+        2 => "UDF_POAPPL2DT",
+        3 => "UDF_POAPPL3DT",
+        _ => throw new ArgumentOutOfRangeException(nameof(level))
+    };
 
     private static PurchaseRequestLineRow MapLineRow(DbDataReader reader)
     {

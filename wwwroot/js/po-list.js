@@ -12,6 +12,10 @@
   const hasAppRange = appFromRaw.length > 0 && appToRaw.length > 0;
   const appFrom = hasAppRange ? Number.parseFloat(appFromRaw) : Number.NaN;
   const appTo = hasAppRange ? Number.parseFloat(appToRaw) : Number.NaN;
+  const appLevelRaw = String(cfgEl?.dataset.appLevel || '').trim();
+  const userLevelNum = Number.parseInt(appLevelRaw, 10);
+  const userLevel = Number.isFinite(userLevelNum) && userLevelNum >= 1 && userLevelNum <= 3 ? userLevelNum : 0;
+  const userEmail = String(cfgEl?.dataset.userEmail || '').trim().toLowerCase();
 
   const modal = document.getElementById('reviewModal');
   const reviewBody = document.getElementById('reviewBody');
@@ -73,12 +77,12 @@
   const persistListStatus = async (tr, listStatus) => {
     if (!setTransferableUrl || !csrfToken) {
       showToast('Cannot save: page is missing save configuration.');
-      return false;
+      return { ok: false };
     }
     const docKey = parseInt(String(tr?.dataset?.docKey ?? ''), 10);
     if (!docKey) {
       showToast('Cannot save: missing document key for this row.');
-      return false;
+      return { ok: false };
     }
     try {
       const res = await fetch(setTransferableUrl, {
@@ -100,12 +104,12 @@
       if (!res.ok || !data || data.ok !== true) {
         const msg = (data && data.error) || `Save failed (${res.status}).`;
         showToast(String(msg));
-        return false;
+        return { ok: false };
       }
-      return true;
+      return { ok: true, data };
     } catch {
       showToast('Save failed. Check your connection.');
-      return false;
+      return { ok: false };
     }
   };
 
@@ -207,7 +211,40 @@
         : status === 'Cancelled'
           ? 'po-status-stack--cancelled'
           : 'po-status-stack--pending';
-  const statusDisplay = (status) => status;
+
+  const requiredLevelsForAmount = (amt) => {
+    if (amt <= 10000) return 1;
+    if (amt <= 100000) return 2;
+    if (amt <= 1000000) return 3;
+    return 0;
+  };
+
+  const rowRequiredLevels = (tr) => {
+    const n = Number.parseInt(String(tr?.dataset?.requiredLevels ?? ''), 10);
+    if (Number.isFinite(n) && n > 0) return n;
+    return requiredLevelsForAmount(parseAmount(tr));
+  };
+
+  const rowCompletedLevels = (tr) =>
+    Number.parseInt(String(tr?.dataset?.completedLevels ?? '0'), 10) || 0;
+
+  const rowNextLevel = (tr) => {
+    const explicit = Number.parseInt(String(tr?.dataset?.nextLevel ?? ''), 10);
+    if (Number.isFinite(explicit) && explicit > 0) return explicit;
+    const completed = rowCompletedLevels(tr);
+    return completed === 0 ? 1 : completed + 1;
+  };
+
+  const levelLabel = (level) => ({ 1: 'MANAGER', 2: 'HOD/PUR', 3: 'DIRECTOR' }[level] || 'approver');
+
+  const statusDisplay = (status, tr) => {
+    if (status === 'Pending' && tr) {
+      const required = rowRequiredLevels(tr);
+      const completed = rowCompletedLevels(tr);
+      if (required > 0 && completed > 0) return `Pending (${completed}/${required})`;
+    }
+    return status;
+  };
 
   const syncRowStatusDom = (tr, status) => {
     if (!tr) return;
@@ -222,7 +259,7 @@
       );
       stack.classList.add(statusStackClass(status));
     }
-    if (text) text.textContent = statusDisplay(status);
+    if (text) text.textContent = statusDisplay(status, tr);
   };
 
   const listStatusFromSnapshot = (prev) => {
@@ -253,6 +290,28 @@
     return 'Pending';
   };
 
+  const applyOrderWorkflowToRow = (tr, o) => {
+    if (!tr || !o) return;
+    tr.dataset.requiredLevels = String(o.requiredLevels ?? requiredLevelsForAmount(parseAmount(tr)));
+    tr.dataset.completedLevels = String(o.completedLevels ?? 0);
+    tr.dataset.nextLevel = String(o.nextLevel ?? 0);
+    tr.dataset.approvalL1 = o.approvalLevel1 || '';
+    tr.dataset.approvalL2 = o.approvalLevel2 || '';
+    tr.dataset.approvalL3 = o.approvalLevel3 || '';
+  };
+
+  const applyWorkflowResultToRow = (tr, data) => {
+    if (!tr || !data) return;
+    if (data.requiredLevels != null) tr.dataset.requiredLevels = String(data.requiredLevels);
+    if (data.completedLevels != null) tr.dataset.completedLevels = String(data.completedLevels);
+    if (data.isFinal) {
+      tr.dataset.nextLevel = '0';
+    } else if (data.completedLevels != null) {
+      tr.dataset.nextLevel = String(data.completedLevels + 1);
+    }
+    if (userLevel > 0 && userEmail) tr.dataset[`approvalL${userLevel}`] = userEmail;
+  };
+
   const rowFromOrder = (o) => {
     const po = o.poNumber || '';
     const vendor = o.vendor || '';
@@ -263,15 +322,21 @@
     const transfer = o.transferable === true ? 'true' : o.transferable === false ? 'false' : '';
     const dateStr = (o.orderDate && String(o.orderDate).slice(0, 10)) || '';
     const docKey = o.docKey != null && o.docKey !== '' ? String(o.docKey) : '';
+    const requiredLevels = o.requiredLevels ?? requiredLevelsForAmount(Number.parseFloat(amount) || 0);
+    const completedLevels = o.completedLevels ?? 0;
+    const nextLevel = o.nextLevel ?? (completedLevels === 0 ? 1 : completedLevels + 1);
+    const progressLabel = status === 'Pending' && requiredLevels > 0 && completedLevels > 0
+      ? `Pending (${completedLevels}/${requiredLevels})`
+      : status;
     const chk =
       status === 'Pending'
         ? `<input type="checkbox" class="row-select" aria-label="Select ${escapeHtml(po)}" />`
         : '';
     const amtNum = Number.parseFloat(amount) || 0;
     const stack = statusStackClass(status);
-    return `<tr class="po-row" data-po="${escapeHtml(po)}" data-doc-key="${escapeHtml(docKey)}" data-amount="${escapeHtml(amount)}" data-transferable="${transfer}" data-status="${escapeHtml(status)}" data-vendor="${escapeHtml(vendor)}" data-description="${escapeHtml(desc)}" data-order-date="${escapeHtml(dateStr)}">
+    return `<tr class="po-row" data-po="${escapeHtml(po)}" data-doc-key="${escapeHtml(docKey)}" data-amount="${escapeHtml(amount)}" data-transferable="${transfer}" data-status="${escapeHtml(status)}" data-vendor="${escapeHtml(vendor)}" data-description="${escapeHtml(desc)}" data-order-date="${escapeHtml(dateStr)}" data-required-levels="${requiredLevels}" data-completed-levels="${completedLevels}" data-next-level="${nextLevel}" data-approval-l1="${escapeHtml(o.approvalLevel1 || '')}" data-approval-l2="${escapeHtml(o.approvalLevel2 || '')}" data-approval-l3="${escapeHtml(o.approvalLevel3 || '')}">
       <td class="td-check" data-label="">${chk}</td>
-      <td class="po-status-td" data-label=""><div class="po-status-stack ${stack}"><span class="po-status-icon" aria-hidden="true"></span><span class="po-status-text">${escapeHtml(statusDisplay(status))}</span></div></td>
+      <td class="po-status-td" data-label=""><div class="po-status-stack ${stack}"><span class="po-status-icon" aria-hidden="true"></span><span class="po-status-text">${escapeHtml(progressLabel)}</span></div></td>
       <td class="po-num" data-label="PO #"><span class="po-num-text">${escapeHtml(po)}</span></td>
       <td class="po-vendor" data-label="Supplier">${escapeHtml(vendor) || '—'}</td>
       <td class="num po-date" data-label="Date">${escapeHtml(formatDisplayDate(dateStr))}</td>
@@ -520,7 +585,7 @@
     reviewBody.innerHTML = `
       <div class="review-hero">
         <div class="review-hero__po">${escapeHtml(po)}</div>
-        <span class="review-badge ${statusClass}">${escapeHtml(statusDisplay(status))}</span>
+        <span class="review-badge ${statusClass}">${escapeHtml(statusDisplay(status, tr))}</span>
       </div>
 
       <div class="review-card">
@@ -543,6 +608,8 @@
           </div>
         </div>
       </div>
+
+      ${approvalTrailHtml(tr)}
 
       ${note}
 
@@ -578,13 +645,13 @@
     const approved = status === 'Approved';
     const rejected = status === 'Rejected';
     const cancelled = status === 'Cancelled';
+    const canApproveAction = (pending || rejected || cancelled) && canWorkflowApprove(tr);
     const inRange = amountInApprovalRange(parseAmount(tr));
-    const canApprove = (pending || rejected || cancelled) && inRange;
     const canReject = (pending || approved) && inRange;
 
-    modalApproveBtn.disabled = !canApprove;
+    modalApproveBtn.disabled = !canApproveAction;
     modalApproveBtn.style.display = pending || rejected || cancelled ? '' : 'none';
-    modalApproveBtn.title = inRange ? '' : rangeDeniedMessage();
+    modalApproveBtn.title = canApproveAction ? '' : workflowDeniedMessage(tr);
 
     if (modalRejectBtnEl) {
       modalRejectBtnEl.textContent = approved ? 'Cancel approval' : 'Reject';
@@ -606,12 +673,52 @@
     return amt >= appFrom && amt <= appTo;
   };
 
+  const slotEmailAtUserLevel = (tr) => {
+    if (userLevel <= 0) return '';
+    return String(tr?.dataset?.[`approvalL${userLevel}`] || '').trim();
+  };
+
+  const canWorkflowApprove = (tr) => {
+    if (!amountInApprovalRange(parseAmount(tr))) return false;
+    const next = rowNextLevel(tr);
+    if (userLevel <= 0 || next <= 0) return false;
+    if (userLevel !== next) return false;
+    const existing = slotEmailAtUserLevel(tr);
+    if (existing && userEmail && existing.toLowerCase() === userEmail) return false;
+    return true;
+  };
+
   const rangeDeniedMessage = () => {
     if (!canApproveRole)
       return 'You are not authorized to change approval status for this document.';
     if (!hasAppRange || Number.isNaN(appFrom) || Number.isNaN(appTo))
       return 'Your approval range is not set. Contact your administrator.';
     return `This document is outside your approval range (${formatRm(appFrom)} – ${formatRm(appTo)}).`;
+  };
+
+  const workflowDeniedMessage = (tr) => {
+    if (!amountInApprovalRange(parseAmount(tr))) return rangeDeniedMessage();
+    const required = rowRequiredLevels(tr);
+    const completed = rowCompletedLevels(tr);
+    const next = rowNextLevel(tr);
+    if (userLevel <= 0) return 'Your approval level is not set. Contact your administrator.';
+    const existing = slotEmailAtUserLevel(tr);
+    if (existing && userEmail && existing.toLowerCase() === userEmail)
+      return 'You have already approved at this level.';
+    if (userLevel !== next)
+      return `Waiting for ${levelLabel(next)} approval (${completed}/${required}).`;
+    return rangeDeniedMessage();
+  };
+
+  const approvalTrailHtml = (tr) => {
+    const parts = [];
+    for (let lvl = 1; lvl <= 3; lvl += 1) {
+      const email = String(tr?.dataset?.[`approvalL${lvl}`] || '').trim();
+      if (!email) continue;
+      parts.push(`<div class="review-field review-field--full"><div class="review-label">Level ${lvl} (${levelLabel(lvl)})</div><div class="review-value">${escapeHtml(email)}</div></div>`);
+    }
+    if (parts.length === 0) return '';
+    return `<div class="review-card"><div class="review-grid">${parts.join('')}</div></div>`;
   };
 
   const showUndo = (msg, revertFn) => {
@@ -636,12 +743,28 @@
 
   /**
    * @param {HTMLElement} tr
-   * @param {{ quiet?: boolean }} [opts]
+   * @param {{ quiet?: boolean, message?: string }} [opts]
+   */
+  const partialApproveRowInternal = (tr, data, opts = {}) => {
+    const { quiet = false, message = '' } = opts;
+    applyWorkflowResultToRow(tr, data);
+    tr.dataset.status = 'Pending';
+    syncRowStatusDom(tr, 'Pending');
+    updateRowButtons(tr);
+    if (!quiet) showToast(message || data?.message || 'Approval recorded.');
+    refreshView();
+  };
+
+  /**
+   * @param {HTMLElement} tr
+   * @param {{ quiet?: boolean, message?: string }} [opts]
    */
   const approveRowInternal = (tr, opts = {}) => {
-    const { quiet = false } = opts;
+    const { quiet = false, message = '' } = opts;
     tr.dataset.status = 'Approved';
     tr.dataset.transferable = 'true';
+    tr.dataset.completedLevels = tr.dataset.requiredLevels || tr.dataset.completedLevels || '0';
+    tr.dataset.nextLevel = '0';
     syncRowStatusDom(tr, 'Approved');
     const cb = tr.querySelector('.row-select');
     if (cb) {
@@ -649,7 +772,7 @@
       cb.disabled = true;
     }
     updateRowButtons(tr);
-    if (!quiet) showToast(`PO ${tr.dataset.po} approved.`);
+    if (!quiet) showToast(message || `PO ${tr.dataset.po} approved.`);
     refreshView();
   };
 
@@ -657,6 +780,11 @@
     const { quiet = false } = opts;
     tr.dataset.status = 'Rejected';
     tr.dataset.transferable = 'false';
+    tr.dataset.completedLevels = '0';
+    tr.dataset.nextLevel = '0';
+    tr.dataset.approvalL1 = '';
+    tr.dataset.approvalL2 = '';
+    tr.dataset.approvalL3 = '';
     syncRowStatusDom(tr, 'Rejected');
     const cb = tr.querySelector('.row-select');
     if (cb) {
@@ -679,27 +807,42 @@
 
   const runApprove = (tr) => {
     const amt = parseAmount(tr);
-    if (!amountInApprovalRange(amt)) {
-      showToast(rangeDeniedMessage());
+    if (!canWorkflowApprove(tr)) {
+      showToast(workflowDeniedMessage(tr));
       return;
     }
     const doApprove = async () => {
       const prev = {
         status: tr.dataset.status,
-        transferable: tr.dataset.transferable || ''
+        transferable: tr.dataset.transferable || '',
+        completedLevels: tr.dataset.completedLevels || '0',
+        nextLevel: tr.dataset.nextLevel || '0',
+        approvalL1: tr.dataset.approvalL1 || '',
+        approvalL2: tr.dataset.approvalL2 || '',
+        approvalL3: tr.dataset.approvalL3 || ''
       };
-      const ok = await persistListStatus(tr, 'Approved');
-      if (!ok) return;
-      approveRowInternal(tr, { quiet: true });
-      showUndo('Approved.', async () => {
-        const uok = await persistListStatus(tr, listStatusFromSnapshot(prev));
-        if (!uok) {
-          showToast('Undo could not be saved to the database.');
-          return;
-        }
-        revertRowApproval(tr, prev);
-        refreshView();
-      });
+      const result = await persistListStatus(tr, 'Approved');
+      if (!result.ok) return;
+      const data = result.data || {};
+      if (data.isFinal) {
+        approveRowInternal(tr, { quiet: true, message: data.message || '' });
+        showUndo('Approved.', async () => {
+          const uok = await persistListStatus(tr, listStatusFromSnapshot(prev));
+          if (!uok.ok) {
+            showToast('Undo could not be saved to the database.');
+            return;
+          }
+          tr.dataset.completedLevels = prev.completedLevels;
+          tr.dataset.nextLevel = prev.nextLevel;
+          tr.dataset.approvalL1 = prev.approvalL1;
+          tr.dataset.approvalL2 = prev.approvalL2;
+          tr.dataset.approvalL3 = prev.approvalL3;
+          revertRowApproval(tr, prev);
+          refreshView();
+        });
+        return;
+      }
+      partialApproveRowInternal(tr, data, { quiet: true, message: data.message || '' });
     };
 
     if (amt >= highValueThreshold) {
@@ -742,11 +885,11 @@
         transferable: tr.dataset.transferable || ''
       };
       const ok = await persistListStatus(tr, 'Rejected');
-      if (!ok) return;
+      if (!ok.ok) return;
       rejectRowInternal(tr, { quiet: true });
       showUndo('Rejected.', async () => {
         const uok = await persistListStatus(tr, listStatusFromSnapshot(prev));
-        if (!uok) {
+        if (!uok.ok) {
           showToast('Undo could not be saved to the database.');
           return;
         }
@@ -758,14 +901,15 @@
 
   const updateRowButtons = (tr) => {
     const status = rowListStatus(tr);
-    const inRange = amountInApprovalRange(parseAmount(tr));
+    const canApprove = canWorkflowApprove(tr);
     const approveBtn = tr.querySelector('.btn-approve');
     const rejectBtn = tr.querySelector('.btn-reject');
+    const inRange = amountInApprovalRange(parseAmount(tr));
     if (approveBtn) {
       const showApprove = status === 'Pending' || status === 'Cancelled' || status === 'Rejected';
       approveBtn.style.display = showApprove ? '' : 'none';
-      approveBtn.disabled = !showApprove || !inRange;
-      approveBtn.title = inRange ? '' : rangeDeniedMessage();
+      approveBtn.disabled = !showApprove || !canApprove;
+      approveBtn.title = canApprove ? '' : workflowDeniedMessage(tr);
     }
     if (rejectBtn) {
       const showReject = status === 'Pending' || status === 'Approved';
@@ -978,24 +1122,39 @@
   const bulkApproveConfirmed = async (selected) => {
     const snapshots = selected.map((tr) => ({
       tr,
-      prev: { status: tr.dataset.status, transferable: tr.dataset.transferable || '' }
+      prev: {
+        status: tr.dataset.status,
+        transferable: tr.dataset.transferable || '',
+        completedLevels: tr.dataset.completedLevels || '0',
+        nextLevel: tr.dataset.nextLevel || '0',
+        approvalL1: tr.dataset.approvalL1 || '',
+        approvalL2: tr.dataset.approvalL2 || '',
+        approvalL3: tr.dataset.approvalL3 || ''
+      }
     }));
     for (const tr of selected) {
-      const ok = await persistListStatus(tr, 'Approved');
-      if (!ok) {
+      const result = await persistListStatus(tr, 'Approved');
+      if (!result.ok) {
         await refreshRowsFromServer();
         return;
       }
-      approveRowInternal(tr, { quiet: true });
+      const data = result.data || {};
+      if (data.isFinal) approveRowInternal(tr, { quiet: true });
+      else partialApproveRowInternal(tr, data, { quiet: true });
     }
     showUndo(`${selected.length} PO(s) approved.`, async () => {
       for (const { tr, prev } of snapshots) {
         const uok = await persistListStatus(tr, listStatusFromSnapshot(prev));
-        if (!uok) {
+        if (!uok.ok) {
           showToast('Bulk undo failed partway; refreshing list.');
           await refreshRowsFromServer();
           return;
         }
+        tr.dataset.completedLevels = prev.completedLevels;
+        tr.dataset.nextLevel = prev.nextLevel;
+        tr.dataset.approvalL1 = prev.approvalL1;
+        tr.dataset.approvalL2 = prev.approvalL2;
+        tr.dataset.approvalL3 = prev.approvalL3;
         revertRowApproval(tr, prev);
       }
       refreshView();
@@ -1010,14 +1169,14 @@
         r.querySelector('.row-select')?.checked
     );
     if (selected.length === 0) return;
-    const inRange = selected.filter((r) => amountInApprovalRange(parseAmount(r)));
-    const skipped = selected.length - inRange.length;
-    if (inRange.length === 0) {
-      showToast(rangeDeniedMessage());
+    const eligible = selected.filter((r) => canWorkflowApprove(r));
+    const skipped = selected.length - eligible.length;
+    if (eligible.length === 0) {
+      showToast(workflowDeniedMessage(selected[0]));
       return;
     }
-    const anyHigh = inRange.some((r) => parseAmount(r) >= highValueThreshold);
-    const lines = inRange
+    const anyHigh = eligible.some((r) => parseAmount(r) >= highValueThreshold);
+    const lines = eligible
       .map(
         (r) =>
           `${escapeHtml(r.dataset.po)} — ${parseAmount(r).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}`
@@ -1025,16 +1184,16 @@
       .join('<br/>');
     const skipNote =
       skipped > 0
-        ? `<p class="modal__note">${skipped} selected order(s) are outside your approval range and will be skipped.</p>`
+        ? `<p class="modal__note">${skipped} selected order(s) cannot be approved at your level or are outside your range and will be skipped.</p>`
         : '';
     openConfirm(
       'Bulk approve',
-      `<p>Approve <strong>${inRange.length}</strong> purchase order(s)?</p><div class="bulk-list">${lines}</div>${skipNote}${
+      `<p>Approve <strong>${eligible.length}</strong> purchase order(s)?</p><div class="bulk-list">${lines}</div>${skipNote}${
         anyHigh
           ? '<p class="modal__note">Includes high-value PO(s). Only use bulk approve if your process allows it.</p>'
           : ''
       }`,
-      () => void bulkApproveConfirmed(inRange)
+      () => void bulkApproveConfirmed(eligible)
     );
   });
 
