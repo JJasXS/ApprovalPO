@@ -51,40 +51,27 @@ public sealed class ApprovalAuthority : IApprovalAuthority
         if (ctx.Deny is not null)
             return ctx.Deny;
 
+        // Amount must be within the user's configured approval range.
         var amountDecision = ApprovalAmountGate.Evaluate(ctx.AppRole, ctx.AppFrom, ctx.AppTo, amount);
         if (!amountDecision.Allowed)
             return amountDecision;
-
-        var required = ApprovalLevelWorkflow.RequiredLevels(amount);
-        if (required <= 0)
-        {
-            return ApprovalAuthorityDecision.Deny(
-                $"This document amount exceeds the maximum approval limit (RM {ApprovalAmountGate.FormatRm(ApprovalLevelWorkflow.BandLevel3Max)}).");
-        }
-
-        var completed = ApprovalLevelWorkflow.CompletedLevels(currentSlots);
-        var nextLevel = ApprovalLevelWorkflow.NextRequiredLevel(currentSlots);
-        if (nextLevel <= 0)
-            return ApprovalAuthorityDecision.Deny("This purchase order already has all required approvals.");
 
         var userLevel = ApprovalLevelWorkflow.ResolveUserLevel(ctx.AppLevel, ctx.AppRole);
         if (userLevel <= 0)
             return ApprovalAuthorityDecision.Deny("Your approval level is not set. Contact your administrator.");
 
-        if (userLevel != nextLevel)
-        {
-            return ApprovalAuthorityDecision.Deny(
-                $"Waiting for {ApprovalLevelWorkflow.LevelLabel(nextLevel)} approval ({completed}/{required}).");
-        }
-
+        // Prevent the same person approving twice at the same slot level.
         var existingAtLevel = currentSlots.EmailAtLevel(userLevel);
         if (ApprovalLevelWorkflow.EmailMatches(existingAtLevel, ctx.Email))
             return ApprovalAuthorityDecision.Deny("You have already approved at this level.");
 
+        // Higher-level approvers can approve without waiting for lower levels —
+        // record sign-off at the user's own level slot and treat it as final.
+        var required = ApprovalLevelWorkflow.RequiredLevels(amount);
+        var completed = ApprovalLevelWorkflow.CompletedLevels(currentSlots);
         var newCompleted = completed + 1;
-        var isFinal = newCompleted >= required;
-        var waitLevel = isFinal ? 0 : newCompleted + 1;
-        var message = ApprovalLevelWorkflow.BuildProgressMessage(newCompleted, required, waitLevel, isFinal);
+        var isFinal = true; // any authorised approver makes it final
+        var message = $"Approved by {ApprovalLevelWorkflow.LevelLabel(userLevel)}.";
         return ApprovalAuthorityDecision.AllowWorkflow(newCompleted, required, isFinal, message);
     }
 

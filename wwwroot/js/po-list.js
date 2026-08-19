@@ -697,9 +697,7 @@
 
   const canWorkflowApprove = (tr) => {
     if (!amountInApprovalRange(parseAmount(tr))) return false;
-    const next = rowNextLevel(tr);
-    if (userLevel <= 0 || next <= 0) return false;
-    if (userLevel !== next) return false;
+    if (userLevel <= 0) return false;
     const existing = slotEmailAtUserLevel(tr);
     if (existing && userEmail && existing.toLowerCase() === userEmail) return false;
     return true;
@@ -715,15 +713,10 @@
 
   const workflowDeniedMessage = (tr) => {
     if (!amountInApprovalRange(parseAmount(tr))) return rangeDeniedMessage();
-    const required = rowRequiredLevels(tr);
-    const completed = rowCompletedLevels(tr);
-    const next = rowNextLevel(tr);
     if (userLevel <= 0) return 'Your approval level is not set. Contact your administrator.';
     const existing = slotEmailAtUserLevel(tr);
     if (existing && userEmail && existing.toLowerCase() === userEmail)
       return 'You have already approved at this level.';
-    if (userLevel !== next)
-      return `Waiting for ${levelLabel(next)} approval (${completed}/${required}).`;
     return rangeDeniedMessage();
   };
 
