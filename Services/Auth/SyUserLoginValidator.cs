@@ -34,7 +34,8 @@ public sealed class SyUserEmailLookupResult
         string? appRole = null,
         decimal? appLevel = null,
         decimal? appFrom = null,
-        decimal? appTo = null) =>
+        decimal? appTo = null,
+        string? diagnostic = null) =>
         new()
         {
             Status = SyUserEmailLookupStatus.Ok,
@@ -43,6 +44,7 @@ public sealed class SyUserEmailLookupResult
             AppLevel = appLevel,
             AppFrom = appFrom,
             AppTo = appTo,
+            Diagnostic = string.IsNullOrWhiteSpace(diagnostic) ? null : diagnostic,
         };
 
     public static SyUserEmailLookupResult NotFound() => new() { Status = SyUserEmailLookupStatus.NotFound };
@@ -145,6 +147,7 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
     {
         var includeIsActive = true;
         var includeApprovalUdfs = true;
+        string? udfDiagnostic = null;
         for (var attempt = 0; attempt < 4; attempt++)
         {
             try
@@ -157,7 +160,7 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
                 if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                     return SyUserEmailLookupResult.NotFound();
 
-                return MapLookupRow(reader, includeIsActive, includeApprovalUdfs);
+                return MapLookupRow(reader, includeIsActive, includeApprovalUdfs, udfDiagnostic);
             }
             catch (Exception ex) when (includeIsActive && IsLikelyMissingColumn(ex, "ISACTIVE"))
             {
@@ -168,6 +171,7 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
             {
                 _logger.LogWarning(ex, "SY_USER approval UDF columns caused error — retrying without them. Error: {Msg}", ex.Message);
                 includeApprovalUdfs = false;
+                udfDiagnostic = ex.Message;
             }
             catch (Exception ex)
             {
@@ -199,7 +203,8 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
     private static SyUserEmailLookupResult MapLookupRow(
         System.Data.Common.DbDataReader reader,
         bool includeIsActive,
-        bool includeApprovalUdfs)
+        bool includeApprovalUdfs,
+        string? udfDiagnostic)
     {
         var displayName = (FirebirdDataReaderHelper.GetString(reader, "DISP_NAME") ?? "").Trim();
 
@@ -230,7 +235,8 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
             appRole,
             appLevel,
             appFrom,
-            appTo);
+            appTo,
+            diagnostic: udfDiagnostic);
     }
 
     private static bool IsLikelyMissingApprovalUdf(Exception ex) =>
