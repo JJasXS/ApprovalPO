@@ -148,6 +148,7 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
         var includeIsActive = true;
         var includeApprovalUdfs = true;
         string? udfDiagnostic = null;
+        var ensuredUdfColumns = false;
         for (var attempt = 0; attempt < 4; attempt++)
         {
             try
@@ -169,9 +170,29 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
             }
             catch (Exception ex) when (includeApprovalUdfs && IsLikelyMissingApprovalUdf(ex))
             {
-                _logger.LogWarning(ex, "SY_USER approval UDF columns caused error — retrying without them. Error: {Msg}", ex.Message);
-                includeApprovalUdfs = false;
-                udfDiagnostic = ex.Message;
+                // Tenant DB may not have the approval UDF columns deployed yet.
+                // Attempt to bootstrap them once, then retry with UDF columns enabled.
+                if (!ensuredUdfColumns)
+                {
+                    ensuredUdfColumns = true;
+                    try
+                    {
+                        await SyUserSchemaBootstrap.EnsureApprovalUdfColumnsAsync(conn, _logger, cancellationToken)
+                            .ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        _logger.LogWarning(ex, "SY_USER approval UDF bootstrap failed — retrying without them.");
+                        includeApprovalUdfs = false;
+                        udfDiagnostic = ex.Message;
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning(ex, "SY_USER approval UDF columns still missing — retrying without them.");
+                    includeApprovalUdfs = false;
+                    udfDiagnostic = ex.Message;
+                }
             }
             catch (Exception ex)
             {
