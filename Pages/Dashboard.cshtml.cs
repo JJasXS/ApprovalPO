@@ -23,8 +23,6 @@ public class DashboardModel : PageModel
     public bool HasAnyModule =>
         ShowPurchaseApproval || ShowSalesApproval || ShowScanPo || ShowReceivedGoods || ShowMaintenanceScanner;
 
-    public string RoleLabel { get; private set; } = "";
-
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         var flags = await _modules.GetDashboardModulesAsync(User, cancellationToken).ConfigureAwait(false);
@@ -33,16 +31,5 @@ public class DashboardModel : PageModel
         ShowScanPo = flags.ScanPo;
         ShowReceivedGoods = flags.ReceivedGoods;
         ShowMaintenanceScanner = flags.MaintenanceScanner;
-
-        if (User.IsInRole(ApprovalRoles.Admin) && User.IsInRole(ApprovalRoles.Maintenance))
-            RoleLabel = "Admin · Maintenance";
-        else if (User.IsInRole(ApprovalRoles.Admin))
-            RoleLabel = "Admin";
-        else if (User.IsInRole(ApprovalRoles.Maintenance))
-            RoleLabel = "Maintenance";
-
-        var level = User.FindFirst(ApprovalClaimTypes.AppLevel)?.Value;
-        if (!string.IsNullOrWhiteSpace(level) && RoleLabel.Length > 0)
-            RoleLabel = $"{RoleLabel} · L{level}";
     }
 }
