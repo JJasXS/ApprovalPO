@@ -186,7 +186,7 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
         if (includeIsActive)
             extra += ", ISACTIVE";
         if (includeApprovalUdfs)
-            extra += ", UDF_APPROLE, UDF_APPLEVEL, UDF_APPFROM, UDF_APPTO";
+            extra += ", UDF_APPROLE, CAST(UDF_APPLEVEL AS NUMERIC(15,2)) AS UDF_APPLEVEL, CAST(UDF_APPFROM AS NUMERIC(15,2)) AS UDF_APPFROM, CAST(UDF_APPTO AS NUMERIC(15,2)) AS UDF_APPTO";
 
         return $"""
             SELECT FIRST 1
