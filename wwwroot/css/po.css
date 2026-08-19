@@ -631,6 +631,27 @@ select.po-filter-input {
   box-shadow: var(--po-shadow-sm);
 }
 
+.tab-bang {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  margin: 0 2px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 800;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.tab-bang[hidden] {
+  display: none;
+}
+
 /* ——— Table region ——— */
 
 .po-table-wrap__head {
