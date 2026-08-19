@@ -166,7 +166,7 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
             }
             catch (Exception ex) when (includeApprovalUdfs && IsLikelyMissingApprovalUdf(ex))
             {
-                _logger.LogInformation(ex, "SY_USER without approval UDF columns retry for email lookup.");
+                _logger.LogWarning(ex, "SY_USER approval UDF columns caused error — retrying without them. Error: {Msg}", ex.Message);
                 includeApprovalUdfs = false;
             }
             catch (Exception ex)

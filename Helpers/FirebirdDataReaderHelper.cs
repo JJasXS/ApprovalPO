@@ -72,9 +72,17 @@ public static class FirebirdDataReaderHelper
             if (reader.IsDBNull(ord))
                 return null;
             var v = reader.GetValue(ord);
-            if (v is decimal d)
-                return d;
-            return Convert.ToDecimal(v, CultureInfo.InvariantCulture);
+            return v switch
+            {
+                decimal d => d,
+                long l => l,
+                int i => i,
+                short s => s,
+                double db => (decimal)db,
+                float f => (decimal)f,
+                string str when decimal.TryParse(str, NumberStyles.Any, CultureInfo.InvariantCulture, out var pd) => pd,
+                _ => Convert.ToDecimal(v, CultureInfo.InvariantCulture),
+            };
         }
 
         return null;
