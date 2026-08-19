@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Configuration;
 
 namespace ApprovalPO.Pages;
 
@@ -45,6 +46,7 @@ public class PurchaseOrdersModel : PageModel
     private readonly IApprovalAuthority _authority;
     private readonly ISyUserLoginValidator _syUser;
     private readonly IWebHostEnvironment _env;
+    private readonly IConfiguration _config;
 
     public PurchaseOrdersModel(
         IOptions<ApprovalOptions> approval,
@@ -52,7 +54,8 @@ public class PurchaseOrdersModel : PageModel
         IPurchaseOrderCatalog orders,
         IApprovalAuthority authority,
         ISyUserLoginValidator syUser,
-        IWebHostEnvironment env)
+        IWebHostEnvironment env,
+        IConfiguration config)
     {
         _approval = approval;
         _webPush = webPush;
@@ -60,6 +63,7 @@ public class PurchaseOrdersModel : PageModel
         _authority = authority;
         _syUser = syUser;
         _env = env;
+        _config = config;
     }
 
     /// <summary>Browser Web Push (VAPID) keys are present; client may register a subscription.</summary>
@@ -131,12 +135,13 @@ public class PurchaseOrdersModel : PageModel
         return new JsonResult(new
         {
             email,
+            tenantCode = _config["TenantBootstrap:TenantCode"],
             status = sy.Status.ToString(),
-            appRole = sy.AppRole,
-            appLevel = sy.AppLevel,
-            appFrom = sy.AppFrom,
-            appTo = sy.AppTo,
-            diagnostic = sy.Diagnostic
+            appRole = sy.AppRole ?? "(null)",
+            appLevel = sy.AppLevel?.ToString() ?? "(null)",
+            appFrom = sy.AppFrom?.ToString() ?? "(null)",
+            appTo = sy.AppTo?.ToString() ?? "(null)",
+            diagnostic = sy.Diagnostic ?? "(null)"
         }, JsonCamel);
     }
 
