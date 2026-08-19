@@ -47,8 +47,7 @@ public static class SyUserApprovalMapper
     }
 
     public static bool CanApproveFromClaims(ClaimsPrincipal user) =>
-        user.IsInRole(ApprovalRoles.Admin)
-        && ReadDecimalClaim(user, ApprovalClaimTypes.AppFrom) is not null
+        ReadDecimalClaim(user, ApprovalClaimTypes.AppFrom) is not null
         && ReadDecimalClaim(user, ApprovalClaimTypes.AppTo) is not null;
 
     private static void AddOptional(List<Claim> claims, string type, string? value)

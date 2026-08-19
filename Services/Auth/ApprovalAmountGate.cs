@@ -39,11 +39,6 @@ public static class ApprovalAmountGate
         decimal? to,
         decimal amount)
     {
-        var roles = SyUserApprovalMapper.MapRoles(appRole);
-        var isAdmin = roles.Any(r => string.Equals(r, ApprovalRoles.Admin, StringComparison.OrdinalIgnoreCase));
-        if (!isAdmin)
-            return ApprovalAuthorityDecision.Deny("You are not authorized to change approval status for this document.");
-
         if (from is null || to is null)
             return ApprovalAuthorityDecision.Deny("Your approval range is not set. Contact your administrator.");
 

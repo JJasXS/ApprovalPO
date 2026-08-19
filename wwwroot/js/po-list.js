@@ -669,7 +669,7 @@
     `RM ${Number(n).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const amountInApprovalRange = (amt) => {
-    if (!canApproveRole || !hasAppRange || Number.isNaN(appFrom) || Number.isNaN(appTo)) return false;
+    if (!hasAppRange || Number.isNaN(appFrom) || Number.isNaN(appTo)) return false;
     return amt >= appFrom && amt <= appTo;
   };
 
@@ -704,8 +704,6 @@
   };
 
   const rangeDeniedMessage = () => {
-    if (!canApproveRole)
-      return 'You are not authorized to change approval status for this document.';
     if (!hasAppRange || Number.isNaN(appFrom) || Number.isNaN(appTo))
       return 'Your approval range is not set. Contact your administrator.';
     return `This document is outside your approval range (${formatRm(appFrom)} – ${formatRm(appTo)}).`;
