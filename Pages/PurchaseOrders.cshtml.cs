@@ -43,6 +43,7 @@ public class PurchaseOrdersModel : PageModel
     private readonly IOptions<WebPushOptions> _webPush;
     private readonly IPurchaseOrderCatalog _orders;
     private readonly IApprovalAuthority _authority;
+    private readonly ISyUserLoginValidator _syUser;
     private readonly IWebHostEnvironment _env;
 
     public PurchaseOrdersModel(
@@ -50,12 +51,14 @@ public class PurchaseOrdersModel : PageModel
         IOptions<WebPushOptions> webPush,
         IPurchaseOrderCatalog orders,
         IApprovalAuthority authority,
+        ISyUserLoginValidator syUser,
         IWebHostEnvironment env)
     {
         _approval = approval;
         _webPush = webPush;
         _orders = orders;
         _authority = authority;
+        _syUser = syUser;
         _env = env;
     }
 
@@ -114,6 +117,26 @@ public class PurchaseOrdersModel : PageModel
             cookieAppFrom = User.FindFirst(ApprovalClaimTypes.AppFrom)?.Value,
             cookieAppTo = User.FindFirst(ApprovalClaimTypes.AppTo)?.Value,
             allClaims = User.Claims.Select(c => new { c.Type, c.Value }).ToList()
+        }, JsonCamel);
+    }
+
+    /// <summary>
+    /// Live SY_USER lookup for the signed-in user, bypassing cookie/session.
+    /// Useful to diagnose why app UDFs are null in the cookie.
+    /// </summary>
+    public async Task<IActionResult> OnGetDebugSyUserAsync(CancellationToken cancellationToken)
+    {
+        var email = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "";
+        var sy = await _syUser.LookupByEmailAsync(email, cancellationToken).ConfigureAwait(false);
+        return new JsonResult(new
+        {
+            email,
+            status = sy.Status.ToString(),
+            appRole = sy.AppRole,
+            appLevel = sy.AppLevel,
+            appFrom = sy.AppFrom,
+            appTo = sy.AppTo,
+            diagnostic = sy.Diagnostic
         }, JsonCamel);
     }
 
