@@ -101,6 +101,22 @@ public class PurchaseOrdersModel : PageModel
         return new JsonResult(list, JsonCamel);
     }
 
+    /// <summary>Temporary debug: returns raw SY_USER UDF claims for the signed-in user.</summary>
+    public IActionResult OnGetDebugClaims()
+    {
+        var email = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "";
+        return new JsonResult(new
+        {
+            email,
+            canApprove = CanApprove,
+            appRole = User.FindFirst(ApprovalClaimTypes.AppRole)?.Value,
+            appLevel = User.FindFirst(ApprovalClaimTypes.AppLevel)?.Value,
+            appFrom = User.FindFirst(ApprovalClaimTypes.AppFrom)?.Value,
+            appTo = User.FindFirst(ApprovalClaimTypes.AppTo)?.Value,
+            allClaims = User.Claims.Select(c => new { c.Type, c.Value }).ToList()
+        }, JsonCamel);
+    }
+
     /// <summary>Lightweight snapshot for desktop notifications: orders in the Pending tab (e.g. <c>UDF_POSTATUS</c> <c>PENDING</c> when using default list SQL).</summary>
     public async Task<IActionResult> OnGetPendingNotifySnapshotAsync(CancellationToken cancellationToken)
     {
