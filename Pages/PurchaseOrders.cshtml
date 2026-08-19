@@ -77,6 +77,7 @@
                     <label class="po-toolbar-select-all" title="Select every pending PO shown in the list (respects the Pending tab and filters)">
                         <input type="checkbox" id="bulkSelectAll" disabled aria-label="Select all visible pending purchase orders" />
                         <span class="po-toolbar-select-all__text">Select all</span>
+                        <span id="bulkWaitingBang" class="tab-bang" hidden>!</span>
                     </label>
                     <button type="button" id="bulkApproveBtn" class="po-btn po-btn--bulk" disabled>Bulk approve</button>
                     <button type="button" id="filterClearBtn" class="po-btn po-btn--filter-clear">Clear</button>
@@ -90,7 +91,7 @@
             <div class="tabs-wrap">
                 <div class="tabs" role="tablist" aria-label="PO status tabs">
                     <button id="tabPending" class="tab-btn is-active" type="button" role="tab" aria-selected="true">Pending (<span id="countPending">0</span>)</button>
-                    <button id="tabWaiting" class="tab-btn" type="button" role="tab" aria-selected="false" title="Orders you already signed that still need other levels">Waiting <span id="waitingBang" class="tab-bang" hidden>!</span> (<span id="countWaiting">0</span>)</button>
+                    <button id="tabWaiting" class="tab-btn" type="button" role="tab" aria-selected="false" title="Orders you already signed that still need other levels">Waiting (<span id="countWaiting">0</span>)</button>
                     <button id="tabApproved" class="tab-btn" type="button" role="tab" aria-selected="false">Approved (<span id="countApproved">0</span>)</button>
                     <button id="tabCancelled" class="tab-btn" type="button" role="tab" aria-selected="false">Cancelled (<span id="countCancelled">0</span>)</button>
                     <button id="tabRejected" class="tab-btn" type="button" role="tab" aria-selected="false">Rejected (<span id="countRejected">0</span>)</button>

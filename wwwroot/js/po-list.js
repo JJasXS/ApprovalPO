@@ -35,7 +35,7 @@
   const tabRejected = document.getElementById('tabRejected');
   const countPending = document.getElementById('countPending');
   const countWaiting = document.getElementById('countWaiting');
-  const waitingBang = document.getElementById('waitingBang');
+  const bulkWaitingBang = document.getElementById('bulkWaitingBang');
   const countApproved = document.getElementById('countApproved');
   const countCancelled = document.getElementById('countCancelled');
   const countRejected = document.getElementById('countRejected');
@@ -1009,7 +1009,7 @@
     const rejectedCount = rows.filter((r) => rowListStatus(r) === 'Rejected').length;
     if (countPending) countPending.textContent = String(pendingCount);
     if (countWaiting) countWaiting.textContent = String(waitingCount);
-    if (waitingBang) waitingBang.hidden = waitingCount === 0;
+    if (bulkWaitingBang) bulkWaitingBang.hidden = waitingCount === 0;
     if (countApproved) countApproved.textContent = String(approvedCount);
     if (countCancelled) countCancelled.textContent = String(cancelledCount);
     if (countRejected) countRejected.textContent = String(rejectedCount);
