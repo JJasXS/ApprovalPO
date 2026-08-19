@@ -109,10 +109,10 @@ public class PurchaseOrdersModel : PageModel
         {
             email,
             canApprove = CanApprove,
-            appRole = User.FindFirst(ApprovalClaimTypes.AppRole)?.Value,
-            appLevel = User.FindFirst(ApprovalClaimTypes.AppLevel)?.Value,
-            appFrom = User.FindFirst(ApprovalClaimTypes.AppFrom)?.Value,
-            appTo = User.FindFirst(ApprovalClaimTypes.AppTo)?.Value,
+            cookieAppRole = User.FindFirst(ApprovalClaimTypes.AppRole)?.Value,
+            cookieAppLevel = User.FindFirst(ApprovalClaimTypes.AppLevel)?.Value,
+            cookieAppFrom = User.FindFirst(ApprovalClaimTypes.AppFrom)?.Value,
+            cookieAppTo = User.FindFirst(ApprovalClaimTypes.AppTo)?.Value,
             allClaims = User.Claims.Select(c => new { c.Type, c.Value }).ToList()
         }, JsonCamel);
     }

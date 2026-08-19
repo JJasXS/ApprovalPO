@@ -171,6 +171,8 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "SY_USER query failed for {Email} (includeIsActive={IA}, includeApprovalUdfs={IU}): {Msg}",
+                    email, includeIsActive, includeApprovalUdfs, ex.Message);
                 return SyUserEmailLookupResult.DatabaseUnavailable(AppendLocalhostHint(ex.Message, "SY_USER query failed."));
             }
         }
@@ -184,7 +186,7 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
         if (includeIsActive)
             extra += ", ISACTIVE";
         if (includeApprovalUdfs)
-            extra += ", TRIM(CAST(UDF_APPROLE AS VARCHAR(80))) AS UDF_APPROLE, UDF_APPLEVEL, UDF_APPFROM, UDF_APPTO";
+            extra += ", UDF_APPROLE, UDF_APPLEVEL, UDF_APPFROM, UDF_APPTO";
 
         return $"""
             SELECT FIRST 1
@@ -217,7 +219,7 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
         decimal? appTo = null;
         if (includeApprovalUdfs)
         {
-            appRole = FirebirdDataReaderHelper.GetString(reader, "UDF_APPROLE");
+            appRole = FirebirdDataReaderHelper.GetString(reader, "UDF_APPROLE")?.Trim();
             appLevel = FirebirdDataReaderHelper.GetDecimalNullable(reader, "UDF_APPLEVEL");
             appFrom = FirebirdDataReaderHelper.GetDecimalNullable(reader, "UDF_APPFROM");
             appTo = FirebirdDataReaderHelper.GetDecimalNullable(reader, "UDF_APPTO");
@@ -237,23 +239,16 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
     private static bool IsLikelyMissingColumn(Exception ex, params string[] columnNames)
     {
         var m = ex.Message;
-        var mentionsColumn = false;
-        foreach (var name in columnNames)
-        {
-            if (m.Contains(name, StringComparison.OrdinalIgnoreCase))
-            {
-                mentionsColumn = true;
-                break;
-            }
-        }
-
+        var mentionsColumn = columnNames.Any(n => m.Contains(n, StringComparison.OrdinalIgnoreCase));
         if (!mentionsColumn)
             return false;
 
         return m.Contains("-206", StringComparison.Ordinal)
                || m.Contains("Column unknown", StringComparison.OrdinalIgnoreCase)
                || m.Contains("Unknown column", StringComparison.OrdinalIgnoreCase)
-               || m.Contains("Invalid column", StringComparison.OrdinalIgnoreCase);
+               || m.Contains("Invalid column", StringComparison.OrdinalIgnoreCase)
+               || m.Contains("Dynamic SQL Error", StringComparison.OrdinalIgnoreCase)
+               || m.Contains("token unknown", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string AppendLocalhostHint(string message, string? prefix)
