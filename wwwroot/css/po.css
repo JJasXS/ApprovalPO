@@ -369,9 +369,44 @@ body {
 }
 
 .po-toolbar {
-  display: flex;
-  justify-content: flex-end;
   margin-bottom: var(--po-space-2);
+}
+
+.po-toolbar__cluster {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.po-toolbar__cluster::-webkit-scrollbar {
+  display: none;
+}
+
+.po-toolbar__cluster .po-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  min-height: 36px;
+  padding: 7px 12px;
+  font-size: 0.75rem;
+}
+
+.po-toolbar-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  margin-right: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--po-text);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* Post-login: compact floating prompt (no extra toolbar height) */
@@ -466,29 +501,22 @@ body {
   background: #dbeafe;
 }
 
-.po-toolbar__cluster {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
+.po-toolbar__date {
+  flex: 0 0 7.5rem;
+  width: 7.5rem;
+  min-width: 7.5rem;
+  max-width: 9.5rem;
+  height: 36px;
+  min-height: 36px;
+  margin-left: auto;
+  padding: 0 8px 0 10px;
+  font-size: 0.6875rem;
 }
 
-.po-toolbar__cluster .po-btn {
-  white-space: nowrap;
-}
-
-.po-toolbar-select-all {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-right: 4px;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--po-text);
-  cursor: pointer;
-  user-select: none;
-  -webkit-user-select: none;
+.po-toolbar__cluster .po-btn--bulk,
+.po-toolbar__cluster .po-btn--filter-clear {
+  height: 36px;
+  min-height: 36px;
 }
 
 .po-toolbar-select-all input {
@@ -1880,25 +1908,20 @@ tr.items-row--xfer-bad .items-check .po-check input:focus-visible + .po-check__b
     font-size: max(16px, 0.8125rem);
   }
 
-  .po-filters #filterVendor,
-  .po-filters #filterDateFrom {
+  .po-toolbar__date {
+    flex: 0 0 8.25rem;
+    width: 8.25rem;
+    min-width: 8.25rem;
     height: 40px;
     min-height: 40px;
+    font-size: max(16px, 0.8125rem);
   }
 
-  .po-btn--filter-clear {
-    min-height: 40px;
-  }
-
-  .po-toolbar__cluster {
-    width: 100%;
-    justify-content: stretch;
-  }
-
+  .po-toolbar__cluster .po-btn,
   .po-toolbar__cluster .po-btn--bulk,
   .po-toolbar__cluster .po-btn--filter-clear {
-    flex: 1 1 0;
-    min-width: 0;
+    min-height: 40px;
+    height: 40px;
   }
 
   .menu-btn {

@@ -71,18 +71,15 @@
     <div class="po-main__inner">
         <div id="poTableHeadPanel" class="po-table-wrap__head">
             <div class="po-toolbar">
-                <div class="po-toolbar__cluster">
+                <div class="po-toolbar__cluster" id="poFilters">
                     <label class="po-toolbar-select-all" title="Select every pending SO shown in the list">
                         <input type="checkbox" id="bulkSelectAll" disabled aria-label="Select all visible pending sales orders" />
                         <span class="po-toolbar-select-all__text">Select all</span>
                     </label>
                     <button type="button" id="bulkApproveBtn" class="po-btn po-btn--bulk" disabled>Bulk approve</button>
                     <button type="button" id="filterClearBtn" class="po-btn po-btn--filter-clear">Clear</button>
+                    <input id="filterDateFrom" class="po-filter-input po-toolbar__date" type="date" aria-label="From date" />
                 </div>
-            </div>
-
-            <div class="po-filters" id="poFilters">
-                <input id="filterDateFrom" class="po-filter-input" type="date" aria-label="From date" />
             </div>
 
             <div class="tabs-wrap">
