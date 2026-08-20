@@ -87,7 +87,7 @@
             <div class="tabs-wrap">
                 <div class="tabs" role="tablist" aria-label="PO status tabs">
                     <button id="tabPending" class="tab-btn is-active" type="button" role="tab" aria-selected="true">Pending (<span id="countPending">0</span>)</button>
-                    <button id="tabWaiting" class="tab-btn" type="button" role="tab" aria-selected="false" title="Orders you already signed that still need other levels">Waiting (<span id="countWaiting">0</span>)</button>
+                    <button id="tabWaiting" class="tab-btn" type="button" role="tab" aria-selected="false" title="Partially approved — waiting for remaining sign-offs">Waiting (<span id="countWaiting">0</span>)</button>
                     <button id="tabApproved" class="tab-btn" type="button" role="tab" aria-selected="false">Approved (<span id="countApproved">0</span>)</button>
                     <button id="tabRejected" class="tab-btn" type="button" role="tab" aria-selected="false">Rejected (<span id="countRejected">0</span>)</button>
                 </div>
@@ -134,8 +134,11 @@
                             : row.Status == "Cancelled"
                                 ? "po-status-stack--cancelled"
                                 : "po-status-stack--pending";
-                    var progressLabel = row.Status == "Pending" && row.RequiredLevels > 0 && row.CompletedLevels > 0
-                        ? $"Pending ({row.CompletedLevels}/{row.RequiredLevels})"
+                    var progressLabel = row.Status == "Pending"
+                        && row.RequiredLevels > 1
+                        && row.CompletedLevels > 0
+                        && row.CompletedLevels < row.RequiredLevels
+                        ? $"Waiting ({row.CompletedLevels}/{row.RequiredLevels})"
                         : row.Status;
                     <tr class="po-row" data-po="@row.PoNumber"
                         data-doc-key="@row.DocKey"

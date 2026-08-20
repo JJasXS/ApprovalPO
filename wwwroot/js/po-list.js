@@ -231,11 +231,15 @@
 
   const levelLabel = (level) => ({ 1: 'MANAGER', 2: 'HOD/PUR', 3: 'DIRECTOR' }[level] || 'approver');
 
+  const partialProgressLabel = (required, completed) =>
+    required > 1 && completed > 0 && completed < required
+      ? `Waiting (${completed}/${required})`
+      : null;
+
   const statusDisplay = (status, tr) => {
     if (status === 'Pending' && tr) {
-      const required = rowRequiredLevels(tr);
-      const completed = rowCompletedLevels(tr);
-      if (required > 0 && completed > 0) return `Pending (${completed}/${required})`;
+      const label = partialProgressLabel(rowRequiredLevels(tr), rowCompletedLevels(tr));
+      if (label) return label;
     }
     return status;
   };
@@ -312,9 +316,7 @@
     const requiredLevels = o.requiredLevels ?? requiredLevelsForAmount(Number.parseFloat(amount) || 0);
     const completedLevels = o.completedLevels ?? 0;
     const nextLevel = o.nextLevel ?? (completedLevels === 0 ? 1 : completedLevels + 1);
-    const progressLabel = status === 'Pending' && requiredLevels > 0 && completedLevels > 0
-      ? `Pending (${completedLevels}/${requiredLevels})`
-      : status;
+    const progressLabel = partialProgressLabel(requiredLevels, completedLevels) || status;
     const chk =
       status === 'Pending'
         ? `<input type="checkbox" class="row-select" aria-label="Select ${escapeHtml(po)}" />`
@@ -715,13 +717,12 @@
     return [1, 2, 3].some((lvl) => emailsEqual(tr?.dataset?.[`approvalL${lvl}`], userEmail));
   };
 
-  /** Signed by me, still pending remaining levels (not fully Approved yet). */
+  /** Pending multi-level PO with at least one sign-off still needed (visible in Waiting for all users). */
   const rowIsWaitingForOthers = (tr) => {
     if (rowListStatus(tr) !== 'Pending') return false;
     const required = rowRequiredLevels(tr);
     const completed = rowCompletedLevels(tr);
-    if (required <= 1 || completed <= 0 || completed >= required) return false;
-    return currentUserSignedRow(tr);
+    return required > 1 && completed > 0 && completed < required;
   };
 
   const canWorkflowApprove = (tr) => {
@@ -1099,7 +1100,7 @@
             ? activeListTab === 'Pending'
               ? 'No pending purchase orders.'
               : activeListTab === 'Waiting'
-                ? 'No purchase orders waiting for other approvers.'
+                ? 'No purchase orders waiting for remaining approvals.'
                 : activeListTab === 'Approved'
                   ? 'No approved purchase orders.'
                 : 'No rejected purchase orders.'
