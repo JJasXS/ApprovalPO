@@ -93,17 +93,17 @@ foreach (var row in syUserRows)
     }
 }
 
-AssertGate("blank role denied even with a range", null, 0m, 1000000m, 5000m, false);
+AssertGate("blank role allowed when range is set", null, 0m, 1000000m, 5000m, true);
 AssertGate("MANAGER 10000.01", "MANAGER", 0m, 10000m, 10000.01m, false);
 AssertGate("HOD 100000.01", "HOD", 0m, 100000m, 100000.01m, false);
 AssertGate("DIRECTOR 1000000.01", "DIRECTOR", 0m, 1000000m, 1000000.01m, false);
 
-Section("4. Maintenance never approves (even inside FROM/TO)");
+Section("4. Amount range is the only gate (role label does not block)");
 foreach (var role in new[] { "Maintenance", "Maint", "Scanner", null, "" })
 {
-    AssertGate("maint-in-range", role, 0m, 10000m, 5000m, false);
-    AssertGate("maint-at-10k", role, 0m, 10000m, 10000m, false);
-    AssertGate("maint-at-100k", role, 10000m, 100000m, 100000m, false);
+    AssertGate("range-in", role, 0m, 10000m, 5000m, true);
+    AssertGate("range-at-to", role, 0m, 10000m, 10000m, true);
+    AssertGate("range-at-to-100k", role, 10000m, 100000m, 100000m, true);
 }
 
 Section("5. Missing FROM/TO (fail closed)");
@@ -204,9 +204,10 @@ AssertJsonIgnoresExtraAmount();
         Fail("out-of-range DB amount should deny", $"allowed={high.Allowed}");
 }
 
-Section("14. Sequential multi-level PO approval workflow");
+Section("14. Multi-level PO approval workflow");
 AssertRequiredLevels(5000m, 1);
 AssertRequiredLevels(10000m, 1);
+AssertRequiredLevels(20100m, 2);
 AssertRequiredLevels(50000m, 2);
 AssertRequiredLevels(100000m, 2);
 AssertRequiredLevels(500000m, 3);
@@ -220,6 +221,40 @@ AssertNextLevel(new PoApprovalSlots(), 1);
 AssertNextLevel(new PoApprovalSlots { Level1Email = "a@b.com" }, 2);
 AssertNextLevel(new PoApprovalSlots { Level1Email = "a@b.com", Level2Email = "c@d.com" }, 3);
 
+AssertCompletedAfterSign(new PoApprovalSlots(), 1, 1);
+AssertCompletedAfterSign(new PoApprovalSlots(), 2, 2);
+AssertCompletedAfterSign(new PoApprovalSlots(), 3, 3);
+AssertCompletedAfterSign(new PoApprovalSlots { Level1Email = "mgr@acme.com" }, 2, 2);
+
+AssertGate("jason-range", "HOD", 0m, 20000m, 20100m, false);
+AssertGate("jason-range-in", "HOD", 0m, 20000m, 20000m, true);
+
+{
+    var auth = new ApprovalAuthority(new RecordingSyUser
+    {
+        Result = SyUserEmailLookupResult.Ok("Jason", "MANAGER", 1m, 0m, 20000m)
+    });
+    var user = PrincipalWithEmail("jason.choo2004@gmail.com");
+    var d = auth.AuthorizePartialApproveAsync(user, 20100m, new PoApprovalSlots()).GetAwaiter().GetResult();
+    if (d.Allowed && !d.IsFinalApproval && d.CompletedLevels == 1 && d.RequiredLevels == 2)
+        Pass("Level 1 partial RM 20,100 above appTo 20k -> Waiting (1/2)");
+    else
+        Fail("Jason 20100 partial", $"allowed={d.Allowed} final={d.IsFinalApproval} {d.CompletedLevels}/{d.RequiredLevels} msg={d.ErrorMessage}");
+}
+
+{
+    var auth = new ApprovalAuthority(new RecordingSyUser
+    {
+        Result = SyUserEmailLookupResult.Ok("Jason", "HOD", 2m, 0m, 20000m)
+    });
+    var user = PrincipalWithEmail("jason.choo2004@gmail.com");
+    var d = auth.AuthorizePartialApproveAsync(user, 20100m, new PoApprovalSlots()).GetAwaiter().GetResult();
+    if (!d.Allowed && d.ErrorMessage?.Contains("outside your approval range", StringComparison.OrdinalIgnoreCase) == true)
+        Pass("Level 2 final RM 20,100 above appTo 20k denied");
+    else
+        Fail("Jason L2 20100 final deny", $"allowed={d.Allowed} final={d.IsFinalApproval} msg={d.ErrorMessage}");
+}
+
 {
     var auth = new ApprovalAuthority(new RecordingSyUser
     {
@@ -228,7 +263,7 @@ AssertNextLevel(new PoApprovalSlots { Level1Email = "a@b.com", Level2Email = "c@
     var user = PrincipalWithEmail("mgr@acme.com");
     var d = auth.AuthorizePartialApproveAsync(user, 50000m, new PoApprovalSlots()).GetAwaiter().GetResult();
     if (d.Allowed && !d.IsFinalApproval && d.CompletedLevels == 1 && d.RequiredLevels == 2)
-        Pass("MANAGER first approve RM 50k (1/2)");
+        Pass("MANAGER first approve RM 50k (1/2) stays Waiting");
     else
         Fail("MANAGER first 50k", $"allowed={d.Allowed} final={d.IsFinalApproval} {d.CompletedLevels}/{d.RequiredLevels}");
 }
@@ -241,7 +276,7 @@ AssertNextLevel(new PoApprovalSlots { Level1Email = "a@b.com", Level2Email = "c@
     var user = PrincipalWithEmail("mgr@acme.com");
     var slots = new PoApprovalSlots { Level1Email = "mgr@acme.com" };
     var d = auth.AuthorizePartialApproveAsync(user, 50000m, slots).GetAwaiter().GetResult();
-    if (!d.Allowed && d.ErrorMessage?.Contains("HOD", StringComparison.OrdinalIgnoreCase) == true)
+    if (!d.Allowed && d.ErrorMessage?.Contains("already approved", StringComparison.OrdinalIgnoreCase) == true)
         Pass("MANAGER blocked after already signing level 1 on 50k PO");
     else
         Fail("MANAGER duplicate L1", $"allowed={d.Allowed} msg={d.ErrorMessage}");
@@ -268,10 +303,23 @@ AssertNextLevel(new PoApprovalSlots { Level1Email = "a@b.com", Level2Email = "c@
     });
     var user = PrincipalWithEmail("hod@acme.com");
     var d = auth.AuthorizePartialApproveAsync(user, 50000m, new PoApprovalSlots()).GetAwaiter().GetResult();
-    if (!d.Allowed && d.ErrorMessage?.Contains("MANAGER", StringComparison.OrdinalIgnoreCase) == true)
-        Pass("HOD blocked until MANAGER approves");
+    if (d.Allowed && d.IsFinalApproval && d.CompletedLevels == 2 && d.RequiredLevels == 2)
+        Pass("HOD alone on RM 50k covers L1+L2 and is Approved immediately");
     else
-        Fail("HOD before MANAGER", $"allowed={d.Allowed} msg={d.ErrorMessage}");
+        Fail("HOD first 50k covers lower levels", $"allowed={d.Allowed} final={d.IsFinalApproval} {d.CompletedLevels}/{d.RequiredLevels} msg={d.ErrorMessage}");
+}
+
+{
+    var auth = new ApprovalAuthority(new RecordingSyUser
+    {
+        Result = SyUserEmailLookupResult.Ok("Dir", "DIRECTOR", 3m, 0m, 1000000m)
+    });
+    var user = PrincipalWithEmail("dir@acme.com");
+    var d = auth.AuthorizePartialApproveAsync(user, 500000m, new PoApprovalSlots()).GetAwaiter().GetResult();
+    if (d.Allowed && d.IsFinalApproval && d.CompletedLevels == 3)
+        Pass("DIRECTOR alone on RM 500k covers L1+L2+L3 and is Approved immediately");
+    else
+        Fail("DIRECTOR first 500k", $"allowed={d.Allowed} final={d.IsFinalApproval} {d.CompletedLevels}/{d.RequiredLevels}");
 }
 
 PrintMatrix(amounts, syUserRows);
@@ -391,6 +439,16 @@ void AssertNextLevel(PoApprovalSlots slots, int expected)
 {
     var got = ApprovalLevelWorkflow.NextRequiredLevel(slots);
     var label = $"NextRequiredLevel -> {expected}";
+    if (got == expected)
+        Pass(label);
+    else
+        Fail(label, $"got={got}");
+}
+
+void AssertCompletedAfterSign(PoApprovalSlots slots, int userLevel, int expected)
+{
+    var got = ApprovalLevelWorkflow.CompletedLevelsAfterSign(slots, userLevel);
+    var label = $"CompletedLevelsAfterSign(L{userLevel}) -> {expected}";
     if (got == expected)
         Pass(label);
     else

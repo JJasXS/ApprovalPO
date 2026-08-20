@@ -51,11 +51,6 @@ public sealed class ApprovalAuthority : IApprovalAuthority
         if (ctx.Deny is not null)
             return ctx.Deny;
 
-        // Amount must be within the user's configured approval range.
-        var amountDecision = ApprovalAmountGate.Evaluate(ctx.AppRole, ctx.AppFrom, ctx.AppTo, amount);
-        if (!amountDecision.Allowed)
-            return amountDecision;
-
         var userLevel = ApprovalLevelWorkflow.ResolveUserLevel(ctx.AppLevel, ctx.AppRole);
         if (userLevel <= 0)
             return ApprovalAuthorityDecision.Deny("Your approval level is not set. Contact your administrator.");
@@ -65,11 +60,26 @@ public sealed class ApprovalAuthority : IApprovalAuthority
         if (ApprovalLevelWorkflow.EmailMatches(existingAtLevel, ctx.Email))
             return ApprovalAuthorityDecision.Deny("You have already approved at this level.");
 
-        // A higher-level approver covers all slots up to their own level.
-        // e.g. Level 3 signing a 3-level PO fills slots 1, 2, 3 → final immediately.
         var required = ApprovalLevelWorkflow.RequiredLevels(amount);
+        if (required <= 0)
+        {
+            return ApprovalAuthorityDecision.Deny(
+                $"This document amount exceeds the maximum approval limit (RM {ApprovalAmountGate.FormatRm(ApprovalLevelWorkflow.BandLevel3Max)}).");
+        }
+
         var newCompleted = ApprovalLevelWorkflow.CompletedLevelsAfterSign(currentSlots, userLevel);
         var isFinal = newCompleted >= required;
+
+        // Final sign-off uses personal appTo; partial sign-off uses the workflow band ceiling
+        // so lower levels can record progress (Waiting tab) even above personal appTo.
+        var effectiveTo = isFinal
+            ? ctx.AppTo
+            : ApprovalLevelWorkflow.BandMaxForRequiredLevels(required);
+
+        var amountDecision = ApprovalAmountGate.Evaluate(ctx.AppRole, ctx.AppFrom, effectiveTo, amount);
+        if (!amountDecision.Allowed)
+            return amountDecision;
+
         var message = ApprovalLevelWorkflow.BuildProgressMessage(newCompleted, required, 0, isFinal);
         return ApprovalAuthorityDecision.AllowWorkflow(newCompleted, required, isFinal, message);
     }

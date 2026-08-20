@@ -108,9 +108,12 @@ public class PurchaseOrdersModel : PageModel
         return new JsonResult(list, JsonCamel);
     }
 
-    /// <summary>Temporary debug: returns raw SY_USER UDF claims for the signed-in user.</summary>
+    /// <summary>Development-only: returns raw SY_USER UDF claims for the signed-in user.</summary>
     public IActionResult OnGetDebugClaims()
     {
+        if (!_env.IsDevelopment())
+            return NotFound();
+
         var email = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "";
         return new JsonResult(new
         {
@@ -125,11 +128,13 @@ public class PurchaseOrdersModel : PageModel
     }
 
     /// <summary>
-    /// Live SY_USER lookup for the signed-in user, bypassing cookie/session.
-    /// Useful to diagnose why app UDFs are null in the cookie.
+    /// Development-only live SY_USER lookup for the signed-in user, bypassing cookie/session.
     /// </summary>
     public async Task<IActionResult> OnGetDebugSyUserAsync(CancellationToken cancellationToken)
     {
+        if (!_env.IsDevelopment())
+            return NotFound();
+
         var email = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "";
         var sy = await _syUser.LookupByEmailAsync(email, cancellationToken).ConfigureAwait(false);
         return new JsonResult(new

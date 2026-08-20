@@ -1002,6 +1002,15 @@ select.po-filter-input {
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.28);
 }
 
+.po-btn--approve:disabled,
+.po-btn--approve-solid:disabled {
+  opacity: 1;
+  background: #cbd5e1;
+  color: #475569;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
 .po-btn--reject-outline {
   flex: 1;
   min-height: 48px;
@@ -1384,6 +1393,12 @@ select.po-filter-input {
   border: 1px solid #fde68a;
   color: #92400e;
   font-size: 0.8125rem;
+}
+
+.modal__note--block {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
 }
 
 .items-title {

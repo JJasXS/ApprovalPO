@@ -20,6 +20,15 @@ public static class ApprovalLevelWorkflow
         return 0;
     }
 
+    /// <summary>Upper amount band for POs that require <paramref name="requiredLevels"/> sign-offs.</summary>
+    public static decimal BandMaxForRequiredLevels(int requiredLevels) => requiredLevels switch
+    {
+        1 => BandLevel1Max,
+        2 => BandLevel2Max,
+        3 => BandLevel3Max,
+        _ => 0
+    };
+
     /// <summary>Counts how many level slots have been signed, regardless of order.</summary>
     public static int CompletedLevels(PoApprovalSlots slots)
     {

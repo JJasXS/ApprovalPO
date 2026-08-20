@@ -582,6 +582,7 @@
       amt >= highValueThreshold && status === 'Pending'
         ? '<div class="modal__note">High-value PO — confirm approval aligns with your policy.</div>'
         : '';
+    const gateHint = reviewGateHintHtml(tr, status);
 
     reviewBody.innerHTML = `
       <div class="review-hero">
@@ -609,6 +610,8 @@
           </div>
         </div>
       </div>
+
+      ${gateHint}
 
       ${approvalTrailHtml(tr)}
 
@@ -652,6 +655,7 @@
     modalApproveBtn.disabled = !canApproveAction;
     modalApproveBtn.style.display = pending || rejected ? '' : 'none';
     modalApproveBtn.title = canApproveAction ? '' : workflowDeniedMessage(tr);
+    modalApproveBtn.setAttribute('aria-disabled', modalApproveBtn.disabled ? 'true' : 'false');
 
     if (modalRejectBtnEl) {
       modalRejectBtnEl.textContent = approved ? 'Cancel approval' : 'Reject';
@@ -663,7 +667,10 @@
     updateModalNav();
   };
 
-  const parseAmount = (tr) => Number.parseFloat(String(tr.dataset.amount || '0')) || 0;
+  const parseAmount = (tr) => {
+    const raw = String(tr?.dataset?.amount || '0').replace(/,/g, '').trim();
+    return Number.parseFloat(raw) || 0;
+  };
 
   const formatRm = (n) =>
     `RM ${Number(n).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -671,6 +678,43 @@
   const amountInApprovalRange = (amt) => {
     if (!hasAppRange || Number.isNaN(appFrom) || Number.isNaN(appTo)) return false;
     return amt >= appFrom && amt <= appTo;
+  };
+
+  const bandMaxForRequired = (required) => {
+    if (required <= 1) return 10000;
+    if (required <= 2) return 100000;
+    if (required <= 3) return 1000000;
+    return 0;
+  };
+
+  const completedLevelsAfterSign = (tr, level) => {
+    const filled = [false, false, false, false];
+    for (let lvl = 1; lvl <= 3; lvl += 1) {
+      if (String(tr?.dataset?.[`approvalL${lvl}`] || '').trim()) filled[lvl] = true;
+    }
+    for (let i = 1; i <= level && i <= 3; i += 1) filled[i] = true;
+    if (!filled[1]) return 0;
+    if (!filled[2]) return 1;
+    if (!filled[3]) return 2;
+    return 3;
+  };
+
+  const wouldFinaliseAfterSign = (tr) => {
+    if (userLevel <= 0) return false;
+    const required = rowRequiredLevels(tr);
+    if (required <= 0) return false;
+    return completedLevelsAfterSign(tr, userLevel) >= required;
+  };
+
+  /** Personal range for approve; partial sign-offs use the workflow band ceiling instead of appTo. */
+  const amountInApprovalRangeForRow = (tr) => {
+    const amt = parseAmount(tr);
+    if (!hasAppRange || Number.isNaN(appFrom) || Number.isNaN(appTo)) return false;
+    if (amt < appFrom) return false;
+    const required = rowRequiredLevels(tr);
+    if (required <= 0) return false;
+    const effectiveTo = wouldFinaliseAfterSign(tr) ? appTo : bandMaxForRequired(required);
+    return amt <= effectiveTo;
   };
 
   const slotEmailAtUserLevel = (tr) => {
@@ -696,7 +740,7 @@
   };
 
   const canWorkflowApprove = (tr) => {
-    if (!amountInApprovalRange(parseAmount(tr))) return false;
+    if (!amountInApprovalRangeForRow(tr)) return false;
     if (userLevel <= 0) return false;
     const existing = slotEmailAtUserLevel(tr);
     if (existing && userEmail && existing.toLowerCase() === userEmail) return false;
@@ -709,13 +753,42 @@
     return `This document is outside your approval range (${formatRm(appFrom)} – ${formatRm(appTo)}).`;
   };
 
+  const finalCeilingDeniedMessage = () =>
+    `This document exceeds your approval ceiling for final sign-off (${formatRm(appFrom)} – ${formatRm(appTo)}).`;
+
   const workflowDeniedMessage = (tr) => {
-    if (!amountInApprovalRange(parseAmount(tr))) return rangeDeniedMessage();
+    const amt = parseAmount(tr);
+    if (amt < appFrom || !hasAppRange || Number.isNaN(appFrom) || Number.isNaN(appTo))
+      return rangeDeniedMessage();
+    if (wouldFinaliseAfterSign(tr) && amt > appTo) return finalCeilingDeniedMessage();
+    if (!amountInApprovalRangeForRow(tr)) return rangeDeniedMessage();
     if (userLevel <= 0) return 'Your approval level is not set. Contact your administrator.';
     const existing = slotEmailAtUserLevel(tr);
     if (existing && userEmail && existing.toLowerCase() === userEmail)
       return 'You have already approved at this level.';
     return rangeDeniedMessage();
+  };
+
+  const reviewGateHintHtml = (tr, status) => {
+    if (status !== 'Pending' && status !== 'Rejected') return '';
+    const amt = parseAmount(tr);
+    if (!amountInApprovalRangeForRow(tr)) {
+      const msg = wouldFinaliseAfterSign(tr) && amt > appTo
+        ? finalCeilingDeniedMessage()
+        : rangeDeniedMessage();
+      return `<div class="modal__note modal__note--block">${escapeHtml(msg)}</div>`;
+    }
+    const required = rowRequiredLevels(tr);
+    const partialAboveCeiling = amt > appTo && !wouldFinaliseAfterSign(tr);
+    if (partialAboveCeiling) {
+      return `<div class="modal__note">Amount exceeds your personal ceiling (${formatRm(appTo)}). Your sign-off records progress only; this PO stays in Waiting until a higher level approves.</div>`;
+    }
+    if (required <= 1) return '';
+    if (userLevel > 0 && userLevel < required)
+      return `<div class="modal__note">Needs ${required} approval level(s). Your sign-off records progress (${userLevel}/${required}) and this PO stays in Waiting until a higher level covers the rest.</div>`;
+    if (userLevel >= required)
+      return `<div class="modal__note">Needs ${required} approval level(s). Your level covers remaining slots, so Approve will finalise this PO.</div>`;
+    return '';
   };
 
   const approvalTrailHtml = (tr) => {
@@ -917,7 +990,11 @@
       const showApprove = status === 'Pending' || status === 'Rejected';
       approveBtn.style.display = showApprove ? '' : 'none';
       approveBtn.disabled = !showApprove || !canApprove;
-      approveBtn.title = canApprove ? '' : workflowDeniedMessage(tr);
+      const deny = canApprove ? '' : workflowDeniedMessage(tr);
+      approveBtn.title = deny;
+      approveBtn.setAttribute('aria-disabled', approveBtn.disabled ? 'true' : 'false');
+      if (deny) approveBtn.setAttribute('aria-label', `Approve — ${deny}`);
+      else approveBtn.setAttribute('aria-label', 'Approve');
     }
     if (rejectBtn) {
       const showReject = status === 'Pending' || status === 'Approved';
