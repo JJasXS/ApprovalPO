@@ -41,7 +41,6 @@
   const poSkeleton = document.getElementById('poSkeleton');
   const poTableWrap = document.getElementById('poTableWrap');
   const tbody = document.getElementById('poTableBody');
-  const refreshBtn = document.getElementById('refreshBtn');
   const bulkApproveBtn = document.getElementById('bulkApproveBtn');
   const bulkSelectAll = document.getElementById('bulkSelectAll');
   const filterDateFrom = document.getElementById('filterDateFrom');
@@ -1176,10 +1175,8 @@
   filterClearBtn?.addEventListener('click', () => {
     if (filterDateFrom) filterDateFrom.value = '';
     filters.dateFrom = '';
-    refreshView();
+    refreshRowsFromServer();
   });
-
-  refreshBtn?.addEventListener('click', () => refreshRowsFromServer());
 
   bulkSelectAll?.addEventListener('change', () => {
     const on = bulkSelectAll.checked;

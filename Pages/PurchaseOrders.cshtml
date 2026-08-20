@@ -75,21 +75,24 @@
                 <div class="po-toolbar__cluster" id="poFilters">
                     <label class="po-toolbar-select-all" title="Select every pending PO shown in the list (respects the Pending tab and filters)">
                         <input type="checkbox" id="bulkSelectAll" disabled aria-label="Select all visible pending purchase orders" />
-                        <span class="po-toolbar-select-all__text">Select all</span>
-                        <span id="bulkWaitingBang" class="tab-bang" hidden>!</span>
                     </label>
                     <button type="button" id="bulkApproveBtn" class="po-btn po-btn--bulk" disabled>Bulk approve</button>
-                    <button type="button" id="filterClearBtn" class="po-btn po-btn--filter-clear">Clear</button>
+                    <button type="button" id="filterClearBtn" class="po-btn po-btn--icon" aria-label="Refresh list and clear date filter" title="Refresh list and clear date filter">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                        </svg>
+                    </button>
                     <input id="filterDateFrom" class="po-filter-input po-toolbar__date" type="date" aria-label="From date" />
                 </div>
             </div>
 
             <div class="tabs-wrap">
                 <div class="tabs" role="tablist" aria-label="PO status tabs">
-                    <button id="tabPending" class="tab-btn is-active" type="button" role="tab" aria-selected="true">Pending (<span id="countPending">0</span>)</button>
-                    <button id="tabWaiting" class="tab-btn" type="button" role="tab" aria-selected="false" title="Partially approved — waiting for remaining sign-offs">Waiting (<span id="countWaiting">0</span>)</button>
-                    <button id="tabApproved" class="tab-btn" type="button" role="tab" aria-selected="false">Approved (<span id="countApproved">0</span>)</button>
-                    <button id="tabRejected" class="tab-btn" type="button" role="tab" aria-selected="false">Rejected (<span id="countRejected">0</span>)</button>
+                    <button id="tabPending" class="tab-btn is-active" type="button" role="tab" aria-selected="true"><span class="tab-btn__label">Pending</span> (<span id="countPending">0</span>)</button>
+                    <button id="tabWaiting" class="tab-btn" type="button" role="tab" aria-selected="false" title="Partially approved — waiting for remaining sign-offs"><span class="tab-btn__label">Waiting</span><span id="bulkWaitingBang" class="tab-bang" hidden aria-label="Urgent: orders waiting for remaining approvals">!</span> (<span id="countWaiting">0</span>)</button>
+                    <button id="tabApproved" class="tab-btn" type="button" role="tab" aria-selected="false"><span class="tab-btn__label">Approved</span> (<span id="countApproved">0</span>)</button>
+                    <button id="tabRejected" class="tab-btn" type="button" role="tab" aria-selected="false"><span class="tab-btn__label">Rejected</span> (<span id="countRejected">0</span>)</button>
                 </div>
             </div>
         </div>
