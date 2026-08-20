@@ -171,7 +171,7 @@
                             <span class="po-num-text">@row.PoNumber</span>
                         </td>
                         <td class="po-vendor" data-label="Supplier">@(string.IsNullOrWhiteSpace(row.Vendor) ? "—" : row.Vendor)</td>
-                        <td class="num po-date" data-label="Date">@row.OrderDate.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</td>
+                        <td class="num po-date" data-label="Date">@row.OrderDate.ToString("d/M", System.Globalization.CultureInfo.InvariantCulture)</td>
                         <td class="num po-amount" data-label="Amount">@row.Amount.ToString("N2")</td>
                         <td class="actions" data-label="">
                             <div class="actions-row-block">

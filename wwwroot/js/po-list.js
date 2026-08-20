@@ -199,9 +199,12 @@
 
   const formatDisplayDate = (isoYmd) => {
     if (!isoYmd || String(isoYmd).length < 10) return '—';
-    const d = new Date(`${String(isoYmd).slice(0, 10)}T12:00:00`);
-    if (Number.isNaN(d.getTime())) return '—';
-    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    const parts = String(isoYmd).slice(0, 10).split('-');
+    if (parts.length !== 3) return '—';
+    const day = Number.parseInt(parts[2], 10);
+    const month = Number.parseInt(parts[1], 10);
+    if (!day || !month) return '—';
+    return `${day}/${month}`;
   };
 
   const statusStackClass = (status) =>
