@@ -645,11 +645,11 @@ select.po-filter-input {
   display: flex;
   flex-wrap: wrap;
   width: 100%;
-  padding: 3px;
-  border-radius: var(--po-radius-pill);
+  padding: 2px;
+  border-radius: 8px;
   background: #e8edf5;
   border: 1px solid var(--po-border);
-  gap: 4px;
+  gap: 2px;
 }
 
 .tab-btn {
@@ -659,13 +659,13 @@ select.po-filter-input {
   justify-content: center;
   border: none;
   background: transparent;
-  padding: 5px 6px;
-  min-height: 40px;
+  padding: 4px 4px;
+  min-height: 34px;
   font-weight: 600;
   font-size: 0.75rem;
   color: var(--po-text-muted);
   cursor: pointer;
-  border-radius: var(--po-radius-pill);
+  border-radius: 6px;
   font-family: inherit;
   touch-action: manipulation;
   -webkit-user-select: none;
@@ -1938,11 +1938,12 @@ tr.items-row--xfer-bad .items-check .po-check input:focus-visible + .po-check__b
 
   .tab-btn {
     flex: 0 0 auto;
-    padding: 4px 6px;
+    padding: 3px 4px;
     font-size: 0.6875rem;
-    min-height: 36px;
+    min-height: 32px;
     line-height: 1.1;
     white-space: nowrap;
+    border-radius: 5px;
   }
 
   .tab-btn__label {
