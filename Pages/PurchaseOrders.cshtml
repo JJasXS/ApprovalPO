@@ -89,10 +89,10 @@
 
             <div class="tabs-wrap">
                 <div class="tabs" role="tablist" aria-label="PO status tabs">
-                    <button id="tabPending" class="tab-btn is-active" type="button" role="tab" aria-selected="true"><span class="tab-btn__label">Pending</span> (<span id="countPending">0</span>)</button>
-                    <button id="tabWaiting" class="tab-btn" type="button" role="tab" aria-selected="false" title="Partially approved — waiting for remaining sign-offs"><span class="tab-btn__label">Waiting</span><span id="bulkWaitingBang" class="tab-bang" hidden aria-label="Urgent: orders waiting for remaining approvals">!</span> (<span id="countWaiting">0</span>)</button>
-                    <button id="tabApproved" class="tab-btn" type="button" role="tab" aria-selected="false"><span class="tab-btn__label">Approved</span> (<span id="countApproved">0</span>)</button>
-                    <button id="tabRejected" class="tab-btn" type="button" role="tab" aria-selected="false"><span class="tab-btn__label">Rejected</span> (<span id="countRejected">0</span>)</button>
+                    <button id="tabPending" class="tab-btn is-active" type="button" role="tab" aria-selected="true"><span class="tab-btn__stack"><span class="tab-btn__label">Pending</span><span class="tab-btn__count">(<span id="countPending">0</span>)</span></span></button>
+                    <button id="tabWaiting" class="tab-btn" type="button" role="tab" aria-selected="false" title="Partially approved — waiting for remaining sign-offs"><span class="tab-btn__stack"><span class="tab-btn__top"><span class="tab-btn__label">Waiting</span><span id="bulkWaitingBang" class="tab-bang" hidden aria-label="Urgent: orders waiting for remaining approvals">!</span></span><span class="tab-btn__count">(<span id="countWaiting">0</span>)</span></span></button>
+                    <button id="tabApproved" class="tab-btn" type="button" role="tab" aria-selected="false"><span class="tab-btn__stack"><span class="tab-btn__label">Approved</span><span class="tab-btn__count">(<span id="countApproved">0</span>)</span></span></button>
+                    <button id="tabRejected" class="tab-btn" type="button" role="tab" aria-selected="false"><span class="tab-btn__stack"><span class="tab-btn__label">Rejected</span><span class="tab-btn__count">(<span id="countRejected">0</span>)</span></span></button>
                 </div>
             </div>
         </div>

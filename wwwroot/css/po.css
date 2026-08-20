@@ -654,10 +654,13 @@ select.po-filter-input {
 
 .tab-btn {
   flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   background: transparent;
-  padding: 6px 8px;
-  min-height: 36px;
+  padding: 5px 6px;
+  min-height: 40px;
   font-weight: 600;
   font-size: 0.75rem;
   color: var(--po-text-muted);
@@ -670,9 +673,29 @@ select.po-filter-input {
   transition: background 0.2s ease, color 0.2s ease, transform 0.12s ease;
 }
 
+.tab-btn__stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  line-height: 1.1;
+}
+
+.tab-btn__top {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .tab-btn__label {
   font-size: 0.6875rem;
   font-weight: 600;
+}
+
+.tab-btn__count {
+  font-size: 0.625rem;
+  font-weight: 600;
+  opacity: 0.85;
 }
 
 .tab-btn:active {
@@ -689,17 +712,17 @@ select.po-filter-input {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 1.1rem;
-  height: 1.1rem;
-  margin: 0 0 0 3px;
-  padding: 0 4px;
+  min-width: 0.75rem;
+  height: 0.75rem;
+  margin: 0;
+  padding: 0 2px;
   border-radius: 999px;
   background: #dc2626;
   color: #fff;
-  font-size: 0.65rem;
+  font-size: 0.5rem;
   font-weight: 800;
   line-height: 1;
-  vertical-align: middle;
+  flex-shrink: 0;
 }
 
 .tab-btn .tab-bang {
@@ -1915,10 +1938,10 @@ tr.items-row--xfer-bad .items-check .po-check input:focus-visible + .po-check__b
 
   .tab-btn {
     flex: 0 0 auto;
-    padding: 5px 7px;
+    padding: 4px 6px;
     font-size: 0.6875rem;
-    min-height: 30px;
-    line-height: 1.15;
+    min-height: 36px;
+    line-height: 1.1;
     white-space: nowrap;
   }
 
@@ -1926,12 +1949,15 @@ tr.items-row--xfer-bad .items-check .po-check input:focus-visible + .po-check__b
     font-size: 0.5625rem;
   }
 
+  .tab-btn__count {
+    font-size: 0.5rem;
+  }
+
   .tab-bang {
-    min-width: 0.85rem;
-    height: 0.85rem;
-    font-size: 0.5625rem;
-    padding: 0 3px;
-    margin-left: 2px;
+    min-width: 0.65rem;
+    height: 0.65rem;
+    font-size: 0.4375rem;
+    padding: 0 2px;
   }
 
   /* 16px minimum on iOS avoids focus-zoom; keep controls visually compact via height/padding */
