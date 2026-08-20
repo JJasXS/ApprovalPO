@@ -7,9 +7,6 @@ namespace ApprovalPO.Authorization;
 /// </summary>
 public static class PolicyNames
 {
-    /// <summary>Admin role required (Purchase / Sales approval, ScanPO, Received Goods).</summary>
-    public const string AdminOnly = "AdminOnly";
-
     /// <summary>Admin OR Maintenance role required (the Maintenance Scanner module).</summary>
     public const string MaintenanceAccess = "MaintenanceAccess";
 }

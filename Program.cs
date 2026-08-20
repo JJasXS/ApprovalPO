@@ -154,7 +154,6 @@ builder.Services.AddHttpClient<ApprovalPO.Services.Ocr.IOpenAiVisionService, App
     var seconds = builder.Configuration.GetValue<int?>("OpenAi:TimeoutSeconds") ?? 120;
     client.Timeout = TimeSpan.FromSeconds(seconds <= 0 ? 120 : seconds);
 });
-builder.Services.AddScoped<IUserRoleResolver, UserRoleResolver>();
 builder.Services.AddScoped<IApprovalAuthority, ApprovalAuthority>();
 builder.Services.AddScoped<IModuleAccessService, ModuleAccessService>();
 
@@ -224,10 +223,6 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 
 builder.Services.AddAuthorization(options =>
 {
-    // Admin gets access to all business pages.
-    options.AddPolicy(PolicyNames.AdminOnly, p =>
-        p.RequireAuthenticatedUser().RequireRole(ApprovalRoles.Admin));
-
     // Admin OR Maintenance can use the Maintenance Scanner.
     options.AddPolicy(PolicyNames.MaintenanceAccess, p =>
         p.RequireAuthenticatedUser().RequireRole(ApprovalRoles.Admin, ApprovalRoles.Maintenance));

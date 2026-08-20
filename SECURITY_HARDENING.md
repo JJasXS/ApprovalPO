@@ -31,64 +31,7 @@ This document outlines the security improvements made to ApprovalPO and best pra
 
 ---
 
-### 3. Input Sanitization Helpers (`InputSanitizer.cs`)
-**New utility functions:**
-- `SanitizeText()` - Removes dangerous characters, control chars, null bytes
-- `SanitizeHtml()` - Strips script tags, event handlers, dangerous HTML attributes
-- `ValidateEmail()` - RFC-compliant email validation with length checks
-- `ValidatePhone()` - Phone number format and length validation
-- `ValidateNumeric()` - Numeric range validation (prevents overflow)
-- `ValidateIdentifier()` - Alphanumeric-only validation for IDs/codes
-- `IsSafeSqlInput()` - Detects SQL injection patterns in input
-
-**Usage example:**
-```csharp
-var (isValid, sanitized) = InputSanitizer.SanitizeText(userInput, maxLength: 1000);
-if (!isValid) return BadRequest("Invalid input");
-
-var (emailValid, normalizedEmail) = InputSanitizer.ValidateEmail(email);
-```
-
-**Impact:** Prevents:
-- XSS (Cross-Site Scripting)
-- Script injection
-- HTML injection
-- SQL injection patterns
-- Buffer overflows
-
----
-
-### 4. Security Event Logging (`SecurityEventLogger.cs`)
-**New logging methods:**
-- `LogAuthenticationFailure()` - Failed login attempts
-- `LogAuthorizationDenial()` - Access control violations
-- `LogSuspiciousRequest()` - Detected attack patterns
-- `LogRateLimitEnforced()` - Rate limit hits
-- `LogSuccessfulAuthentication()` - Audit trail
-- `LogPrivilegeEscalationAttempt()` - Attempted privilege elevation
-- `LogDataAccess()` - Compliance audit logging
-- `LogConfigurationChange()` - Audit of config changes
-
-**Usage example:**
-```csharp
-var ipAddress = SecurityEventLogger.GetClientIpAddress(HttpContext);
-SecurityEventLogger.LogAuthenticationFailure(
-    _logger, 
-    userId: "user@example.com", 
-    reason: "Invalid OTP", 
-    ipAddress: ipAddress
-);
-```
-
-**Impact:** 
-- Better security event visibility
-- Compliance audit trails
-- Anomaly detection
-- Forensics for incident response
-
----
-
-### 5. Improved HTTPS Redirect
+### 3. Improved HTTPS Redirect
 **Change:** Redirect HTTP → HTTPS now uses HTTP 301 (Permanent) instead of 302 (Temporary)
 
 **Why:** 
@@ -98,7 +41,7 @@ SecurityEventLogger.LogAuthenticationFailure(
 
 ---
 
-### 6. Request Size Limits (Kestrel)
+### 4. Request Size Limits (Kestrel)
 **Configured limits:**
 - Maximum request body: 50 MB
 - Maximum request headers: 64 KB
@@ -111,80 +54,10 @@ SecurityEventLogger.LogAuthenticationFailure(
 ## Recommended Implementation Patterns
 
 ### When Accepting User Input
-Always sanitize and validate:
-
-```csharp
-// In your Razor Pages or API controllers:
-[BindProperty]
-public string UserDescription { get; set; } = "";
-
-public IActionResult OnPost()
-{
-    // Sanitize before storing
-    var (isValid, sanitized) = InputSanitizer.SanitizeText(UserDescription, maxLength: 2000);
-    if (!isValid)
-    {
-        ModelState.AddModelError("UserDescription", "Invalid characters in description");
-        return Page();
-    }
-    
-    // Log data access
-    var ipAddress = SecurityEventLogger.GetClientIpAddress(HttpContext);
-    SecurityEventLogger.LogDataAccess(
-        _logger, 
-        userId: User.FindFirst(ClaimTypes.Email)?.Value ?? "unknown",
-        dataType: "PurchaseOrder",
-        action: "Create",
-        identifier: sanitized,
-        ipAddress: ipAddress
-    );
-    
-    // Proceed with sanitized data
-    return HandleSanitizedInput(sanitized);
-}
-```
+Validate and normalize user input at the page handler or service layer before persistence. Use built-in model validation, length limits, and parameterized Firebird queries. Never trust client-supplied amounts or roles.
 
 ### Authentication Event Logging
-```csharp
-// In Login.cshtml.cs
-var ipAddress = SecurityEventLogger.GetClientIpAddress(HttpContext);
-
-if (loginFailed)
-{
-    SecurityEventLogger.LogAuthenticationFailure(
-        _logger,
-        userId: LoginId,
-        reason: "Invalid OTP",
-        ipAddress: ipAddress
-    );
-}
-else
-{
-    SecurityEventLogger.LogSuccessfulAuthentication(
-        _logger,
-        userId: email,
-        method: "OTP",
-        ipAddress: ipAddress
-    );
-}
-```
-
-### Preventing Privilege Escalation
-```csharp
-// Always re-validate user roles from database, never trust client claims
-var actualRoles = await _roleResolver.ResolveRolesForEmailAsync(email);
-if (!actualRoles.Contains(requestedRole))
-{
-    var ipAddress = SecurityEventLogger.GetClientIpAddress(HttpContext);
-    SecurityEventLogger.LogPrivilegeEscalationAttempt(
-        _logger,
-        userId: email,
-        attemptedRole: requestedRole,
-        ipAddress: ipAddress
-    );
-    return Unauthorized();
-}
-```
+Use `ILogger` in login and authorization paths to record failed OTP attempts, lockouts, and access denials with user id and client IP when available.
 
 ---
 
@@ -275,8 +148,6 @@ OpenAi__ApiKey=<api-key>
 - `Program.cs` - Main security configuration
 - `SecurityHeadersExtensions.cs` - Security headers middleware
 - `RequestValidationExtensions.cs` - Request validation middleware
-- `InputSanitizer.cs` - Input validation and sanitization
-- `SecurityEventLogger.cs` - Security event logging
 - `appsettings.*.json` - Configuration by environment
 
 ---

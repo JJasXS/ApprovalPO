@@ -5,8 +5,6 @@ namespace ApprovalPO.Services.Scan;
 
 public interface IScanPoSubmitStore
 {
-    Task<IReadOnlySet<int>> GetSubmittedDocKeysAsync(CancellationToken cancellationToken = default);
-
     Task<IReadOnlyList<ScanPoSubmitSummary>> GetSubmitSummariesAsync(CancellationToken cancellationToken = default);
 
     Task<ScanPoSubmissionState> GetStateAsync(int docKey, CancellationToken cancellationToken = default);
@@ -61,15 +59,6 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
         var safeTenant = string.Join("_", tenant.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries));
         var dir = Path.Combine(env.ContentRootPath, "Data");
         _path = Path.Combine(dir, $"scan-po-submits-{safeTenant}.json");
-    }
-
-    public async Task<IReadOnlySet<int>> GetSubmittedDocKeysAsync(CancellationToken cancellationToken = default)
-    {
-        var file = await ReadFileAsync(cancellationToken).ConfigureAwait(false);
-        return file.Submissions
-            .Select(s => s.DocKey)
-            .Where(k => k > 0)
-            .ToHashSet();
     }
 
     public async Task<IReadOnlyList<ScanPoSubmitSummary>> GetSubmitSummariesAsync(CancellationToken cancellationToken = default)

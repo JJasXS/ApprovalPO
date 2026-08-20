@@ -9,8 +9,6 @@ public interface IPurchaseOrderScanQuery
     Task<IReadOnlyList<PurchaseOrderRow>> ListApprovedAsync(CancellationToken cancellationToken = default);
 
     Task<PurchaseOrderRow?> GetApprovedByDocKeyAsync(int docKey, CancellationToken cancellationToken = default);
-
-    Task<PurchaseOrderRow?> FindApprovedByPoNumberAsync(string poNumber, CancellationToken cancellationToken = default);
 }
 
 public sealed class PurchaseOrderScanQueryService : IPurchaseOrderScanQuery
@@ -37,16 +35,5 @@ public sealed class PurchaseOrderScanQueryService : IPurchaseOrderScanQuery
         if (docKey <= 0) return null;
         var list = await ListApprovedAsync(cancellationToken).ConfigureAwait(false);
         return list.FirstOrDefault(o => o.DocKey == docKey);
-    }
-
-    public async Task<PurchaseOrderRow?> FindApprovedByPoNumberAsync(string poNumber, CancellationToken cancellationToken = default)
-    {
-        var needle = ScanPoValidationHelper.NormalizeDocumentNumber(poNumber);
-        if (needle.Length == 0)
-            return null;
-
-        var list = await ListApprovedAsync(cancellationToken).ConfigureAwait(false);
-        return list.FirstOrDefault(o =>
-            ScanPoValidationHelper.DocumentNumbersMatch(o.PoNumber, needle));
     }
 }

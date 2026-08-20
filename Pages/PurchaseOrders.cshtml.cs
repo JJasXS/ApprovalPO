@@ -2,14 +2,12 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using ApprovalPO.Models;
 using ApprovalPO.Options;
-using ApprovalPO.Services;
 using ApprovalPO.Services.Auth;
 using ApprovalPO.Services.Orders;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Options;
-using Microsoft.Extensions.Configuration;
 
 namespace ApprovalPO.Pages;
 
@@ -44,26 +42,20 @@ public class PurchaseOrdersModel : PageModel
     private readonly IOptions<WebPushOptions> _webPush;
     private readonly IPurchaseOrderCatalog _orders;
     private readonly IApprovalAuthority _authority;
-    private readonly ISyUserLoginValidator _syUser;
     private readonly IWebHostEnvironment _env;
-    private readonly IConfiguration _config;
 
     public PurchaseOrdersModel(
         IOptions<ApprovalOptions> approval,
         IOptions<WebPushOptions> webPush,
         IPurchaseOrderCatalog orders,
         IApprovalAuthority authority,
-        ISyUserLoginValidator syUser,
-        IWebHostEnvironment env,
-        IConfiguration config)
+        IWebHostEnvironment env)
     {
         _approval = approval;
         _webPush = webPush;
         _orders = orders;
         _authority = authority;
-        _syUser = syUser;
         _env = env;
-        _config = config;
     }
 
     /// <summary>Browser Web Push (VAPID) keys are present; client may register a subscription.</summary>
@@ -95,8 +87,6 @@ public class PurchaseOrdersModel : PageModel
 
     public string? UserEmail => User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value?.Trim();
 
-    public bool CanApprove => SyUserApprovalMapper.CanApproveFromClaims(User);
-
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         Orders = await _orders.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
@@ -106,48 +96,6 @@ public class PurchaseOrdersModel : PageModel
     {
         var list = await _orders.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
         return new JsonResult(list, JsonCamel);
-    }
-
-    /// <summary>Development-only: returns raw SY_USER UDF claims for the signed-in user.</summary>
-    public IActionResult OnGetDebugClaims()
-    {
-        if (!_env.IsDevelopment())
-            return NotFound();
-
-        var email = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "";
-        return new JsonResult(new
-        {
-            email,
-            canApprove = CanApprove,
-            cookieAppRole = User.FindFirst(ApprovalClaimTypes.AppRole)?.Value,
-            cookieAppLevel = User.FindFirst(ApprovalClaimTypes.AppLevel)?.Value,
-            cookieAppFrom = User.FindFirst(ApprovalClaimTypes.AppFrom)?.Value,
-            cookieAppTo = User.FindFirst(ApprovalClaimTypes.AppTo)?.Value,
-            allClaims = User.Claims.Select(c => new { c.Type, c.Value }).ToList()
-        }, JsonCamel);
-    }
-
-    /// <summary>
-    /// Development-only live SY_USER lookup for the signed-in user, bypassing cookie/session.
-    /// </summary>
-    public async Task<IActionResult> OnGetDebugSyUserAsync(CancellationToken cancellationToken)
-    {
-        if (!_env.IsDevelopment())
-            return NotFound();
-
-        var email = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "";
-        var sy = await _syUser.LookupByEmailAsync(email, cancellationToken).ConfigureAwait(false);
-        return new JsonResult(new
-        {
-            email,
-            tenantCode = _config["TenantBootstrap:TenantCode"],
-            status = sy.Status.ToString(),
-            appRole = sy.AppRole ?? "(null)",
-            appLevel = sy.AppLevel?.ToString() ?? "(null)",
-            appFrom = sy.AppFrom?.ToString() ?? "(null)",
-            appTo = sy.AppTo?.ToString() ?? "(null)",
-            diagnostic = sy.Diagnostic ?? "(null)"
-        }, JsonCamel);
     }
 
     /// <summary>Lightweight snapshot for desktop notifications: orders in the Pending tab (e.g. <c>UDF_POSTATUS</c> <c>PENDING</c> when using default list SQL).</summary>

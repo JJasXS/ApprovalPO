@@ -14,39 +14,6 @@ namespace ApprovalPO.Services.Orders;
 /// </summary>
 public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
 {
-    /// <summary>
-    /// Default reads <c>PH_PO.UDF_POSTATUS</c> (VARCHAR). Maps to <c>PQSTATUS</c> + <c>TRANSFERABLEINT</c> for the UI/API.
-    /// Override with <see cref="ApprovalOptions.PurchaseOrdersSql"/> if your view uses different column names.
-    /// Include <c>DOCKEY</c> so line items can load.
-    /// </summary>
-    internal const string DefaultPurchaseOrdersSql = """
-        SELECT FIRST 200
-          DOCKEY,
-          TRIM(DOCNO) AS PONUMBER,
-          TRIM(COALESCE(COMPANYNAME, CODE, '')) AS VENDOR,
-          COALESCE(DOCAMT, 0) AS AMOUNT,
-          TRIM(COALESCE(CAST(DESCRIPTION AS VARCHAR(2000)), '')) AS DESCRIPTION,
-          COALESCE(DOCDATE, CURRENT_DATE) AS ORDERDATE,
-          CAST(CASE UPPER(TRIM(COALESCE(CAST(UDF_POSTATUS AS VARCHAR(40)), '')))
-            WHEN 'APPROVED' THEN 1
-            WHEN 'CANCELLED' THEN 0
-            WHEN 'REJECTED' THEN 0
-            ELSE NULL
-          END AS SMALLINT) AS TRANSFERABLEINT,
-          CAST(CASE UPPER(TRIM(COALESCE(CAST(UDF_POSTATUS AS VARCHAR(40)), '')))
-            WHEN 'APPROVED' THEN 'Approved'
-            WHEN 'CANCELLED' THEN 'Cancelled'
-            WHEN 'REJECTED' THEN 'Rejected'
-            ELSE 'Pending'
-          END AS VARCHAR(20)) AS PQSTATUS
-        FROM PH_PO
-        ORDER BY DOCDATE DESC NULLS LAST, DOCNO DESC
-        """;
-
-    /// <summary>Detail lines for <c>PH_PODTL</c>; parameter <c>@DocKey</c>.</summary>
-    internal static string DefaultPurchaseRequestLinesSql =>
-        FirebirdDocumentSqlBuilder.BuildDetailLinesSql("PH_PODTL");
-
     private readonly IOptions<ApprovalOptions> _approval;
     private readonly TenantDbConnectionResolver _tenantResolver;
     private readonly IConfiguration _configuration;

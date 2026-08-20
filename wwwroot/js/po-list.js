@@ -6,7 +6,6 @@
   const setLineTransferableUrl = cfgEl?.dataset.setLineTransferableUrl || '';
   const csrfToken = cfgEl?.dataset.csrfToken || '';
   const highValueThreshold = parseFloat(String(cfgEl?.dataset.highValueThreshold || '5000'), 10) || 5000;
-  const canApproveRole = String(cfgEl?.dataset.canApprove || '').toLowerCase() === 'true';
   const appFromRaw = String(cfgEl?.dataset.appFrom || '').trim();
   const appToRaw = String(cfgEl?.dataset.appTo || '').trim();
   const hasAppRange = appFromRaw.length > 0 && appToRaw.length > 0;
@@ -230,13 +229,6 @@
   const rowCompletedLevels = (tr) =>
     Number.parseInt(String(tr?.dataset?.completedLevels ?? '0'), 10) || 0;
 
-  const rowNextLevel = (tr) => {
-    const explicit = Number.parseInt(String(tr?.dataset?.nextLevel ?? ''), 10);
-    if (Number.isFinite(explicit) && explicit > 0) return explicit;
-    const completed = rowCompletedLevels(tr);
-    return completed === 0 ? 1 : completed + 1;
-  };
-
   const levelLabel = (level) => ({ 1: 'MANAGER', 2: 'HOD/PUR', 3: 'DIRECTOR' }[level] || 'approver');
 
   const statusDisplay = (status, tr) => {
@@ -293,16 +285,6 @@
     if (tr.dataset.transferable === 'true') return 'Approved';
     if (tr.dataset.transferable === 'false') return 'Rejected';
     return 'Pending';
-  };
-
-  const applyOrderWorkflowToRow = (tr, o) => {
-    if (!tr || !o) return;
-    tr.dataset.requiredLevels = String(o.requiredLevels ?? requiredLevelsForAmount(parseAmount(tr)));
-    tr.dataset.completedLevels = String(o.completedLevels ?? 0);
-    tr.dataset.nextLevel = String(o.nextLevel ?? 0);
-    tr.dataset.approvalL1 = o.approvalLevel1 || '';
-    tr.dataset.approvalL2 = o.approvalLevel2 || '';
-    tr.dataset.approvalL3 = o.approvalLevel3 || '';
   };
 
   const applyWorkflowResultToRow = (tr, data) => {

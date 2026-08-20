@@ -94,14 +94,6 @@ public static class ApprovalLevelWorkflow
         return 0;
     }
 
-    public static string LevelLabel(int level) => level switch
-    {
-        1 => "MANAGER",
-        2 => "HOD/PUR",
-        3 => "DIRECTOR",
-        _ => "approver"
-    };
-
     public static bool EmailMatches(string? a, string? b) =>
         string.Equals((a ?? "").Trim(), (b ?? "").Trim(), StringComparison.OrdinalIgnoreCase);
 

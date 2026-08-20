@@ -56,8 +56,6 @@ public class SalesOrdersModel : PageModel
 
     public decimal? AppTo => SyUserApprovalMapper.ReadDecimalClaim(User, ApprovalClaimTypes.AppTo);
 
-    public bool CanApprove => SyUserApprovalMapper.CanApproveFromClaims(User);
-
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         Orders = await _orders.GetOrdersAsync(cancellationToken).ConfigureAwait(false);

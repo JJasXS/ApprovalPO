@@ -6,19 +6,6 @@ namespace ApprovalPO.Helpers;
 /// <summary>Dynamic INSERT helpers for Firebird tables (mirrors eQuotation <c>_insert_dynamic</c> / <c>_next_key</c>).</summary>
 public static class FirebirdTableWriter
 {
-    public static string? PickColumn(HashSet<string> columns, params string[] candidates)
-    {
-        foreach (var c in candidates)
-        {
-            if (string.IsNullOrWhiteSpace(c)) continue;
-            var u = c.Trim().ToUpperInvariant();
-            if (columns.Contains(u))
-                return u;
-        }
-
-        return null;
-    }
-
     public static async Task<Dictionary<string, int>> GetStringColumnLengthsAsync(
         FbConnection conn,
         string tableName,

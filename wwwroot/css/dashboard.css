@@ -84,17 +84,6 @@
   white-space: nowrap;
 }
 
-.dash-header-role {
-  font-size: 11px;
-  font-weight: 600;
-  color: #475569;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  padding: 4px 8px;
-  white-space: nowrap;
-}
-
 .dash-signout-form {
   margin: 0;
   padding: 0;
@@ -196,13 +185,6 @@
   transform: translateX(4px);
 }
 
-/* Disabled / coming soon card */
-.dash-card--soon {
-  opacity: 0.6;
-  cursor: default;
-  pointer-events: none;
-}
-
 /* ─── Card icon ───────────────────────────────────────────── */
 .dash-card-icon-wrap {
   width: 52px;
@@ -232,11 +214,6 @@
 .dash-card-icon-wrap--violet {
   background: #f5f3ff;
   color: #7c3aed;
-}
-
-.dash-card-icon-wrap--amber {
-  background: #fef3c7;
-  color: #b45309;
 }
 
 .dash-card-icon-wrap--teal {
@@ -275,40 +252,6 @@
 .dash-card-arrow svg {
   width: 18px;
   height: 18px;
-}
-
-/* ─── Coming soon badge ───────────────────────────────────── */
-.dash-card-badge {
-  position: absolute;
-  top: 20px;
-  right: 18px;
-  background: #f1f5f9;
-  color: #64748b;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 3px 10px;
-  border-radius: 999px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  border: 1px solid #e2e8f0;
-}
-
-/* ─── Back chevron link in brand area ─────────────────────── */
-.dash-back-link {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #94a3b8;
-  text-decoration: none;
-  padding: 4px;
-  border-radius: 6px;
-  transition: color 0.15s, background 0.15s;
-  margin-right: 2px;
-}
-
-.dash-back-link:hover {
-  color: var(--app-blue);
-  background: var(--app-blue-soft);
 }
 
 /* ─── Responsive ──────────────────────────────────────────── */

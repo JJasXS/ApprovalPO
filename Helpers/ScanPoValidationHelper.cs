@@ -15,17 +15,6 @@ public static class ScanPoValidationHelper
         return string.Equals(s, r, StringComparison.OrdinalIgnoreCase);
     }
 
-    public static string? MatchLineCode(string? scanned, IEnumerable<string> lineCodes)
-    {
-        foreach (var line in lineCodes)
-        {
-            if (ItemCodesMatch(scanned, line))
-                return line.Trim();
-        }
-
-        return null;
-    }
-
     public static bool ProjectMatch(string? lineProject, string? scanProject)
     {
         var line = NormalizeProject(lineProject);

@@ -31,19 +31,6 @@ public sealed class TenantDbConnectionResolver
         _httpFactory = httpFactory;
     }
 
-    /// <summary>Drops the cached AWS tenant payload so the next resolve re-fetches from the tenant-config API.</summary>
-    public void InvalidateTenant(string tenantCode)
-    {
-        tenantCode = (tenantCode ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(tenantCode))
-            return;
-        _cache.TryRemove(tenantCode, out _);
-    }
-
-    /// <summary>
-    /// Re-fetches tenant config from AWS (connection string, dashboard module flags, roles, email, sqlApi)
-    /// and replaces the in-memory cache entry.
-    /// </summary>
     public Task<string> RefreshTenantConfigAsync(string tenantCode, CancellationToken cancellationToken = default) =>
         GetConnectionStringForTenantAsync(tenantCode, cancellationToken, forceRefresh: true);
 
@@ -189,20 +176,6 @@ public sealed class TenantDbConnectionResolver
 
         await GetConnectionStringForTenantAsync(tenantCode, cancellationToken).ConfigureAwait(false);
         return _cache.TryGetValue(tenantCode, out var hit2) ? hit2.SqlApi : null;
-    }
-
-    /// <summary>Dashboard module visibility flags from tenant payload, if present.</summary>
-    public async Task<TenantDashboardModules?> GetTenantDashboardModulesAsync(string tenantCode, CancellationToken cancellationToken = default)
-    {
-        tenantCode = (tenantCode ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(tenantCode))
-            return null;
-
-        if (_cache.TryGetValue(tenantCode, out var hit))
-            return hit.DashboardModules;
-
-        await GetConnectionStringForTenantAsync(tenantCode, cancellationToken).ConfigureAwait(false);
-        return _cache.TryGetValue(tenantCode, out var hit2) ? hit2.DashboardModules : null;
     }
 
     /// <summary>
