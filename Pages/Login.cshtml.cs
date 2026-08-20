@@ -1,8 +1,10 @@
 using System.Security.Claims;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using ApprovalPO.Helpers;
 using ApprovalPO.Options;
 using ApprovalPO.Services;
+using ApprovalPO.Services.Auth;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
@@ -17,6 +19,8 @@ namespace ApprovalPO.Pages;
 public class LoginModel : PageModel
 {
     private static readonly Regex SixDigitOtp = new(@"^\d{6}$", RegexOptions.Compiled);
+    private const string ExpiredLoginMessage =
+        "Your subscription has expired. Please contact ProAcc System to renew.";
 
     private readonly OtpSessionStore _otpStore;
     private readonly LoginIpThrottle _ipThrottle;
@@ -25,6 +29,8 @@ public class LoginModel : PageModel
     private readonly ApprovalOptions _approval;
     private readonly IWebHostEnvironment _env;
     private readonly ILogger<LoginModel> _logger;
+    private readonly TenantDbConnectionResolver _tenants;
+    private readonly IConfiguration _configuration;
 
     public LoginModel(
         OtpSessionStore otpStore,
@@ -33,7 +39,9 @@ public class LoginModel : PageModel
         ISyUserLoginValidator syUser,
         IOptions<ApprovalOptions> approval,
         IWebHostEnvironment env,
-        ILogger<LoginModel> logger)
+        ILogger<LoginModel> logger,
+        TenantDbConnectionResolver tenants,
+        IConfiguration configuration)
     {
         _otpStore = otpStore;
         _ipThrottle = ipThrottle;
@@ -42,6 +50,8 @@ public class LoginModel : PageModel
         _approval = approval.Value;
         _env = env;
         _logger = logger;
+        _tenants = tenants;
+        _configuration = configuration;
     }
 
     [BindProperty]
@@ -58,12 +68,16 @@ public class LoginModel : PageModel
     [BindProperty(SupportsGet = true)]
     public string? ReturnUrl { get; set; }
 
-    public IActionResult OnGet()
+    public SubscriptionBanner.Context Subscription { get; private set; } =
+        SubscriptionBanner.Build(null, null, null);
+
+    public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
         if (User.Identity?.IsAuthenticated == true)
             return RedirectToPage("/Dashboard");
 
         ReturnUrl = NormalizeLocalReturn(ReturnUrl);
+        Subscription = await LoadSubscriptionAsync(cancellationToken).ConfigureAwait(false);
         return Page();
     }
 
@@ -71,6 +85,9 @@ public class LoginModel : PageModel
     {
         if (HoneypotTripped())
             return HoneypotJson();
+
+        if (await IsSubscriptionExpiredAsync(cancellationToken).ConfigureAwait(false))
+            return JsonExpired();
 
         if (!_ipThrottle.TrySend(HttpContext, out var sendLimitMsg))
             return JsonThrottle(sendLimitMsg);
@@ -168,6 +185,9 @@ public class LoginModel : PageModel
         if (HoneypotTripped())
             return HoneypotJson();
 
+        if (await IsSubscriptionExpiredAsync(cancellationToken).ConfigureAwait(false))
+            return JsonExpired();
+
         if (!_ipThrottle.TryVerify(HttpContext, out var verifyLimitMsg))
             return JsonThrottle(verifyLimitMsg);
 
@@ -221,6 +241,48 @@ public class LoginModel : PageModel
             redirectUrl = redirect
         }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
     }
+
+    private async Task<SubscriptionBanner.Context> LoadSubscriptionAsync(CancellationToken cancellationToken)
+    {
+        var whatsApp = ResolveWhatsAppNumber();
+        if (!TenantConfigurationHelper.TryGetTenantCode(_configuration, out var tenant, out _))
+            return SubscriptionBanner.Build(null, null, whatsApp);
+
+        try
+        {
+            var (expiry, status) = await _tenants.GetTenantLicenseAsync(tenant, cancellationToken).ConfigureAwait(false);
+            return SubscriptionBanner.Build(expiry, status, whatsApp);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not load tenant license for login banner.");
+            return SubscriptionBanner.Build(null, null, whatsApp);
+        }
+    }
+
+    private async Task<bool> IsSubscriptionExpiredAsync(CancellationToken cancellationToken)
+    {
+        var ctx = await LoadSubscriptionAsync(cancellationToken).ConfigureAwait(false);
+        return ctx.Expired;
+    }
+
+    private string? ResolveWhatsAppNumber()
+    {
+        var fromEnv = (Environment.GetEnvironmentVariable("SUPPORT_WHATSAPP_NUMBER")
+                       ?? Environment.GetEnvironmentVariable("Support__WhatsAppNumber")
+                       ?? "").Trim();
+        if (fromEnv.Length > 0)
+            return fromEnv;
+        return (_configuration["Support:WhatsAppNumber"] ?? "").Trim();
+    }
+
+    private IActionResult JsonExpired() =>
+        new JsonResult(
+            new { success = false, message = ExpiredLoginMessage },
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
+        {
+            StatusCode = StatusCodes.Status403Forbidden
+        };
 
     private bool HoneypotTripped()
     {

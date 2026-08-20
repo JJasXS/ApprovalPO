@@ -2,13 +2,32 @@
 @model ApprovalPO.Pages.LoginModel
 @{
     ViewData["Title"] = "Sign in";
+    var sub = Model.Subscription;
+    if (sub.Expired)
+        ViewData["BodyClass"] = "login-page-body is-license-expired";
 }
 
 @section Styles {
     <link rel="stylesheet" href="~/css/login.css" asp-append-version="true" />
 }
 
-<div class="landing-shell">
+@if (sub.Expired)
+{
+    <div class="login-license-lockout" role="alertdialog" aria-modal="true" aria-labelledby="login-license-lockout-title">
+        <div class="login-license-lockout__card">
+            <div class="login-license-lockout__emoji" aria-hidden="true">🔒</div>
+            <h1 id="login-license-lockout-title" class="login-license-lockout__title">@(string.IsNullOrEmpty(sub.Title) ? "Subscription Expired" : sub.Title)</h1>
+            <p class="login-license-lockout__lead">@(string.IsNullOrEmpty(sub.Body) ? "Your subscription has expired." : sub.Body)</p>
+            <p class="login-license-lockout__hint">@(string.IsNullOrEmpty(sub.Detail) ? "Please contact ProAcc System to renew your subscription and restore access." : sub.Detail)</p>
+            @if (!string.IsNullOrEmpty(sub.WhatsAppUrl))
+            {
+                <a class="login-license-wa" href="@sub.WhatsAppUrl" target="_blank" rel="noopener noreferrer">Contact Support</a>
+            }
+        </div>
+    </div>
+}
+
+<div class="landing-shell@(sub.Expired ? " is-license-expired" : "")">
     <div class="landing-page" id="landingPage">
 
         <aside class="landing-aside" aria-label="Welcome">
@@ -49,6 +68,20 @@
                     <button id="sendBtn" type="button" class="step-submit">Send OTP</button>
 
                     <div class="landing-meta">
+                        @if (sub.Show && !sub.Expired && !string.IsNullOrEmpty(sub.Title))
+                        {
+                            <div class="login-license-left" role="status">
+                                <div class="login-license-left__title">@sub.Title</div>
+                                @if (!string.IsNullOrEmpty(sub.Body))
+                                {
+                                    <div class="login-license-left__body">@sub.Body</div>
+                                }
+                                @if (!string.IsNullOrEmpty(sub.WhatsAppUrl))
+                                {
+                                    <a class="login-license-wa login-license-wa--compact" href="@sub.WhatsAppUrl" target="_blank" rel="noopener noreferrer">Renew Subscription</a>
+                                }
+                            </div>
+                        }
                         <div>Managed by ProAcc System.</div>
                         <div class="landing-version">V 1.1</div>
                         <button type="button"

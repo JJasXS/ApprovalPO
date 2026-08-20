@@ -96,10 +96,10 @@ public class ApprovalOptions
     public int PendingNotifyPollSeconds { get; set; } = 120;
 
     /// <summary>
-    /// How often to re-fetch AWS tenant-config (module true/false flags, roles, DB host, etc.).
-    /// Seconds; <c>0</c> disables. Clamped between 60 and 3600 when enabled; default 300 (5 minutes).
+    /// How often to re-fetch AWS tenant-config (module true/false flags, roles, DB host, license, etc.).
+    /// Seconds; <c>0</c> disables. Clamped between 60 and 86400 when enabled; default 86400 (24 hours from service start).
     /// </summary>
-    public int TenantConfigRefreshSeconds { get; set; } = 300;
+    public int TenantConfigRefreshSeconds { get; set; } = 86400;
 
     public int TenantConfigRefreshSecondsClamped
     {
@@ -109,8 +109,8 @@ public class ApprovalOptions
                 return 0;
             if (TenantConfigRefreshSeconds < 60)
                 return 60;
-            if (TenantConfigRefreshSeconds > 3600)
-                return 3600;
+            if (TenantConfigRefreshSeconds > 86400)
+                return 86400;
             return TenantConfigRefreshSeconds;
         }
     }

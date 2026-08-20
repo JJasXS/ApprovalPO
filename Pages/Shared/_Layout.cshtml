@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     @RenderSection("Styles", required: false)
 </head>
-<body>
+<body class="@((ViewData["BodyClass"] as string) ?? "")">
     @{
         var tenantCode = (Configuration["TenantBootstrap:TenantCode"] ?? "").Trim();
     }

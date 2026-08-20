@@ -72,7 +72,7 @@ public sealed class TenantConfigRefreshWorker : BackgroundService
         var sw = System.Diagnostics.Stopwatch.StartNew();
         await _tenants.RefreshTenantConfigAsync(tenant, cancellationToken).ConfigureAwait(false);
         _logger.LogInformation(
-            "Refreshed AWS tenant config for {Tenant} in {ElapsedMs} ms (module flags / roles / DB settings).",
+            "Refreshed AWS tenant config for {Tenant} in {ElapsedMs} ms (module flags / roles / DB / license).",
             tenant,
             sw.ElapsedMilliseconds);
     }

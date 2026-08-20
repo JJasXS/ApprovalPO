@@ -29,6 +29,10 @@ public sealed class TenantResolvedPayload
     public string? OpenAiApiKeySecretRef { get; init; }
     /// <summary>Optional SQL Accounting HTTP API config (tenant field <c>sqlApi</c>); null when not provisioned.</summary>
     public TenantSqlApiConfig? SqlApi { get; init; }
+    /// <summary>Subscription expiry from tenant <c>license.expiryDate</c> (YYYY-MM-DD), if present.</summary>
+    public string? LicenseExpiryDate { get; init; }
+    /// <summary>Optional <c>license.licenseStatus</c> from the tenant payload.</summary>
+    public string? LicenseStatus { get; init; }
 }
 
 /// <summary>

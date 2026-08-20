@@ -117,6 +117,7 @@ public sealed class TenantDbConnectionResolver
             var userRoles = TryParseUserRolesFromRoot(root);
             var openAiSecretRef = TryParseOpenAiSecretRefFromRoot(root);
             var sqlApi = TryParseSqlApiFromRoot(root);
+            var (licenseExpiry, licenseStatus) = TryParseLicenseFromRoot(root);
             _cache[tenantCode] = new TenantResolvedPayload
             {
                 ConnectionString = conn,
@@ -126,7 +127,9 @@ public sealed class TenantDbConnectionResolver
                 MaintenanceDashboardModules = maintenanceDashboardModules,
                 UserRoles = userRoles,
                 OpenAiApiKeySecretRef = openAiSecretRef,
-                SqlApi = sqlApi
+                SqlApi = sqlApi,
+                LicenseExpiryDate = licenseExpiry,
+                LicenseStatus = licenseStatus
             };
             return conn;
         }
@@ -222,6 +225,27 @@ public sealed class TenantDbConnectionResolver
 
         await GetConnectionStringForTenantAsync(tenantCode, cancellationToken).ConfigureAwait(false);
         return _cache.TryGetValue(tenantCode, out var hit2) ? hit2.UserRoles : null;
+    }
+
+    /// <summary>Subscription license fields from the last tenant fetch (<c>license.expiryDate</c> / status).</summary>
+    public async Task<(string? ExpiryDate, string? Status)> GetTenantLicenseAsync(
+        string tenantCode,
+        CancellationToken cancellationToken = default)
+    {
+        tenantCode = (tenantCode ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(tenantCode))
+            return (null, null);
+
+        if (!_cache.TryGetValue(tenantCode, out var hit))
+        {
+            await GetConnectionStringForTenantAsync(tenantCode, cancellationToken).ConfigureAwait(false);
+            _cache.TryGetValue(tenantCode, out hit);
+        }
+
+        if (hit is null)
+            return (null, null);
+
+        return (hit.LicenseExpiryDate, hit.LicenseStatus);
     }
 
     /// <summary>
@@ -392,6 +416,31 @@ public sealed class TenantDbConnectionResolver
                 return secretRef.Trim();
         }
         return null;
+    }
+
+    /// <summary>Reads <c>license.expiryDate</c> / <c>licenseStatus</c> (plain or DynamoDB wrappers).</summary>
+    private static (string? ExpiryDate, string? Status) TryParseLicenseFromRoot(JsonElement root)
+    {
+        if (!TryFindSectionRecursive(root, "license", depth: 0, maxDepth: 8, out var licenseAttr))
+            return (null, null);
+
+        var map = UnwrapDynamoMap(licenseAttr);
+        if (map.ValueKind != JsonValueKind.Object)
+            return (null, null);
+
+        string? expiry = null;
+        string? status = null;
+        if (TryGetScalar(map, "expiryDate", out var e1) && !string.IsNullOrWhiteSpace(e1))
+            expiry = e1.Trim();
+        else if (TryGetScalar(map, "expirationDate", out var e2) && !string.IsNullOrWhiteSpace(e2))
+            expiry = e2.Trim();
+
+        if (TryGetScalar(map, "licenseStatus", out var s1) && !string.IsNullOrWhiteSpace(s1))
+            status = s1.Trim();
+        else if (TryGetScalar(map, "status", out var s2) && !string.IsNullOrWhiteSpace(s2))
+            status = s2.Trim();
+
+        return (expiry, status);
     }
 
     private static TenantEmailOverride MergeTenantEmail(TenantEmailOverride? baseline, TenantEmailOverride next)
