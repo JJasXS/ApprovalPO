@@ -196,6 +196,14 @@ var razorPages = builder.Services.AddRazorPages(options =>
 if (builder.Environment.IsDevelopment())
     razorPages.AddRazorRuntimeCompilation();
 
+if (!builder.Environment.IsDevelopment())
+{
+    builder.Services.AddWebOptimizer(pipeline =>
+    {
+        pipeline.MinifyCssFiles("css/**/*.css");
+    });
+}
+
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -270,6 +278,9 @@ if (!app.Environment.IsDevelopment())
     if (app.Configuration.GetValue("Approval:UseHttpsRedirection", true))
         app.UseHttpsRedirection();
 }
+
+if (!app.Environment.IsDevelopment())
+    app.UseWebOptimizer();
 
 app.UseStaticFiles();
 app.UseRouting();

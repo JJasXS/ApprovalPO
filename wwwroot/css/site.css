@@ -1,3 +1,22 @@
+:root {
+  --app-page-bg: #eef7fc;
+  --app-surface: #ffffff;
+  --app-surface-bright: #fafcff;
+  --app-surface-soft: #f8fcff;
+  --app-text: #1a3a52;
+  --app-text-muted: #5a7f9a;
+  --app-border: #c5dff0;
+  --app-accent: #0ea5e9;
+  --app-accent-soft: #e0f2fe;
+  --app-accent-mid: #bae6fd;
+  --app-blue: #2563eb;
+  --app-blue-soft: #eff6ff;
+  --app-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --app-shadow-md: 0 8px 24px rgba(15, 23, 42, 0.08);
+  --app-header-bg: linear-gradient(180deg, #ffffff 0%, #f8fcff 72%, #eef7fc 100%);
+  --app-font: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
 html {
   font-size: 14px;
 }

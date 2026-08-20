@@ -1,23 +1,23 @@
 /* Purchase Orders — modern mobile-first approval UI */
 
 :root {
-  --po-page-bg: #eef7fc;
-  --po-surface: #ffffff;
-  --po-surface-bright: #fafcff;
-  --po-text: #1a3a52;
-  --po-text-muted: #5a7f9a;
-  --po-border: #c5dff0;
-  --po-accent: #0ea5e9;
-  --po-accent-soft: #e0f2fe;
-  --po-accent-mid: #bae6fd;
-  --po-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
-  --po-shadow-md: 0 8px 24px rgba(15, 23, 42, 0.08);
+  --po-page-bg: var(--app-page-bg);
+  --po-surface: var(--app-surface);
+  --po-surface-bright: var(--app-surface-bright);
+  --po-text: var(--app-text);
+  --po-text-muted: var(--app-text-muted);
+  --po-border: var(--app-border);
+  --po-accent: var(--app-accent);
+  --po-accent-soft: var(--app-accent-soft);
+  --po-accent-mid: var(--app-accent-mid);
+  --po-shadow-sm: var(--app-shadow-sm);
+  --po-shadow-md: var(--app-shadow-md);
   --po-shadow-lg: 0 18px 48px rgba(15, 23, 42, 0.12);
   --po-radius-lg: 20px;
   --po-radius-md: 18px;
   --po-radius-pill: 999px;
-  --po-blue: #2563eb;
-  --po-blue-soft: #eff6ff;
+  --po-blue: var(--app-blue);
+  --po-blue-soft: var(--app-blue-soft);
   --po-green: #059669;
   --po-green-soft: #ecfdf5;
   --po-red: #dc2626;
@@ -38,7 +38,7 @@
   --po-touch-min: 44px;
   /* runtime-measured height of the sticky controls block */
   --po-table-wrap-head-height: 0px;
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--app-font);
 }
 
 html:has(main.po-main) {
@@ -53,7 +53,7 @@ html {
 
 body {
   margin: 0;
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--app-font);
   color: var(--po-text);
   background: var(--po-page-bg);
   -webkit-font-smoothing: antialiased;
@@ -77,7 +77,7 @@ body {
 
 /* Light hero strip: airy surface + slim brand accent */
 .po-header--hero {
-  background: linear-gradient(180deg, #ffffff 0%, #f8fcff 72%, #eef7fc 100%);
+  background: var(--app-header-bg);
 }
 
 .po-header--hero::after {
@@ -1377,14 +1377,6 @@ select.po-filter-input {
   color: #b45309;
 }
 
-/* Legacy (dl-based) review-info is no longer used; kept empty to avoid conflicts if older markup appears. */
-.review-info,
-.review-info__cell,
-.review-info__row,
-.review-info__amount {
-  all: unset;
-}
-
 .modal__note {
   margin: var(--po-space-2) 0 var(--po-space-3);
   padding: var(--po-space-3);
@@ -1645,33 +1637,6 @@ tr.items-row--xfer-bad .items-check .po-check input:focus-visible + .po-check__b
 
 .undo-toast[hidden] {
   display: none !important;
-}
-
-/* Legacy btn classes used by dynamic confirm HTML */
-
-.btn {
-  padding: 8px 12px;
-  border-radius: var(--po-radius-pill);
-  border: none;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-}
-
-.btn-primary {
-  background: var(--po-blue);
-  color: #fff;
-}
-
-.btn-secondary {
-  background: #e2e8f0;
-  color: var(--po-text);
-}
-
-.btn-sm {
-  padding: 6px 10px;
-  font-size: 0.75rem;
 }
 
 .modal__title {

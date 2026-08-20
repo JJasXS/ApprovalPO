@@ -3,8 +3,8 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #eef7fc;
-  font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  background: var(--app-page-bg);
+  font-family: var(--app-font);
 }
 
 /* ─── Header — mirrors po-header--hero ────────────────────── */
@@ -13,10 +13,10 @@
   top: 0;
   z-index: 120;
   padding: 12px 24px 20px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fcff 72%, #eef7fc 100%);
-  color: #1a3a52;
-  border-bottom: 1px solid #c5dff0;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  background: var(--app-header-bg);
+  color: var(--app-text);
+  border-bottom: 1px solid var(--app-border);
+  box-shadow: var(--app-shadow-sm);
 }
 
 /* Blue accent line at bottom of header */
@@ -54,7 +54,7 @@
 .dash-brand-icon {
   width: 20px;
   height: 20px;
-  color: #2563eb;
+  color: var(--app-blue);
   flex-shrink: 0;
 }
 
@@ -167,7 +167,7 @@
 
 /* ─── Card base ───────────────────────────────────────────── */
 .dash-card {
-  background: #ffffff;
+  background: var(--app-surface);
   border-radius: 16px;
   padding: 28px 24px 24px;
   border: 1.5px solid #e2e8f0;
@@ -220,8 +220,8 @@
 }
 
 .dash-card-icon-wrap--blue {
-  background: #eff6ff;
-  color: #2563eb;
+  background: var(--app-blue-soft);
+  color: var(--app-blue);
 }
 
 .dash-card-icon-wrap--green {
@@ -307,8 +307,8 @@
 }
 
 .dash-back-link:hover {
-  color: #2563eb;
-  background: #eff6ff;
+  color: var(--app-blue);
+  background: var(--app-blue-soft);
 }
 
 /* ─── Responsive ──────────────────────────────────────────── */

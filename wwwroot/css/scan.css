@@ -1,17 +1,17 @@
 /* ─── Scan PO Page ───────────────────────────────────────── */
 :root {
-  --scan-accent: #0ea5e9;
-  --scan-accent-soft: #e0f2fe;
-  --scan-accent-mid: #bae6fd;
+  --scan-accent: var(--app-accent);
+  --scan-accent-soft: var(--app-accent-soft);
+  --scan-accent-mid: var(--app-accent-mid);
   --scan-ice: #f0f9ff;
   --scan-ice-deep: #e8f4fc;
-  --scan-border: #c5dff0;
-  --scan-text: #1a3a52;
-  --scan-muted: #5a7f9a;
-  --scan-surface: #ffffff;
-  --scan-surface-bright: #fafcff;
-  --scan-bg: #eef7fc;
-  font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --scan-border: var(--app-border);
+  --scan-text: var(--app-text);
+  --scan-muted: var(--app-text-muted);
+  --scan-surface: var(--app-surface);
+  --scan-surface-bright: var(--app-surface-bright);
+  --scan-bg: var(--app-page-bg);
+  font-family: var(--app-font);
 }
 
 html:has(main.scan-main) { font-size: 106.25%; }
@@ -27,7 +27,7 @@ body {
 .scan-header {
   position: sticky; top: 0; z-index: 120;
   padding: 10px 16px 0;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fcff 72%, #eef7fc 100%);
+  background: var(--app-header-bg);
   border-bottom: 1px solid var(--scan-border);
   box-shadow: 0 1px 3px rgba(14, 116, 183, 0.06);
 }
