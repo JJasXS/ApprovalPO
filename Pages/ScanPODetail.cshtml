@@ -1,6 +1,8 @@
 @page "/ScanPODetail"
 @model ApprovalPO.Pages.ScanPODetailModel
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
 @{
+    var csrf = Antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
     ViewData["Title"] = Model.Order?.PoNumber ?? "PO detail";
     ViewData["AppName"] = "Approval PO";
     var userName = User.Identity?.Name ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "User";
@@ -45,11 +47,20 @@
         {
             <div class="scan-empty">
                 <p>Purchase order not found or not approved.</p>
+                <a asp-page="/ScanPO" class="scan-detail-back-btn">Back to list</a>
             </div>
         }
         else
         {
             var o = Model.Order;
+            var scanSubmitted = Model.IsScanSubmitted;
+            var today = DateTime.Today.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture);
+            <div class="scan-detail-tabs" role="tablist" aria-label="Scan PO workflow">
+                <button type="button" class="scan-detail-tab is-active" id="scanTabScan" role="tab" aria-selected="true" aria-controls="scanPanelScan">Scan</button>
+                <button type="button" class="scan-detail-tab" id="scanTabReceive" role="tab" aria-selected="false" aria-controls="scanPanelReceive">Received qty</button>
+            </div>
+
+            <div id="scanPanelScan" class="scan-detail-panel" role="tabpanel" aria-labelledby="scanTabScan">
             <div class="scan-detail-meta">
                 <div class="scan-detail-field">
                     <label>PO #</label>
@@ -59,16 +70,97 @@
                     <label>PO date</label>
                     <span>@o.OrderDate.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</span>
                 </div>
+                <div class="scan-detail-field">
+                    <label>Today's date</label>
+                    <span>@today</span>
+                </div>
                 <div class="scan-detail-field scan-detail-field--desc">
                     <label>Description</label>
-                    <span>@(string.IsNullOrWhiteSpace(o.Description) ? "—" : o.Description)</span>
+                    <span>@(string.IsNullOrWhiteSpace(o.Description) ? "â" : o.Description)</span>
+                </div>
+                <div class="scan-detail-field scan-detail-field--scan-only">
+                    @if (scanSubmitted)
+                    {
+                        <button type="button" class="scan-detail-scan-btn" id="scanDetailScanBtn" disabled>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <rect x="3" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/>
+                                <path d="M21 16h-3a2 2 0 0 0-2 2v3"/><line x1="21" y1="21" x2="21" y2="21.01"/>
+                            </svg>
+                            <span>Scan</span>
+                        </button>
+                    }
+                    else
+                    {
+                        <button type="button" class="scan-detail-scan-btn" id="scanDetailScanBtn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <rect x="3" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/>
+                                <path d="M21 16h-3a2 2 0 0 0-2 2v3"/><line x1="21" y1="21" x2="21" y2="21.01"/>
+                            </svg>
+                            <span>Scan</span>
+                        </button>
+                    }
+                </div>
+                <div class="scan-detail-field scan-detail-field--manual">
+                    <label>Item code</label>
+                    <div class="scan-manual-row">
+                        @if (scanSubmitted)
+                        {
+                            <input type="text" id="scanManualCode" class="scan-manual-input" placeholder="Type item code" autocomplete="off" enterkeyhint="go" disabled />
+                            <button type="button" class="scan-manual-btn" id="scanManualBtn" disabled>Go</button>
+                        }
+                        else
+                        {
+                            <input type="text" id="scanManualCode" class="scan-manual-input" placeholder="Type item code" autocomplete="off" enterkeyhint="go" />
+                            <button type="button" class="scan-manual-btn" id="scanManualBtn">Go</button>
+                        }
+                    </div>
                 </div>
             </div>
+            </div>
+
+            <div id="scanPanelReceive" class="scan-detail-panel" role="tabpanel" aria-labelledby="scanTabReceive" hidden>
+                <p class="scan-receive-hint">
+                    Enter the <strong>physical quantity received</strong> for each line.
+                    Scanning fills this from the label (e.g. 30); change it if you received less (e.g. 20).
+                    Goods Received is created using <strong>Received</strong> only, not PO qty.
+                </p>
+            </div>
+
+            <div id="scanDetailConfig" hidden
+                 data-doc-key="@Model.DocKey"
+                 data-po-number="@(o.PoNumber)"
+                 data-is-submitted="@(scanSubmitted ? "true" : "false")"
+                 data-require-all-lines="true"
+                 data-resolve-scan-url="@Url.Page("/ScanPODetail", null, new { handler = "ResolveScan" })"
+                 data-scan-state-url="@Url.Page("/ScanPODetail", null, new { handler = "ScanState" })"
+                 data-save-draft-url="@Url.Page("/ScanPODetail", null, new { handler = "SaveDraft" })"
+                 data-reset-scan-url="@Url.Page("/ScanPODetail", null, new { handler = "ResetScan" })"
+                 data-csrf-token="@csrf"
+                 data-submit-form-id="scanDetailSubmitForm"
+                 data-scan-counts-input-id="scanCountsJson"></div>
+
+            <div id="scanToastRoot" class="scan-toast-root" aria-live="polite"></div>
 
             <div class="scan-lines-head">
                 <p class="scan-lines-title">Line items (@Model.Lines.Count)</p>
+                <p id="scanSessionSummary" class="scan-session-summary">
+                    <span id="scanLinesProgress">0 of @Model.Lines.Count lines with received qty</span>
+                    Â· Total received: <strong id="scanSessionTotal">0</strong>
+                    <span class="scan-session-hint">Draft saves to server; submit creates Goods Received from Received qty. Clear Received to undo a line.</span>
+                </p>
+                @if (!scanSubmitted)
+                {
+                    <div class="scan-lines-actions">
+                        <button type="button" id="scanResetBtn" class="scan-reset-btn">Reset scan</button>
+                        <button type="button" id="scanUndoLastBtn" class="scan-undo-btn" hidden>Undo last scan</button>
+                    </div>
+                }
             </div>
 
+            <details class="scan-audit-panel" id="scanAuditPanel" hidden>
+                <summary>Activity log</summary>
+                <ul class="scan-audit-list" id="scanAuditList"></ul>
+            </details>
             @if (Model.Lines.Count == 0)
             {
                 <p class="scan-detail-empty-lines">No line items found.</p>
@@ -84,6 +176,7 @@
                                 <th>Description</th>
                                 <th>Project</th>
                                 <th class="num">PO qty</th>
+                                <th class="num scan-th-received">Received</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -92,24 +185,126 @@
                             {
                                 n++;
                                 var orderQty = line.Sqty != 0 ? line.Sqty : line.Qty;
-                                <tr>
+                                <tr data-line-no="@line.LineNo" data-item-code="@line.ItemCode" data-project="@line.Project" data-order-qty="@orderQty.ToString(System.Globalization.CultureInfo.InvariantCulture)">
                                     <td class="scan-line-num">@n</td>
                                     <td class="scan-line-code">@line.ItemCode</td>
                                     <td>@line.Description</td>
-                                    <td class="scan-line-project">@(string.IsNullOrWhiteSpace(line.Project) ? "—" : line.Project)</td>
+                                    <td class="scan-line-project">@(string.IsNullOrWhiteSpace(line.Project) ? "â" : line.Project)</td>
                                     <td class="num scan-line-order-qty">@orderQty.ToString("N2")</td>
+                                    <td class="num scan-line-status">
+                                        @if (scanSubmitted)
+                                        {
+                                            <span class="scan-received-readonly" data-received-display></span>
+                                        }
+                                        else
+                                        {
+                                            <input type="number" class="scan-received-input" min="0" step="0.01" inputmode="decimal" placeholder="0" aria-label="Quantity received for @line.ItemCode" />
+                                        }
+                                    </td>
                                 </tr>
                             }
                         </tbody>
                     </table>
                 </div>
             }
+
+            @if (TempData["ScanSubmitError"] is string submitError && !string.IsNullOrWhiteSpace(submitError))
+            {
+                <p class="scan-flash scan-flash--error" role="alert">@submitError</p>
+            }
+
+            <div class="scan-detail-actions">
+                <a asp-page="/ScanPO" class="scan-detail-back-btn">&#8592; Back to list</a>
+                @if (!scanSubmitted)
+                {
+                    <form method="post" asp-page="/ScanPODetail" asp-page-handler="Submit" class="scan-detail-submit-form" id="scanDetailSubmitForm">
+                        <input type="hidden" name="docKey" value="@Model.DocKey" />
+                        <input type="hidden" name="scanCountsJson" id="scanCountsJson" value="" />
+                        <button type="submit" class="scan-detail-submit-btn" id="scanDetailSubmitBtn">Submit</button>
+                    </form>
+                }
+                else
+                {
+                    <form method="post" asp-page="/ScanPODetail" asp-page-handler="Reopen" class="scan-detail-reopen-form" id="scanDetailReopenForm">
+                        <input type="hidden" name="docKey" value="@Model.DocKey" />
+                        <button type="submit" class="scan-detail-reopen-btn">Reopen for scanning</button>
+                    </form>
+                }
+            </div>
         }
     </div>
 </main>
 
+<div id="qrOverlay" class="qr-overlay">
+    <div class="qr-box">
+        <video id="qrVideo" class="qr-video" autoplay muted playsinline></video>
+        <canvas id="qrCanvas" class="qr-canvas"></canvas>
+        <div class="qr-guide"></div>
+        <div class="qr-guide-b"></div>
+        <div class="qr-scan-line"></div>
+    </div>
+    <div id="qrCameraHelp" class="qr-camera-help" hidden>
+        <p class="qr-camera-help-title">Camera blocked</p>
+        <p class="qr-camera-help-lead"><strong>This app cannot reset camera permission.</strong> Only your browser or phone settings can. Use <strong>Take photo</strong> below, or change permission manually.</p>
+        <div class="qr-camera-help-actions">
+            <button type="button" id="qrUsePhotoBtn" class="qr-retry-camera-btn">Take photo of QR</button>
+            <button type="button" id="qrRetryCameraBtn" class="qr-use-photo-btn" hidden>Try live camera again</button>
+        </div>
+        <p id="qrCameraPermState" class="qr-camera-perm-state" hidden></p>
+        <p class="qr-camera-help-sub">Reset in browser (pick yours):</p>
+        <details class="qr-camera-help-details" open>
+            <summary>Phone â Chrome / Edge</summary>
+            <ol class="qr-camera-help-steps">
+                <li>Tap <strong>â®</strong> (menu) â <strong>Settings</strong> â <strong>Site settings</strong> â <strong>Camera</strong> â remove block for this site, or set <strong>Ask</strong>.</li>
+                <li>Or: <strong>â®</strong> â <strong>Info</strong> / lock icon on the page â <strong>Permissions</strong> â <strong>Camera</strong> â <strong>Allow</strong>.</li>
+                <li>Close this tab, open the scan page again, tap <strong>Scan</strong>.</li>
+            </ol>
+        </details>
+        <details class="qr-camera-help-details">
+            <summary>iPhone â Safari</summary>
+            <ol class="qr-camera-help-steps">
+                <li><strong>Settings</strong> â <strong>Safari</strong> â <strong>Camera</strong> â <strong>Ask</strong> or <strong>Allow</strong>.</li>
+                <li>Or on the page: <strong>aA</strong> in the address bar â <strong>Website Settings</strong> â <strong>Camera</strong> â <strong>Allow</strong>.</li>
+                <li>Reload the page, then tap <strong>Scan</strong>.</li>
+            </ol>
+        </details>
+        <details class="qr-camera-help-details">
+            <summary>PC â Chrome / Edge</summary>
+            <ol class="qr-camera-help-steps">
+                <li>Click the <strong>lock</strong> left of the address â <strong>Site settings</strong>.</li>
+                <li>Find <strong>Camera</strong> â <strong>Allow</strong> (or <strong>Reset permission</strong>, then reload).</li>
+                <li>Reload, then tap <strong>Scan</strong>. Use <strong>https://â¦</strong> (HTTPS port) for live camera.</li>
+            </ol>
+        </details>
+    </div>
+    <div id="qrPhotoPanel" class="qr-photo-panel" hidden>
+        <p class="qr-photo-hint" id="qrPhotoHint">Using HTTP â live camera needs HTTPS. Take a photo of the QR, or open <strong id="qrHttpsLink"></strong></p>
+        <button type="button" id="qrPhotoBtn" class="qr-photo-btn">Take photo</button>
+        <input type="file" id="qrPhotoInput" accept="image/*" capture="environment" hidden />
+    </div>
+    <div class="qr-toolbar" id="qrToolbar">
+        <button type="button" id="qrTorchBtn" class="qr-tool-btn" hidden aria-label="Toggle flashlight">Light</button>
+        <button type="button" id="qrPhotoFallbackBtn" class="qr-tool-btn">Photo</button>
+    </div>
+    <p id="qrStatus" class="qr-status">Hold QR inside the frame. Move closer if it does not scan.</p>
+    <button id="qrCloseBtn" class="qr-close-btn" type="button">Cancel</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="~/js/scan-qr-scanner.js" asp-append-version="true"></script>
+<script src="~/js/scan-resolve.js" asp-append-version="true"></script>
+<script src="~/js/scan-po-detail.js" asp-append-version="true"></script>
 <script>
     (function () {
+        var link = document.getElementById('qrHttpsLink');
+        if (link && !window.isSecureContext) {
+            var host = location.hostname || 'localhost';
+            var httpsMeta = document.querySelector('meta[name="approval-https-port"]');
+            var httpsPort = (httpsMeta && httpsMeta.content) ? httpsMeta.content : '2096';
+            var url = 'https://' + host + ':' + httpsPort + location.pathname + location.search;
+            link.textContent = url;
+            link.style.wordBreak = 'break-all';
+        }
         var btn = document.getElementById('scanMenuBtn');
         var panel = document.getElementById('scanMenuPanel');
         if (!btn || !panel) return;
@@ -119,9 +314,6 @@
             panel.hidden = open;
             btn.setAttribute('aria-expanded', String(!open));
         });
-        document.addEventListener('click', function () {
-            panel.hidden = true;
-            btn.setAttribute('aria-expanded', 'false');
-        });
+        document.addEventListener('click', function () { panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); });
     })();
 </script>
