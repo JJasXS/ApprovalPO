@@ -67,7 +67,13 @@
     return n;
   };
 
-  const projectNorm = (s) => String(s ?? '').trim().replace(/\s+/g, '');
+  const projectNorm = (s) => {
+    const t = String(s ?? '').trim().replace(/\s+/g, '');
+    // SQL Accounting empty-project placeholders (e.g. PH_PODTL.PROJECT = '----')
+    if (!t || t === '-' || t === '----' || t === '—' || t === '–' || t === '―')
+      return '';
+    return t;
+  };
 
   const projectMatches = (rowProject, scanProject) => {
     const a = projectNorm(rowProject);
@@ -834,6 +840,56 @@
       e.preventDefault();
       runManual();
     }
+  });
+
+  // RFID / barcode guns usually act as a keyboard wedge and may type while
+  // focus is not on #scanManualCode. Capture rapid key bursts page-wide.
+  const isWedgeTypingField = (el) => {
+    if (!el || el === document.body) return false;
+    if (el.isContentEditable) return true;
+    const tag = (el.tagName || '').toUpperCase();
+    if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
+    if (tag !== 'INPUT') return false;
+    const type = String(el.type || 'text').toLowerCase();
+    if (['checkbox', 'radio', 'button', 'submit', 'reset', 'file', 'hidden', 'image'].includes(type))
+      return false;
+    // Manual item field and Received qty have their own handlers.
+    if (el.id === 'scanManualCode' || el.classList.contains('scan-manual-input'))
+      return true;
+    if (el.classList.contains('scan-received-input'))
+      return true;
+    return true;
+  };
+
+  let wedgeBuf = '';
+  let wedgeTimer = null;
+  const WEDGE_IDLE_MS = 70;
+
+  const flushWedgeBuffer = () => {
+    clearTimeout(wedgeTimer);
+    wedgeTimer = null;
+    const text = wedgeBuf.trim();
+    wedgeBuf = '';
+    if (readOnly || text.length < 3) return;
+    void processScan(text);
+  };
+
+  document.addEventListener('keydown', (e) => {
+    if (readOnly) return;
+    if (isWedgeTypingField(e.target)) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      if (!wedgeBuf.trim()) return;
+      e.preventDefault();
+      flushWedgeBuffer();
+      return;
+    }
+
+    if (e.key.length !== 1) return;
+    wedgeBuf += e.key;
+    clearTimeout(wedgeTimer);
+    wedgeTimer = setTimeout(flushWedgeBuffer, WEDGE_IDLE_MS);
   });
 
   undoBtn?.addEventListener('click', () => undoLastScan());

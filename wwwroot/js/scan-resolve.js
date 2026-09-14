@@ -148,7 +148,10 @@
   }
 
   function projectNorm(s) {
-    return String(s ?? '').trim().replace(/\s+/g, '');
+    const t = String(s ?? '').trim().replace(/\s+/g, '');
+    if (!t || t === '-' || t === '----' || t === '—' || t === '–' || t === '―')
+      return '';
+    return t;
   }
 
   function cacheKey(url, knownCodes) {

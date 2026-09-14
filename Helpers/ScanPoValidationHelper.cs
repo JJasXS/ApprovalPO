@@ -28,7 +28,11 @@ public static class ScanPoValidationHelper
     {
         if (string.IsNullOrWhiteSpace(value))
             return "";
-        return new string(value.Trim().Where(c => !char.IsWhiteSpace(c)).ToArray());
+        var t = new string(value.Trim().Where(c => !char.IsWhiteSpace(c)).ToArray());
+        // SQL Accounting empty-project placeholders (e.g. PH_PODTL.PROJECT = '----')
+        if (t is "-" or "----" or "—" or "–" or "―")
+            return "";
+        return t;
     }
 
     public static PurchaseRequestLineRow? MatchPoLine(
@@ -57,6 +61,13 @@ public static class ScanPoValidationHelper
             return matched;
         }
 
+        // Plain RFID / item-code scan (no project): match lines with blank/placeholder project.
+        var noProject = candidates
+            .Where(l => NormalizeProject(l.Project).Length == 0)
+            .OrderBy(l => l.LineNo)
+            .ToList();
+        if (noProject.Count >= 1)
+            return noProject[0];
         return candidates.Count == 1 ? candidates[0] : null;
     }
 
