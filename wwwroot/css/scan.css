@@ -674,6 +674,42 @@ body {
   background: #fff;
 }
 
+@media (max-width: 720px) {
+  .scan-lines-table--handheld .scan-col-desc,
+  .scan-lines-table--handheld .scan-col-project {
+    display: none;
+  }
+
+  .scan-lines-table--handheld .scan-line-code-short {
+    display: inline;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    word-break: normal;
+  }
+  .scan-lines-table--handheld .scan-line-code-full {
+    display: none;
+  }
+
+  .scan-lines-table--handheld .scan-received-input {
+    width: 5.25rem;
+    height: 44px;
+    font-size: 16px;
+    border-width: 2px;
+  }
+
+  .scan-lines-table--handheld tr.scan-line-received .scan-received-input {
+    border-color: #22c55e;
+    background: #dcfce7;
+  }
+
+  .scan-status-bar {
+    top: 48px;
+    font-size: 16px;
+    padding: 14px 14px;
+  }
+}
+
 .scan-received-input:focus {
   outline: none;
   border-color: #38bdf8;
@@ -942,6 +978,63 @@ body {
   gap: 8px 16px;
   margin-bottom: 10px;
 }
+
+/* Sticky RFID / scan status for handheld guns */
+.scan-status-bar {
+  position: sticky;
+  top: 52px;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #7dd3fc;
+  background: #f0f9ff;
+  color: #0c4a6e;
+  font-size: 15px;
+  font-weight: 600;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
+}
+.scan-status-bar-main { flex: 1; min-width: 0; }
+.scan-status-bar-meta {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  opacity: 0.9;
+}
+.scan-status-bar[data-state="ok"] {
+  border-color: #86efac;
+  background: #ecfdf5;
+  color: #14532d;
+}
+.scan-status-bar[data-state="already"] {
+  border-color: #fcd34d;
+  background: #fffbeb;
+  color: #92400e;
+}
+.scan-status-bar[data-state="error"] {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #991b1b;
+}
+.scan-status-bar[data-state="done"] {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
+}
+
+.scan-line-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  word-break: break-all;
+}
+.scan-line-code-short { display: none; }
+.scan-line-code-full { display: inline; }
+
 .scan-session-summary {
   margin: 0;
   font-size: 13px;

@@ -30,6 +30,10 @@
   const reopenForm = document.getElementById('scanDetailReopenForm');
   const toastRoot = document.getElementById('scanToastRoot');
   const linesTableBody = document.querySelector('.scan-lines-table tbody');
+  const statusBar = document.getElementById('scanStatusBar');
+  const statusMain = document.getElementById('scanStatusMain');
+  const statusMeta = document.getElementById('scanStatusMeta');
+  let statusResetTimer = null;
 
   if (docKey && typeof ScanResolve.clearCachedForDoc === 'function') {
     ScanResolve.clearCachedForDoc(docKey);
@@ -104,6 +108,94 @@
     return candidates.find((r) => receivedQty(r) === 0) || candidates[0];
   };
 
+  const shortCode = (code) => {
+    const c = String(code || '').trim();
+    if (c.length <= 16) return c;
+    return '…' + c.slice(-8);
+  };
+
+  const remainingLines = () =>
+    lineRows().filter((row) => {
+      const po = orderQty(row);
+      const got = receivedQty(row);
+      if (po > 0) return got < po;
+      return got <= 0;
+    }).length;
+
+  const scrollRowIntoView = (row) => {
+    if (!row || typeof row.scrollIntoView !== 'function') return;
+    try {
+      row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    } catch (_) {
+      row.scrollIntoView(false);
+    }
+  };
+
+  const setStatusBar = (state, mainText, metaText) => {
+    if (!statusBar) return;
+    statusBar.dataset.state = state || 'ready';
+    if (statusMain) statusMain.textContent = mainText || 'Ready to scan';
+    if (statusMeta) statusMeta.textContent = metaText ?? `${remainingLines()} remaining`;
+    clearTimeout(statusResetTimer);
+    if (state && state !== 'ready') {
+      statusResetTimer = setTimeout(() => {
+        if (readOnly) return;
+        setStatusBar('ready', 'Ready to scan', `${remainingLines()} remaining`);
+      }, 2200);
+    }
+  };
+
+  const playAlreadyFeedback = () => {
+    try {
+      if (navigator.vibrate) navigator.vibrate([20, 40, 20]);
+    } catch (_) { /* ignore */ }
+  };
+
+  const lineAlreadyComplete = (row) => {
+    const po = orderQty(row);
+    const got = receivedQty(row);
+    if (po > 0) return got >= po;
+    return got > 0;
+  };
+
+  /** Apply a matched PO line: green Received, or soft Already received. */
+  const confirmLineMatch = (row, code, qtyRaw, opts = {}) => {
+    if (!row) return { ok: false };
+    const display = shortCode(code || row.dataset.itemCode || '');
+    scrollRowIntoView(row);
+
+    if (lineAlreadyComplete(row)) {
+      if (!opts.silent && !opts.fromQueue) {
+        showToast(`Already received: ${display}`, 'warn');
+        playAlreadyFeedback();
+        setStatusBar('already', 'Already received', display);
+      }
+      return { ok: true, already: true, row, qty: receivedQty(row) };
+    }
+
+    const qty =
+      qtyRaw != null && Number(qtyRaw) > 0
+        ? normalizeReceived(row, Number(qtyRaw))
+        : orderQty(row) || 1;
+
+    setReceivedQty(row, qty, {
+      noFeedback: opts.fromQueue || opts.noFeedback,
+      skipHistory: opts.fromQueue || opts.skipHistory,
+      quietFlash: opts.quietFlash,
+    });
+    scrollRowIntoView(row);
+
+    if (!opts.silent && !opts.fromQueue) {
+      const proj = projectNorm(row.dataset.project || opts.project || '');
+      const locPart = proj ? ` @ ${proj}` : '';
+      showToast(`Matched: ${display}${locPart} — received ${qty}`, 'ok');
+      setStatusBar('ok', `Received ${qty}`, display);
+    } else {
+      setStatusBar('ready', 'Ready to scan', `${remainingLines()} remaining`);
+    }
+    return { ok: true, already: false, row, qty };
+  };
+
   const setReceivedQty = (row, rawQty, opts = {}) => {
     if (readOnly || !row) return 0;
     const key = lineKey(row);
@@ -127,14 +219,14 @@
     scheduleDraftSave();
     syncRowVisuals(row);
 
-    if (!opts.quietFlash && n > 0) {
+    if (!opts.quietFlash && n > 0 && n !== prev) {
       row.classList.remove('scan-line-match-flash');
       void row.offsetWidth;
       row.classList.add('scan-line-match-flash');
       setTimeout(() => row.classList.remove('scan-line-match-flash'), 900);
     }
 
-    if (!opts.noFeedback && n > 0) playMatchFeedback();
+    if (!opts.noFeedback && n > 0 && n !== prev) playMatchFeedback();
     updateProgress();
     return n;
   };
@@ -146,20 +238,19 @@
     const row = pickScanRow(local.itemCode, proj, null);
     if (!row) return false;
 
-    const qtyRaw = local.quantity;
-    const qty =
-      qtyRaw != null && Number(qtyRaw) > 0
-        ? normalizeReceived(row, Number(qtyRaw))
-        : orderQty(row) || 1;
-    setReceivedQty(row, qty, { noFeedback: true, skipHistory: opts.fromQueue, ...opts });
-    return { row, qty, proj };
+    const result = confirmLineMatch(row, local.itemCode, local.quantity, {
+      ...opts,
+      project: proj,
+      silent: true,
+      noFeedback: true,
+    });
+    return result.ok ? { row, qty: result.qty, proj } : false;
   };
 
   const tryLocalBarcodeScan = (raw, opts = {}) => {
     const trimmed = String(raw || '').trim();
     if (!trimmed.includes(';')) return null;
 
-    const parseAll = ScanResolve.parseSemicolonPayloadAll || ScanResolve.parseSemicolonPayload;
     const allParsed = typeof ScanResolve.parseSemicolonPayloadAll === 'function'
       ? ScanResolve.parseSemicolonPayloadAll(trimmed, knownItemCodes())
       : [ScanResolve.parseSemicolonPayload(trimmed, knownItemCodes())].filter(Boolean);
@@ -175,6 +266,7 @@
       if (hits.length > 0) {
         if (!opts.silent && !opts.fromQueue) {
           showToast(`Matched ${hits.length} PO line(s) from QR`, 'ok');
+          setStatusBar('ok', `Matched ${hits.length}`, `${remainingLines()} remaining`);
         }
         return { handled: true, ok: true };
       }
@@ -196,23 +288,16 @@
     const row = pickScanRow(local.itemCode, proj, null);
     if (!row) {
       if (!opts.silent) {
-        showScanError('not_on_po', `${local.itemCode} @ ${proj} is not on this PO.`);
+        showScanError('not_on_po', `${shortCode(local.itemCode)} @ ${proj} is not on this PO.`);
       }
       return { handled: true, ok: false };
     }
 
-    const qtyRaw = local.quantity;
-    const qty =
-      qtyRaw != null && Number(qtyRaw) > 0
-        ? normalizeReceived(row, Number(qtyRaw))
-        : orderQty(row) || 1;
-    setReceivedQty(row, qty, { noFeedback: opts.fromQueue, ...opts });
-    if (!opts.silent && !opts.fromQueue) {
-      const displayProj = (row.dataset.project || proj || '').trim();
-      const locPart = displayProj ? ` @ ${displayProj}` : '';
-      showToast(`Matched: ${local.itemCode}${locPart} — received ${qty}`, 'ok');
-    }
-    return { handled: true, ok: true };
+    const result = confirmLineMatch(row, local.itemCode, local.quantity, {
+      ...opts,
+      project: proj,
+    });
+    return { handled: true, ok: result.ok };
   };
 
   const knownItemCodes = () =>
@@ -306,6 +391,8 @@
       case 'need_project':
         return d || 'This item appears on multiple project lines. Scan a QR that includes P1, P2, etc.';
       case 'not_on_po':
+        if (/^[A-Fa-f0-9]{16,}$/i.test(d))
+          return `Item ${shortCode(d)} is not on this purchase order.`;
         return d || 'That item / project is not on this purchase order.';
       case 'wrong_po':
         return d || 'This QR belongs to a different purchase order. Open the correct PO and scan again.';
@@ -322,6 +409,15 @@
 
   const showScanError = (code, detail) => {
     showToast(messageForScanError(code, detail), 'error');
+    const label =
+      code === 'not_on_po'
+        ? 'Not on PO'
+        : code === 'need_project'
+          ? 'Need project'
+          : code === 'already_submitted'
+            ? 'Submitted'
+            : 'Scan error';
+    setStatusBar('error', label, shortCode(detail) || `${remainingLines()} remaining`);
   };
 
   const playMatchFeedback = () => {
@@ -525,6 +621,15 @@
     if (linesProgressEl) {
       linesProgressEl.textContent =
         total > 0 ? `${withScan} of ${total} lines with received qty` : '';
+    }
+    if (statusBar && (!statusBar.dataset.state || statusBar.dataset.state === 'ready')) {
+      setStatusBar(
+        readOnly ? 'done' : 'ready',
+        readOnly ? 'Submitted' : 'Ready to scan',
+        `${remainingLines()} remaining`
+      );
+    } else if (statusMeta && statusBar?.dataset.state === 'ready') {
+      statusMeta.textContent = `${remainingLines()} remaining`;
     }
     updateUndoButton();
     updateScanButton();
@@ -750,17 +855,11 @@
         : null;
       if (localRow) {
         const qtyRaw = local.quantity ?? resolved.scanQuantity ?? resolved.ScanQuantity;
-        const qty =
-          qtyRaw != null && Number(qtyRaw) > 0
-            ? normalizeReceived(localRow, Number(qtyRaw))
-            : orderQty(localRow) || 1;
-        setReceivedQty(localRow, qty, { noFeedback: opts.fromQueue });
-        if (!opts.silent && !opts.fromQueue) {
-          const proj = (localRow.dataset.project || localProject || '').trim();
-          const locPart = proj ? ` @ ${proj}` : '';
-          showToast(`Matched: ${local.itemCode}${locPart} — received ${qty}`, 'ok');
-        }
-        return true;
+        const result = confirmLineMatch(localRow, local.itemCode, qtyRaw, {
+          ...opts,
+          project: localProject,
+        });
+        return result.ok;
       }
       if (!opts.silent) {
         showScanError(classifyResolveError(resolved), err);
@@ -786,17 +885,11 @@
     let matchRow = pickScanRow(code, scanProject, lineNo);
     if (matchRow) {
       const qtyRaw = resolved.scanQuantity ?? resolved.ScanQuantity;
-      const qty =
-        qtyRaw != null && Number(qtyRaw) > 0
-          ? normalizeReceived(matchRow, Number(qtyRaw))
-          : orderQty(matchRow) || 1;
-      setReceivedQty(matchRow, qty, { noFeedback: opts.fromQueue });
-      if (!opts.silent && !opts.fromQueue) {
-        const proj = (matchRow.dataset.project || scanProject || '').trim();
-        const locPart = proj ? ` @ ${proj}` : '';
-        showToast(`Matched: ${code}${locPart} — received ${qty}`, 'ok');
-      }
-      return true;
+      const result = confirmLineMatch(matchRow, code, qtyRaw, {
+        ...opts,
+        project: scanProject,
+      });
+      return result.ok;
     }
 
     if (!opts.silent) showScanError('not_on_po', err || code);
