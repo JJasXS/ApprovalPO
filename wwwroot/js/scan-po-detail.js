@@ -281,7 +281,7 @@
     } catch (_) {
       try { manualInput.focus(); } catch (__) { /* ignore */ }
     }
-    try { manualInput.select(); } catch (_) { /* ignore */ }
+    // Do not select() — that races HID keystrokes and drops RFID characters.
   };
 
   const scheduleManualCaptureFocus = () => {
@@ -305,15 +305,21 @@
     manualInput.value = '';
   };
 
-  const isLikelyIncompleteEpc = (text) => {
+  /** True only when idle flush is safe (complete EPC / multi dump). Never mid-stream. */
+  const isBufferCompleteForIdleFlush = (text) => {
     const t = String(text || '').trim();
-    if (!t || /[\s,|]/.test(t) || t.includes(';')) return false;
-    // Mid-stream hex EPC (typical 24) — wait for more keystrokes before flush.
-    if (/^[A-Fa-f0-9]+$/.test(t) && t.length < 24) return true;
-    return false;
+    if (t.length < 3) return false;
+    if (t.includes(';') || /[\s,|]/.test(t)) return true;
+    if (/^[A-Fa-f0-9]+$/.test(t)) {
+      // Complete single EPC (24) or glued multiples of 24.
+      return t.length >= 24 && t.length % 24 === 0;
+    }
+    // Non-hex stock codes: require a pause after a substantial token (Enter is preferred).
+    return t.length >= 8;
   };
 
-  // Declared early; assigned after enqueueWedgeCodes exists.
+  // Declared early; assigned after processScan / enqueueWedgeCodes exist.
+  let processManualCodes = async (_raw) => false;
   let enqueueWedgeCodes = (_raw) => {};
 
   const flushManualCapture = (opts) => {
@@ -322,9 +328,10 @@
     captureIdleTimer = null;
     if (!manualInput) return;
     const text = String(manualInput.value || '').trim();
-    // Always wait out mid-EPC typing (continuous Item code path).
-    if (!force && isLikelyIncompleteEpc(text)) {
-      captureIdleTimer = setTimeout(() => flushManualCapture({ force: true }), WEDGE_IDLE_ARMED_MS);
+    // Never flush truncated hex EPCs — wait for more keystrokes or Enter.
+    if (!force && !isBufferCompleteForIdleFlush(text)) return;
+    if (force && /^[A-Fa-f0-9]+$/.test(text) && text.length < 24 && !/[\s,|;]/.test(text)) {
+      wedgeDebugLog(`manual skip truncated hex (${text.length}): ${text}`);
       return;
     }
     manualInput.value = '';
@@ -338,18 +345,8 @@
       ? ScanResolve.splitInventoryCodes(text)
       : [text];
     wedgeDebugLog(`manual flush "${text}" → ${lastWedgeCodes.length} code(s)`);
-    if (lastWedgeCodes.length === 1) {
-      wedgeDebugLog(
-        'hint: 1 code this burst — enable gun multi-tag/inventory mode for many EPCs per trigger'
-      );
-    }
     refreshWedgeDebug();
-    enqueueWedgeCodes(text);
-    // Keep caret in Item code so the next tag can land immediately.
-    if (inventoryArmed) scheduleManualCaptureFocus();
-    else if (document.activeElement === manualInput) {
-      try { manualInput.focus(); } catch (_) { /* ignore */ }
-    }
+    void processManualCodes(text);
   };
 
   const setInventoryArmed = (armed, opts = {}) => {
@@ -1132,6 +1129,53 @@
     return false;
   };
 
+  /** Item code path: split multi dumps, processScan each (restores working RFID), keep focus. */
+  processManualCodes = async (raw) => {
+    const parts = typeof ScanResolve.splitInventoryCodes === 'function'
+      ? ScanResolve.splitInventoryCodes(raw)
+      : [String(raw || '').trim()].filter(Boolean);
+    if (!parts.length) return false;
+
+    const multi = parts.length > 1;
+    let matched = 0;
+    let missed = 0;
+    for (const code of parts) {
+      const ok = await processScan(code, {
+        silent: multi,
+        noFeedback: multi,
+        quietFlash: true,
+      });
+      if (ok) matched += 1;
+      else {
+        missed += 1;
+        if (multi) addUnmatchedCodes([code]);
+      }
+    }
+
+    if (manualInput) manualInput.value = '';
+    if (inventoryArmed) scheduleManualCaptureFocus();
+    else {
+      try { manualInput?.focus(); } catch (_) { /* ignore */ }
+    }
+
+    if (multi) {
+      if (matched > 0) {
+        showToast(
+          `Matched ${matched} tag(s)` + (missed ? `, ${missed} not on PO` : ''),
+          missed ? 'warn' : 'ok'
+        );
+      } else if (missed > 0) {
+        showToast(`${missed} tag(s) not on this PO`, 'warn');
+      }
+    }
+
+    if (inventoryArmed) {
+      clearTimeout(statusResetTimer);
+      statusResetTimer = setTimeout(() => refreshIdleStatusBar(), 1200);
+    }
+    return matched > 0;
+  };
+
   const qr = typeof ScanQrScanner !== 'undefined'
     ? ScanQrScanner.create({
         closeOnDetect: true,
@@ -1160,8 +1204,11 @@
       showToast(inventoryArmed ? 'Scan a tag into Item code.' : 'Enter an item code.', 'warn');
       return;
     }
-    // Always continuous multi-code path (split + batch + keep going).
-    flushManualCapture({ force: true });
+    // Primary path that worked before: Enter/Go → processScan (multi-split when needed).
+    clearTimeout(captureIdleTimer);
+    captureIdleTimer = null;
+    if (manualInput) manualInput.value = '';
+    void processManualCodes(text);
   };
 
   manualBtn?.addEventListener('click', runManual);
@@ -1175,6 +1222,9 @@
     if (readOnly) return;
     refreshWedgeDebug();
     clearTimeout(captureIdleTimer);
+    const text = String(manualInput?.value || '').trim();
+    // Idle flush only when buffer looks complete — never mid-EPC.
+    if (!isBufferCompleteForIdleFlush(text)) return;
     captureIdleTimer = setTimeout(() => flushManualCapture(), wedgeIdleMs());
   });
   manualInput?.addEventListener('blur', () => {
@@ -1277,6 +1327,12 @@
 
       const hit = matchOneInventoryCode(code);
       if (hit.missed) {
+        // Fall back to full processScan (API resolve) — restores pre-batch reliability.
+        const ok = await processScan(code, { silent: true, noFeedback: true, quietFlash: true });
+        if (ok) {
+          matched += 1;
+          continue;
+        }
         missed += 1;
         missedCodes.push(code);
         continue;
@@ -1380,9 +1436,10 @@
     clearTimeout(wedgeTimer);
     wedgeTimer = null;
     const text = wedgeBuf.trim();
-    if (!force && inventoryArmed && isLikelyIncompleteEpc(text)) {
-      wedgeTimer = setTimeout(() => flushWedgeBuffer({ force: true }), WEDGE_IDLE_ARMED_MS);
-      return;
+    // Idle: only flush complete buffers. Enter/Tab force still allowed.
+    if (!force && !isBufferCompleteForIdleFlush(text)) return;
+    if (force && /^[A-Fa-f0-9]+$/.test(text) && text.length < 24 && !/[\s,|;]/.test(text)) {
+      // Enter on truncated hex is still worth trying via processScan path in batch fallback.
     }
     wedgeBuf = '';
     refreshWedgeDebug();
@@ -1393,11 +1450,6 @@
     lastWedgeFlush = text;
     lastWedgeCodes = splitWedgeCodes(text);
     wedgeDebugLog(`flush "${text}" → ${lastWedgeCodes.length} code(s)`);
-    if (inventoryArmed && lastWedgeCodes.length === 1) {
-      wedgeDebugLog(
-        'hint: 1 code this burst — enable gun multi-tag/inventory mode for many EPCs per trigger'
-      );
-    }
     refreshWedgeDebug();
     enqueueWedgeCodes(text);
   };
