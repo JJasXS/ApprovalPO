@@ -282,6 +282,49 @@
     return codesEqual(scannedCode, rowCode);
   }
 
+  /** Typical UHF EPC hex length when used as ST_ITEM / item code. */
+  const EPC_HEX_LEN = 24;
+
+  function expandGluedHexEpcs(token) {
+    const t = String(token || '').trim();
+    if (!t) return [];
+    if (/^[A-Fa-f0-9]{48,}$/.test(t) && t.length % EPC_HEX_LEN === 0) {
+      const parts = [];
+      for (let i = 0; i < t.length; i += EPC_HEX_LEN)
+        parts.push(t.slice(i, i + EPC_HEX_LEN));
+      return parts;
+    }
+    return [t];
+  }
+
+  /**
+   * Split a HID wedge dump into discrete inventory codes.
+   * QR semicolon payloads stay as a single string for existing parsers.
+   * Supports newline/comma/pipe/space separators and glued 24-char hex EPCs.
+   */
+  function splitInventoryCodes(raw) {
+    const text = String(raw || '').trim();
+    if (!text) return [];
+    if (text.includes(';')) return [text];
+
+    const tokens = text.split(/[\s,|]+/).map((s) => s.trim()).filter(Boolean);
+    const expanded = [];
+    for (const token of tokens) {
+      for (const part of expandGluedHexEpcs(token))
+        expanded.push(part);
+    }
+
+    const seen = new Set();
+    const out = [];
+    for (const code of expanded) {
+      const key = code.toUpperCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(code);
+    }
+    return out;
+  }
+
   const sourceLabel = (source) => {
     const map = {
       'semicolon-format': 'barcode fields',
@@ -303,6 +346,7 @@
     parseSemicolonPayload,
     parseSemicolonPayloadAll,
     splitBarcodeLines,
+    splitInventoryCodes,
     codesEqual,
     codesMatch,
     sourceLabel,

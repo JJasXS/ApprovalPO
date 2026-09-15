@@ -935,8 +935,9 @@
     }
   });
 
-  // RFID / barcode guns usually act as a keyboard wedge and may type while
-  // focus is not on #scanManualCode. Capture rapid key bursts page-wide.
+  // RFID / barcode guns: HID keyboard wedge only (no RFID SDK in this app).
+  // Gun model / inventory profile is firmware-side and not configured here.
+  // Multi-tag: wedge batch-split — coalesce rapid Enter dumps, then match each EPC.
   const isWedgeTypingField = (el) => {
     if (!el || el === document.body) return false;
     if (el.isContentEditable) return true;
@@ -956,7 +957,115 @@
 
   let wedgeBuf = '';
   let wedgeTimer = null;
+  let batchCodes = [];
+  let batchTimer = null;
+  // Assemble one HID burst (one EPC typing stream).
   const WEDGE_IDLE_MS = 70;
+  // After each code/Enter, wait briefly for more inventory tags from the same trigger.
+  const BATCH_IDLE_MS = 280;
+
+  const splitWedgeCodes = (raw) => {
+    if (typeof ScanResolve.splitInventoryCodes === 'function')
+      return ScanResolve.splitInventoryCodes(raw);
+    const t = String(raw || '').trim();
+    return t ? [t] : [];
+  };
+
+  const matchOneInventoryCode = (code) => {
+    const row = pickScanRow(code, '', null);
+    if (!row) return { ok: false, missed: true, code };
+    const result = confirmLineMatch(row, code, null, {
+      silent: true,
+      noFeedback: true,
+      quietFlash: true,
+    });
+    return {
+      ok: result.ok,
+      already: !!result.already,
+      missed: false,
+      row: result.row,
+      code,
+    };
+  };
+
+  const processInventoryBatch = async (codes) => {
+    if (!codes.length) return false;
+    if (codes.length === 1) return processScan(codes[0]);
+
+    let matched = 0;
+    let already = 0;
+    let missed = 0;
+    let lastRow = null;
+
+    for (const code of codes) {
+      if (code.includes(';') || (typeof ScanResolve.isUrl === 'function' && ScanResolve.isUrl(code))) {
+        const ok = await processScan(code, { silent: true, noFeedback: true });
+        if (ok) matched += 1;
+        else missed += 1;
+        continue;
+      }
+
+      const hit = matchOneInventoryCode(code);
+      if (hit.missed) {
+        missed += 1;
+        continue;
+      }
+      if (hit.already) already += 1;
+      else if (hit.ok) {
+        matched += 1;
+        lastRow = hit.row;
+      }
+    }
+
+    if (lastRow) scrollRowIntoView(lastRow);
+
+    if (matched > 0) {
+      playMatchFeedback();
+      showToast(
+        `Matched ${matched} tag(s)` +
+          (already ? `, ${already} already received` : '') +
+          (missed ? `, ${missed} not on PO` : ''),
+        missed ? 'warn' : 'ok'
+      );
+      setStatusBar('ok', `Matched ${matched}`, `${remainingLines()} remaining`);
+      return true;
+    }
+
+    if (already > 0 && missed === 0) {
+      playAlreadyFeedback();
+      showToast(`Already received (${already})`, 'warn');
+      setStatusBar('already', 'Already received', `${remainingLines()} remaining`);
+      return true;
+    }
+
+    showScanError('not_on_po', missed ? `${missed} tag(s) not on this PO` : 'No tags matched');
+    return false;
+  };
+
+  const flushInventoryBatch = () => {
+    clearTimeout(batchTimer);
+    batchTimer = null;
+    const pending = batchCodes.splice(0, batchCodes.length);
+    if (readOnly || !pending.length) return;
+    const seen = new Set();
+    const codes = [];
+    for (const code of pending) {
+      const key = String(code || '').trim().toUpperCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      codes.push(code);
+    }
+    if (!codes.length) return;
+    void processInventoryBatch(codes);
+  };
+
+  const enqueueWedgeCodes = (raw) => {
+    const parts = splitWedgeCodes(raw);
+    if (!parts.length) return;
+    for (const part of parts) batchCodes.push(part);
+    clearTimeout(batchTimer);
+    batchTimer = setTimeout(flushInventoryBatch, BATCH_IDLE_MS);
+  };
 
   const flushWedgeBuffer = () => {
     clearTimeout(wedgeTimer);
@@ -964,7 +1073,7 @@
     const text = wedgeBuf.trim();
     wedgeBuf = '';
     if (readOnly || text.length < 3) return;
-    void processScan(text);
+    enqueueWedgeCodes(text);
   };
 
   document.addEventListener('keydown', (e) => {
