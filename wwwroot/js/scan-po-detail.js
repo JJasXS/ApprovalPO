@@ -703,7 +703,7 @@
 
   const updateUndoButton = () => {
     if (!undoBtn || readOnly) return;
-    const canUndo = scanHistory.length > 0 && totalScans() > 0;
+    const canUndo = scanHistory.length > 0 || totalScans() > 0;
     undoBtn.hidden = false;
     undoBtn.disabled = !canUndo;
   };
@@ -751,11 +751,11 @@
     if (!window.confirm(msg)) return;
 
     clearLocalScanSession();
-    inventoryArmed = false;
-    applyManualListeningUi(false);
-    if (listenHint) listenHint.hidden = true;
     clearUnmatched();
+    updateUndoButton();
+    updateResetButton();
     refreshIdleStatusBar();
+    setInventoryArmed(true, { quiet: true });
 
     if (resetScanUrl && docKey && navigator.onLine) {
       try {
@@ -772,9 +772,11 @@
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.ok) {
           showToast(data.error || 'Could not reset on server.', 'error');
+          return;
         }
       } catch (_) {
         showToast('Reset locally; server sync failed (offline?).', 'warn');
+        return;
       }
     }
 
@@ -982,13 +984,31 @@
       const prev = entry?.prevQty != null ? entry.prevQty : 0;
       setReceivedQty(row, prev, { skipHistory: true, quietFlash: true, noFeedback: true });
       const proj = entry?.project || '';
-      const label = proj ? `${entry.code} (${proj})` : entry.code;
+      const label = proj ? `${entry.code} (${proj})` : (entry.code || shortCode(row.dataset.itemCode));
       showToast(`Undid change for ${label}.`, 'info');
       updateUndoButton();
+      updateResetButton();
       return;
     }
+
+    // Draft/reload: no history stack — clear the last line that still has received qty.
+    const rows = lineRows();
+    for (let i = rows.length - 1; i >= 0; i -= 1) {
+      const row = rows[i];
+      if (receivedQty(row) <= 0) continue;
+      const code = (row.dataset.itemCode || '').trim();
+      const proj = (row.dataset.project || '').trim();
+      const label = proj ? `${code} (${proj})` : code;
+      setReceivedQty(row, 0, { skipHistory: true, quietFlash: true, noFeedback: true });
+      showToast(`Undid change for ${label}.`, 'info');
+      updateUndoButton();
+      updateResetButton();
+      return;
+    }
+
     showToast('Nothing to undo.', 'warn');
     updateUndoButton();
+    updateResetButton();
   };
 
   const getOfflineQueue = () => {
@@ -1604,11 +1624,15 @@
   stopRefocusOnActionPointer(resetBtn);
   stopRefocusOnActionPointer(submitBtn);
 
-  undoBtn?.addEventListener('click', () => {
+  undoBtn?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     closeActionsMenu();
     undoLastScan();
   });
-  resetBtn?.addEventListener('click', () => {
+  resetBtn?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     closeActionsMenu();
     void resetScanSession();
   });

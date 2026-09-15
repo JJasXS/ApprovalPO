@@ -345,6 +345,9 @@
                 btn.setAttribute('aria-expanded', String(!open));
                 closeActionsMenu();
             });
+            panel.addEventListener('click', function (e) {
+                e.stopPropagation();
+            });
         }
 
         if (actionsBtn && actionsPanel) {
@@ -355,9 +358,17 @@
                 actionsBtn.setAttribute('aria-expanded', String(!open));
                 closeHeaderMenu();
             });
+            actionsPanel.addEventListener('click', function (e) {
+                e.stopPropagation();
+            });
         }
 
-        document.addEventListener('click', function () {
+        document.addEventListener('click', function (e) {
+            var t = e.target;
+            if (btn && btn.contains(t)) return;
+            if (panel && panel.contains(t)) return;
+            if (actionsBtn && actionsBtn.contains(t)) return;
+            if (actionsPanel && actionsPanel.contains(t)) return;
             closeHeaderMenu();
             closeActionsMenu();
         });
