@@ -621,8 +621,9 @@ body {
 }
 
 .scan-detail-field--scan-only {
+  grid-column: 1 / -1;
   min-width: 0;
-  padding-top: 18px;
+  padding-top: 4px;
 }
 
 .scan-detail-field--scan-only .scan-detail-scan-btn {

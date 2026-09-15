@@ -96,6 +96,21 @@
                     <label>Description</label>
                     <span>@(string.IsNullOrWhiteSpace(o.Description) ? "â" : o.Description)</span>
                 </div>
+                <div class="scan-detail-field scan-detail-field--manual">
+                    <label>Item code</label>
+                    <div class="scan-manual-row">
+                        @if (scanSubmitted)
+                        {
+                            <input type="text" id="scanManualCode" class="scan-manual-input" placeholder="Type item code" autocomplete="off" enterkeyhint="go" disabled />
+                            <button type="button" class="scan-manual-btn" id="scanManualBtn" disabled>Go</button>
+                        }
+                        else
+                        {
+                            <input type="text" id="scanManualCode" class="scan-manual-input" placeholder="Type item code" autocomplete="off" enterkeyhint="go" />
+                            <button type="button" class="scan-manual-btn" id="scanManualBtn">Go</button>
+                        }
+                    </div>
+                </div>
                 <div class="scan-detail-field scan-detail-field--scan-only">
                     <div class="scan-detail-scan-row">
                         @if (scanSubmitted)
@@ -122,21 +137,6 @@
                                 <input type="hidden" name="scanCountsJson" id="scanCountsJson" value="" />
                                 <button type="submit" class="scan-detail-submit-btn" id="scanDetailSubmitBtn">Submit</button>
                             </form>
-                        }
-                    </div>
-                </div>
-                <div class="scan-detail-field scan-detail-field--manual">
-                    <label>Item code</label>
-                    <div class="scan-manual-row">
-                        @if (scanSubmitted)
-                        {
-                            <input type="text" id="scanManualCode" class="scan-manual-input" placeholder="Type item code" autocomplete="off" enterkeyhint="go" disabled />
-                            <button type="button" class="scan-manual-btn" id="scanManualBtn" disabled>Go</button>
-                        }
-                        else
-                        {
-                            <input type="text" id="scanManualCode" class="scan-manual-input" placeholder="Type item code" autocomplete="off" enterkeyhint="go" />
-                            <button type="button" class="scan-manual-btn" id="scanManualBtn">Go</button>
                         }
                     </div>
                 </div>
