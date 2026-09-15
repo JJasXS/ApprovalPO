@@ -883,8 +883,11 @@ body {
   overflow: hidden;
   z-index: 300;
 }
-.scan-actions-menu-panel.is-open {
+.scan-actions-menu-panel.is-open,
+body > .scan-actions-menu-panel.is-open {
   /* JS portals to body + position:fixed above sticky Listening bar */
+  display: block;
+  position: fixed;
   z-index: 2000;
 }
 .scan-actions-menu-item {

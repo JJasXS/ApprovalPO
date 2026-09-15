@@ -386,7 +386,20 @@
             // Close scan-actions kebab when opening the header menu.
             var actionsPanel = document.getElementById('scanActionsMenuPanel');
             var actionsBtn = document.getElementById('scanActionsMenuBtn');
-            if (actionsPanel) actionsPanel.hidden = true;
+            var actionsWrap = document.querySelector('.scan-actions-menu-wrap');
+            if (actionsPanel) {
+                actionsPanel.hidden = true;
+                actionsPanel.setAttribute('hidden', '');
+                actionsPanel.classList.remove('is-open');
+                actionsPanel.style.position = '';
+                actionsPanel.style.top = '';
+                actionsPanel.style.left = '';
+                actionsPanel.style.right = '';
+                actionsPanel.style.zIndex = '';
+                actionsPanel.style.display = '';
+                if (actionsWrap && actionsPanel.parentElement !== actionsWrap)
+                    actionsWrap.appendChild(actionsPanel);
+            }
             if (actionsBtn) actionsBtn.setAttribute('aria-expanded', 'false');
         });
         document.addEventListener('click', function () {

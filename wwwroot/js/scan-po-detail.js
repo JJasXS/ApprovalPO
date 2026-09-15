@@ -1539,6 +1539,7 @@
   const actionsMenuWrap = actionsMenuBtn?.parentElement || null;
   let actionsMenuFromPointer = false;
   let actionsMenuToggleAt = 0;
+  let actionsMenuIgnoreOutsideUntil = 0;
 
   const positionActionsMenuPanel = () => {
     if (!actionsMenuBtn || !actionsMenuPanel) return;
@@ -1553,6 +1554,7 @@
     actionsMenuPanel.style.left = `${Math.round(left)}px`;
     actionsMenuPanel.style.right = 'auto';
     actionsMenuPanel.style.zIndex = '2000';
+    actionsMenuPanel.style.display = 'block';
   };
 
   const clearActionsMenuPosition = () => {
@@ -1562,25 +1564,30 @@
     actionsMenuPanel.style.left = '';
     actionsMenuPanel.style.right = '';
     actionsMenuPanel.style.zIndex = '';
+    actionsMenuPanel.style.display = '';
   };
 
   const setActionsMenuOpen = (open) => {
     if (!actionsMenuBtn || !actionsMenuPanel) return;
-    actionsMenuPanel.hidden = !open;
-    actionsMenuBtn.setAttribute('aria-expanded', String(!!open));
     if (open) {
-      actionsMenuGuardUntil = Date.now() + 600;
+      actionsMenuPanel.removeAttribute('hidden');
+      actionsMenuPanel.hidden = false;
+      actionsMenuIgnoreOutsideUntil = Date.now() + 450;
+      actionsMenuGuardUntil = Date.now() + 800;
       stopCaptureRefocus();
       actionsMenuPanel.classList.add('is-open');
       if (actionsMenuPanel.parentElement !== document.body)
         document.body.appendChild(actionsMenuPanel);
       positionActionsMenuPanel();
     } else {
+      actionsMenuPanel.hidden = true;
+      actionsMenuPanel.setAttribute('hidden', '');
       actionsMenuPanel.classList.remove('is-open');
       clearActionsMenuPosition();
       if (actionsMenuWrap && actionsMenuPanel.parentElement !== actionsMenuWrap)
         actionsMenuWrap.appendChild(actionsMenuPanel);
     }
+    actionsMenuBtn.setAttribute('aria-expanded', String(!!open));
   };
   const closeActionsMenu = () => setActionsMenuOpen(false);
 
@@ -1588,7 +1595,7 @@
     const now = Date.now();
     if (now - actionsMenuToggleAt < 350) return;
     actionsMenuToggleAt = now;
-    const willOpen = actionsMenuPanel.hasAttribute('hidden') || actionsMenuPanel.hidden;
+    const willOpen = actionsMenuPanel.hasAttribute('hidden') || !!actionsMenuPanel.hidden;
     setActionsMenuOpen(willOpen);
     const headerPanel = document.getElementById('scanMenuPanel');
     const headerBtn = document.getElementById('scanMenuBtn');
@@ -1597,18 +1604,16 @@
   };
 
   if (actionsMenuBtn && actionsMenuPanel) {
+    // Open on pointerdown so the tap is not lost to keyboard-dismiss / blur on phone.
     actionsMenuBtn.addEventListener('pointerdown', (e) => {
-      actionsMenuGuardUntil = Date.now() + 600;
-      stopCaptureRefocus();
-      e.stopPropagation();
-    });
-    actionsMenuBtn.addEventListener('pointerup', (e) => {
       if (e.button != null && e.button !== 0) return;
       e.preventDefault();
       e.stopPropagation();
+      actionsMenuGuardUntil = Date.now() + 800;
+      stopCaptureRefocus();
       actionsMenuFromPointer = true;
       toggleActionsMenu();
-      setTimeout(() => { actionsMenuFromPointer = false; }, 350);
+      setTimeout(() => { actionsMenuFromPointer = false; }, 400);
     });
     actionsMenuBtn.addEventListener('click', (e) => {
       e.preventDefault();
@@ -1618,6 +1623,7 @@
     });
     document.addEventListener('pointerdown', (e) => {
       if (actionsMenuPanel.hidden) return;
+      if (Date.now() < actionsMenuIgnoreOutsideUntil) return;
       const t = e.target;
       if (!(t instanceof Node)) {
         closeActionsMenu();
