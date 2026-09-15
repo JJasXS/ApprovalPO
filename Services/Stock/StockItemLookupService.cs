@@ -11,6 +11,9 @@ public interface IStockItemLookup
 {
     /// <summary>Canonical description for a stock item code (SQL API catalog, then Firebird ST_ITEM).</summary>
     Task<StockItemLookupResult?> LookupByCodeAsync(string code, CancellationToken cancellationToken = default);
+
+    /// <summary>EPC-style stock codes from ST_ITEM for RFID detect / stocktake (hex codes, typically 16–64 chars).</summary>
+    Task<IReadOnlyList<StockItemLookupResult>> ListEpcStyleCodesAsync(CancellationToken cancellationToken = default);
 }
 
 public sealed record StockItemLookupResult(string Code, string Description, string Source);
@@ -245,5 +248,42 @@ public sealed class StockItemLookupService : IStockItemLookup
             return null;
         }
     }
+
+    public async Task<IReadOnlyList<StockItemLookupResult>> ListEpcStyleCodesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await using var conn = await _tenantResolver
+                .OpenConnectionAsync(_configuration, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+            await using var cmd = new FbCommand(
+                """
+                SELECT TRIM(I.CODE), TRIM(COALESCE(I.DESCRIPTION, ''))
+                FROM ST_ITEM I
+                WHERE CHAR_LENGTH(TRIM(I.CODE)) BETWEEN 16 AND 64
+                  AND TRIM(I.CODE) SIMILAR TO '[0-9A-Fa-f]+'
+                ORDER BY I.CODE
+                """,
+                conn);
+            var list = new List<StockItemLookupResult>();
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                var code = reader.IsDBNull(0) ? "" : reader.GetString(0).Trim();
+                if (code.Length == 0) continue;
+                var desc = reader.IsDBNull(1) ? "" : reader.GetString(1).Trim();
+                list.Add(new StockItemLookupResult(code, desc, "firebird"));
+            }
+
+            return list;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ST_ITEM EPC-style list failed.");
+            return Array.Empty<StockItemLookupResult>();
+        }
+    }
+
     private sealed record CatalogCache(Dictionary<string, string> ByCode, DateTime ExpiresAt);
 }

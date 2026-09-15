@@ -1,0 +1,78 @@
+@page "/DetectRfid"
+@model ApprovalPO.Pages.DetectRfidModel
+@{
+    ViewData["Title"] = "Detect RFID";
+    var expectedUrl = Url.Page("/DetectRfid", "ExpectedJson")!;
+    var userDisplay = User.Identity?.Name
+        ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+        ?? "User";
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/scan.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/detect-rfid.css" asp-append-version="true" />
+}
+
+<div id="detectRfidConfig"
+     data-expected-url="@expectedUrl"
+     data-detect-seconds="@Model.DetectSeconds"
+     hidden></div>
+
+<main class="detect-rfid-page scan-page">
+    <header class="scan-topbar">
+        <a asp-page="/Dashboard" class="scan-back-link" title="Back to home">&#8592;</a>
+        <h1 class="scan-title">Detect RFID</h1>
+        <span class="scan-user">@userDisplay</span>
+    </header>
+
+    <div class="detect-rfid-body">
+        <p class="detect-rfid-lede">
+            Hold the trigger near tags. Detection runs for a few seconds, then compares what was heard
+            to EPC-style stock items in inventory (<code>ST_ITEM</code>).
+        </p>
+
+        <div class="detect-rfid-controls">
+            <button type="button" id="detectRfidBtn" class="detect-rfid-btn">Detect RFID</button>
+            <p id="detectRfidStatus" class="detect-rfid-status" aria-live="polite">Ready</p>
+            <div id="detectRfidCountdown" class="detect-rfid-countdown" hidden>
+                <span id="detectRfidCountdownNum">3</span>s
+            </div>
+        </div>
+
+        <input type="text"
+               id="detectListenCapture"
+               class="scan-listen-capture"
+               autocomplete="off"
+               autocorrect="off"
+               autocapitalize="off"
+               spellcheck="false"
+               tabindex="-1"
+               aria-hidden="true"
+               inputmode="none" />
+
+        <p id="detectExpectedMeta" class="detect-rfid-meta">Loading inventory…</p>
+
+        <div id="detectResults" class="detect-rfid-results" hidden>
+            <section class="detect-rfid-section detect-rfid-section--matched">
+                <h2>Matched <span id="detectMatchedCount" class="detect-rfid-count">0</span></h2>
+                <p class="detect-rfid-section-desc">Detected and exists in inventory</p>
+                <ul id="detectMatchedList" class="detect-rfid-list"></ul>
+            </section>
+            <section class="detect-rfid-section detect-rfid-section--unknown">
+                <h2>Unknown <span id="detectUnknownCount" class="detect-rfid-count">0</span></h2>
+                <p class="detect-rfid-section-desc">Detected but not in inventory</p>
+                <ul id="detectUnknownList" class="detect-rfid-list"></ul>
+            </section>
+            <section class="detect-rfid-section detect-rfid-section--missing">
+                <h2>Missing <span id="detectMissingCount" class="detect-rfid-count">0</span></h2>
+                <p class="detect-rfid-section-desc">In inventory but not detected</p>
+                <ul id="detectMissingList" class="detect-rfid-list"></ul>
+            </section>
+        </div>
+    </div>
+</main>
+
+@section Scripts {
+    <script src="~/js/scan-resolve.js" asp-append-version="true"></script>
+    <script src="~/js/detect-rfid.js" asp-append-version="true"></script>
+}
