@@ -36,7 +36,6 @@
   const unmatchedWrap = document.getElementById('scanUnmatchedWrap');
   const unmatchedBody = document.getElementById('scanUnmatchedBody');
   const unmatchedClearBtn = document.getElementById('scanUnmatchedClear');
-  const listenCapture = document.getElementById('scanListenCapture');
   const listenHint = document.getElementById('scanListenHint');
   const wedgeDebugEl = document.getElementById('scanWedgeDebug');
   const debugArmedEl = document.getElementById('scanDebugArmed');
@@ -46,6 +45,9 @@
   const debugLogEl = document.getElementById('scanDebugLog');
   let statusResetTimer = null;
   let inventoryArmed = false;
+  const manualPlaceholderDefault =
+    (manualInput && manualInput.getAttribute('placeholder')) || 'Type item code';
+  const MANUAL_PLACEHOLDER_LISTENING = 'Listening — scan tags here…';
   /** @type {Set<string>} */
   const unmatchedKeys = new Set();
   /** @type {string[]} */
@@ -199,7 +201,7 @@
     if (debugArmedEl) debugArmedEl.textContent = inventoryArmed ? 'yes' : 'no';
     if (debugFocusEl) debugFocusEl.textContent = focusLabel();
     if (debugBufferEl) {
-      const cap = inventoryArmed && listenCapture ? String(listenCapture.value || '') : '';
+      const cap = inventoryArmed && manualInput ? String(manualInput.value || '') : '';
       debugBufferEl.textContent = wedgeBuf || cap || '(empty)';
     }
     if (debugLastFlushEl) {
@@ -254,13 +256,28 @@
     captureRefocusTimer = null;
   };
 
-  const focusListenCapture = () => {
-    if (!listenCapture || readOnly || !inventoryArmed) return;
+  const focusManualCapture = () => {
+    if (!manualInput || readOnly || !inventoryArmed || manualInput.disabled) return;
     try {
-      listenCapture.focus({ preventScroll: true });
+      manualInput.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    } catch (_) { /* ignore */ }
+    try {
+      manualInput.focus({ preventScroll: true });
     } catch (_) {
-      try { listenCapture.focus(); } catch (__) { /* ignore */ }
+      try { manualInput.focus(); } catch (__) { /* ignore */ }
     }
+  };
+
+  const applyManualListeningUi = (armed) => {
+    if (!manualInput) return;
+    if (armed) {
+      manualInput.classList.add('scan-manual-input--listening');
+      manualInput.setAttribute('placeholder', MANUAL_PLACEHOLDER_LISTENING);
+      return;
+    }
+    manualInput.classList.remove('scan-manual-input--listening');
+    manualInput.setAttribute('placeholder', manualPlaceholderDefault);
+    manualInput.value = '';
   };
 
   const isLikelyIncompleteEpc = (text) => {
@@ -271,27 +288,30 @@
     return false;
   };
 
-  const flushListenCapture = (opts) => {
+  // Declared early; assigned after enqueueWedgeCodes exists.
+  let enqueueWedgeCodes = (_raw) => {};
+
+  const flushManualCapture = (opts) => {
     const force = !!(opts && opts.force);
     clearTimeout(captureIdleTimer);
     captureIdleTimer = null;
-    if (!listenCapture) return;
-    const text = String(listenCapture.value || '').trim();
+    if (!manualInput) return;
+    const text = String(manualInput.value || '').trim();
     if (!force && inventoryArmed && isLikelyIncompleteEpc(text)) {
-      captureIdleTimer = setTimeout(() => flushListenCapture({ force: true }), WEDGE_IDLE_ARMED_MS);
+      captureIdleTimer = setTimeout(() => flushManualCapture({ force: true }), WEDGE_IDLE_ARMED_MS);
       return;
     }
-    listenCapture.value = '';
+    manualInput.value = '';
     refreshWedgeDebug();
     if (readOnly || text.length < 3) {
-      if (text) wedgeDebugLog(`capture ignored short/readonly: ${text}`);
+      if (text) wedgeDebugLog(`manual ignored short/readonly: ${text}`);
       return;
     }
     lastWedgeFlush = text;
     lastWedgeCodes = typeof ScanResolve.splitInventoryCodes === 'function'
       ? ScanResolve.splitInventoryCodes(text)
       : [text];
-    wedgeDebugLog(`capture flush "${text}" → ${lastWedgeCodes.length} code(s)`);
+    wedgeDebugLog(`manual flush "${text}" → ${lastWedgeCodes.length} code(s)`);
     if (inventoryArmed && lastWedgeCodes.length === 1) {
       wedgeDebugLog(
         'hint: 1 code this burst — enable gun multi-tag/inventory mode for many EPCs per trigger'
@@ -299,28 +319,27 @@
     }
     refreshWedgeDebug();
     enqueueWedgeCodes(text);
+    if (inventoryArmed) focusManualCapture();
   };
 
   const setInventoryArmed = (armed) => {
     if (readOnly) return;
     inventoryArmed = !!armed;
     if (listenHint) listenHint.hidden = !inventoryArmed;
+    applyManualListeningUi(inventoryArmed);
     refreshIdleStatusBar();
     if (inventoryArmed) {
-      showToast(
-        'Listening… Hold trigger near tags. Multi-tag needs gun inventory mode.',
-        'ok'
-      );
+      showToast('Listening… Scan into Item code (same as typing).', 'ok');
       try { statusBar?.blur(); } catch (_) { /* ignore */ }
-      focusListenCapture();
+      const scanTab = document.getElementById('scanTabScan');
+      if (scanTab && typeof scanTab.click === 'function') {
+        try { scanTab.click(); } catch (_) { /* ignore */ }
+      }
+      focusManualCapture();
     } else {
       showToast('Inventory listening stopped.', 'warn');
       stopCaptureRefocus();
       clearTimeout(captureIdleTimer);
-      if (listenCapture) {
-        listenCapture.value = '';
-        try { listenCapture.blur(); } catch (_) { /* ignore */ }
-      }
     }
     wedgeDebugLog(inventoryArmed ? 'armed' : 'disarmed');
     refreshWedgeDebug();
@@ -700,6 +719,8 @@
 
     clearLocalScanSession();
     inventoryArmed = false;
+    applyManualListeningUi(false);
+    if (listenHint) listenHint.hidden = true;
     clearUnmatched();
     refreshIdleStatusBar();
 
@@ -1106,6 +1127,10 @@
   }
 
   const runManual = () => {
+    if (inventoryArmed) {
+      flushManualCapture({ force: true });
+      return;
+    }
     const code = (manualInput?.value || '').trim();
     if (!code) {
       showToast('Enter an item code.', 'warn');
@@ -1117,15 +1142,37 @@
 
   manualBtn?.addEventListener('click', runManual);
   manualInput?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' || (inventoryArmed && e.key === 'Tab')) {
       e.preventDefault();
       runManual();
     }
+  });
+  manualInput?.addEventListener('input', () => {
+    if (!inventoryArmed || readOnly) return;
+    refreshWedgeDebug();
+    clearTimeout(captureIdleTimer);
+    captureIdleTimer = setTimeout(() => flushManualCapture(), wedgeIdleMs());
+  });
+  manualInput?.addEventListener('blur', () => {
+    if (!inventoryArmed || readOnly) return;
+    stopCaptureRefocus();
+    captureRefocusTimer = setTimeout(() => {
+      if (!inventoryArmed || readOnly) return;
+      const ae = document.activeElement;
+      if (ae && (ae.id === 'scanStatusBar' || ae.id === 'scanUnmatchedClear'))
+        return;
+      if (ae && ae.classList?.contains('scan-received-input'))
+        return;
+      if (ae && (ae.id === 'scanManualBtn' || ae.classList?.contains('scan-manual-btn')))
+        return;
+      focusManualCapture();
+    }, 50);
   });
 
   // RFID / barcode guns: HID keyboard wedge only (no RFID SDK in this app).
   // Gun model / inventory profile is firmware-side and not configured here.
   // Multi-tag: wedge batch-split — coalesce rapid Enter dumps, then match each EPC.
+  // While Listening, #scanManualCode owns typing (same field that works for Item code).
   const isWedgeTypingField = (el) => {
     if (!el || el === document.body) return false;
     if (el.isContentEditable) return true;
@@ -1135,10 +1182,7 @@
     const type = String(el.type || 'text').toLowerCase();
     if (['checkbox', 'radio', 'button', 'submit', 'reset', 'file', 'hidden', 'image'].includes(type))
       return false;
-    // Hidden inventory capture owns typing while Listening.
-    if (el.id === 'scanListenCapture' || el.classList.contains('scan-listen-capture'))
-      return true;
-    // Manual item field always owns its own typing.
+    // Manual item field owns typing (Listening capture + normal Item code).
     if (el.id === 'scanManualCode' || el.classList.contains('scan-manual-input'))
       return true;
     // While inventory listening, allow page-wide capture even from Received qty.
@@ -1284,7 +1328,7 @@
     void processInventoryBatch(codes);
   };
 
-  const enqueueWedgeCodes = (raw) => {
+  enqueueWedgeCodes = (raw) => {
     const parts = splitWedgeCodes(raw);
     if (!parts.length) return;
     for (const part of parts) batchCodes.push(part);
@@ -1358,38 +1402,6 @@
     });
   }
   unmatchedClearBtn?.addEventListener('click', () => clearUnmatched());
-
-  if (listenCapture) {
-    listenCapture.addEventListener('keydown', (e) => {
-      if (!inventoryArmed || readOnly) return;
-      if (e.key === 'Enter' || e.key === 'Tab') {
-        e.preventDefault();
-        wedgeDebugLog(`capture key ${e.key}`);
-        flushListenCapture({ force: true });
-      }
-    });
-    listenCapture.addEventListener('input', () => {
-      if (!inventoryArmed || readOnly) return;
-      refreshWedgeDebug();
-      clearTimeout(captureIdleTimer);
-      captureIdleTimer = setTimeout(() => flushListenCapture(), wedgeIdleMs());
-    });
-    listenCapture.addEventListener('blur', () => {
-      if (!inventoryArmed || readOnly) return;
-      stopCaptureRefocus();
-      captureRefocusTimer = setTimeout(() => {
-        if (!inventoryArmed || readOnly) return;
-        const ae = document.activeElement;
-        if (ae && (ae.id === 'scanManualCode' || ae.classList?.contains('scan-manual-input')))
-          return;
-        if (ae && (ae.id === 'scanStatusBar' || ae.id === 'scanUnmatchedClear'))
-          return;
-        if (ae && ae.classList?.contains('scan-received-input'))
-          return;
-        focusListenCapture();
-      }, 50);
-    });
-  }
 
   undoBtn?.addEventListener('click', () => undoLastScan());
   resetBtn?.addEventListener('click', () => void resetScanSession());

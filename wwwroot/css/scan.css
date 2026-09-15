@@ -575,6 +575,11 @@ body {
   border-radius: 8px;
   background: #fff;
 }
+.scan-manual-input--listening {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.28);
+  background: #f0f9ff;
+}
 
 .scan-manual-btn {
   flex: 0 0 auto;
