@@ -1242,6 +1242,10 @@
         return;
       if (ae && ae.classList?.contains('scan-status-bar'))
         return;
+      if (ae && (ae.id === 'scanActionsMenuBtn' || ae.classList?.contains('scan-actions-kebab-btn')))
+        return;
+      if (ae && ae.closest?.('.scan-actions-menu-panel'))
+        return;
       if (ae && ae.classList?.contains('scan-received-input'))
         return;
       if (ae && (ae.id === 'scanManualBtn' || ae.classList?.contains('scan-manual-btn')))
@@ -1520,26 +1524,79 @@
 
   const actionsMenuBtn = document.getElementById('scanActionsMenuBtn');
   const actionsMenuPanel = document.getElementById('scanActionsMenuPanel');
+  let actionsMenuFromPointer = false;
+  let actionsMenuToggleAt = 0;
+
+  const positionActionsMenuPanel = () => {
+    if (!actionsMenuBtn || !actionsMenuPanel) return;
+    const r = actionsMenuBtn.getBoundingClientRect();
+    const width = Math.max(180, actionsMenuPanel.offsetWidth || 180);
+    let left = r.right - width;
+    if (left < 8) left = 8;
+    if (left + width > window.innerWidth - 8)
+      left = Math.max(8, window.innerWidth - 8 - width);
+    actionsMenuPanel.style.position = 'fixed';
+    actionsMenuPanel.style.top = `${Math.round(r.bottom + 6)}px`;
+    actionsMenuPanel.style.left = `${Math.round(left)}px`;
+    actionsMenuPanel.style.right = 'auto';
+    actionsMenuPanel.style.zIndex = '2000';
+  };
+
+  const clearActionsMenuPosition = () => {
+    if (!actionsMenuPanel) return;
+    actionsMenuPanel.style.position = '';
+    actionsMenuPanel.style.top = '';
+    actionsMenuPanel.style.left = '';
+    actionsMenuPanel.style.right = '';
+    actionsMenuPanel.style.zIndex = '';
+  };
+
   const setActionsMenuOpen = (open) => {
     if (!actionsMenuBtn || !actionsMenuPanel) return;
     actionsMenuPanel.hidden = !open;
     actionsMenuBtn.setAttribute('aria-expanded', String(!!open));
+    if (open) {
+      actionsMenuPanel.classList.add('is-open');
+      positionActionsMenuPanel();
+    } else {
+      actionsMenuPanel.classList.remove('is-open');
+      clearActionsMenuPosition();
+    }
   };
   const closeActionsMenu = () => setActionsMenuOpen(false);
 
+  const toggleActionsMenu = () => {
+    const now = Date.now();
+    if (now - actionsMenuToggleAt < 350) return;
+    actionsMenuToggleAt = now;
+    const willOpen = actionsMenuPanel.hasAttribute('hidden') || actionsMenuPanel.hidden;
+    setActionsMenuOpen(willOpen);
+    const headerPanel = document.getElementById('scanMenuPanel');
+    const headerBtn = document.getElementById('scanMenuBtn');
+    if (headerPanel) headerPanel.hidden = true;
+    if (headerBtn) headerBtn.setAttribute('aria-expanded', 'false');
+  };
+
   if (actionsMenuBtn && actionsMenuPanel) {
+    actionsMenuBtn.addEventListener('pointerdown', (e) => {
+      stopCaptureRefocus();
+      e.stopPropagation();
+    });
+    actionsMenuBtn.addEventListener('pointerup', (e) => {
+      if (e.button != null && e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      actionsMenuFromPointer = true;
+      toggleActionsMenu();
+      setTimeout(() => { actionsMenuFromPointer = false; }, 350);
+    });
     actionsMenuBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const willOpen = actionsMenuPanel.hasAttribute('hidden') || actionsMenuPanel.hidden;
-      setActionsMenuOpen(willOpen);
-      // Close the header hamburger if it was open.
-      const headerPanel = document.getElementById('scanMenuPanel');
-      const headerBtn = document.getElementById('scanMenuBtn');
-      if (headerPanel) headerPanel.hidden = true;
-      if (headerBtn) headerBtn.setAttribute('aria-expanded', 'false');
+      if (actionsMenuFromPointer) return;
+      toggleActionsMenu();
     });
-    document.addEventListener('click', (e) => {
+    document.addEventListener('pointerdown', (e) => {
       if (actionsMenuPanel.hidden) return;
       const t = e.target;
       if (!(t instanceof Node)) {
@@ -1551,6 +1608,12 @@
     });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') closeActionsMenu();
+    });
+    window.addEventListener('scroll', () => {
+      if (!actionsMenuPanel.hidden) closeActionsMenu();
+    }, true);
+    window.addEventListener('resize', () => {
+      if (!actionsMenuPanel.hidden) closeActionsMenu();
     });
   }
 
