@@ -61,6 +61,9 @@
   /** @type {string[]} */
   let batchCodes = [];
   let batchTimer = null;
+  /** EPCs already handled this listen session (hold-trigger dedupe). */
+  /** @type {Set<string>} */
+  const armedSeenEpcs = new Set();
   let captureIdleTimer = null;
   let captureRefocusTimer = null;
 
@@ -727,6 +730,7 @@
   const clearLocalScanSession = () => {
     scanCounts = {};
     scanHistory = [];
+    armedSeenEpcs.clear();
     if (storageKey) {
       try {
         sessionStorage.removeItem(storageKey);
@@ -993,6 +997,7 @@
       if (!row) continue;
       const prev = entry?.prevQty != null ? entry.prevQty : 0;
       setReceivedQty(row, prev, { skipHistory: true, quietFlash: true, noFeedback: true });
+      if (entry?.code) armedSeenEpcs.delete(String(entry.code).trim().toUpperCase());
       const proj = entry?.project || '';
       const label = proj ? `${entry.code} (${proj})` : (entry.code || shortCode(row.dataset.itemCode));
       showToast(`Undid change for ${label}.`, 'info');
@@ -1010,6 +1015,7 @@
       const proj = (row.dataset.project || '').trim();
       const label = proj ? `${code} (${proj})` : code;
       setReceivedQty(row, 0, { skipHistory: true, quietFlash: true, noFeedback: true });
+      if (code) armedSeenEpcs.delete(code.toUpperCase());
       showToast(`Undid change for ${label}.`, 'info');
       updateUndoButton();
       updateResetButton();
@@ -1355,13 +1361,10 @@
   const WEDGE_IDLE_MS = 70;
   // Slower Bluetooth / inventory dumps: wait longer between keystrokes while Listening.
   const WEDGE_IDLE_ARMED_MS = 180;
-  // After each code/Enter, wait for more inventory tags from the same trigger hold.
+  // Unarmed only: short coalesce if several codes arrive in one dump.
   const BATCH_IDLE_MS = 280;
-  // Inventory dump: hold ~2s after the last tag before matching the whole burst.
-  const BATCH_IDLE_ARMED_MS = 2000;
 
   const wedgeIdleMs = () => (inventoryArmed ? WEDGE_IDLE_ARMED_MS : WEDGE_IDLE_MS);
-  const batchIdleMs = () => (inventoryArmed ? BATCH_IDLE_ARMED_MS : BATCH_IDLE_MS);
 
   const splitWedgeCodes = (raw) => {
     if (typeof ScanResolve.splitInventoryCodes === 'function')
@@ -1376,7 +1379,7 @@
     const result = confirmLineMatch(row, code, null, {
       silent: true,
       noFeedback: true,
-      quietFlash: true,
+      quietFlash: false,
       skipScroll: true,
     });
     return {
@@ -1386,6 +1389,67 @@
       row: result.row,
       code,
     };
+  };
+
+  /** Hold-trigger: match each unique EPC as soon as it is typed (no 2s wait). */
+  const ingestArmedCodesLive = async (parts) => {
+    const fresh = [];
+    for (const code of parts) {
+      const key = String(code || '').trim().toUpperCase();
+      if (!key || armedSeenEpcs.has(key)) continue;
+      armedSeenEpcs.add(key);
+      fresh.push(code);
+    }
+    if (!fresh.length) {
+      focusManualCapture();
+      return false;
+    }
+
+    lastBurstSize = fresh.length;
+    refreshWedgeDebug();
+    wedgeDebugLog(`live ingest ${fresh.length} unique (seen=${armedSeenEpcs.size})`);
+
+    let matched = 0;
+    let lastRow = null;
+    const missedCodes = [];
+
+    for (const code of fresh) {
+      if (code.includes(';') || (typeof ScanResolve.isUrl === 'function' && ScanResolve.isUrl(code))) {
+        const ok = await processScan(code, {
+          silent: true,
+          noFeedback: true,
+          quietFlash: false,
+          skipScroll: true,
+        });
+        if (ok) matched += 1;
+        else missedCodes.push(code);
+        continue;
+      }
+
+      const hit = matchOneInventoryCode(code);
+      if (hit.missed) {
+        const ok = await processScan(code, {
+          silent: true,
+          noFeedback: true,
+          quietFlash: false,
+          skipScroll: true,
+        });
+        if (ok) matched += 1;
+        else missedCodes.push(code);
+        continue;
+      }
+      if (hit.ok && !hit.already) {
+        matched += 1;
+        lastRow = hit.row;
+      }
+    }
+
+    if (missedCodes.length) addUnmatchedCodes(missedCodes);
+    updateRemainingMeta();
+    focusManualCapture();
+    if (lastRow) scrollRowIntoView(lastRow);
+    wedgeDebugLog(`live matched=${matched} missed=${missedCodes.length} remaining=${remainingLines()}`);
+    return matched > 0;
   };
 
   const processInventoryBatch = async (codes) => {
@@ -1415,7 +1479,6 @@
 
       const hit = matchOneInventoryCode(code);
       if (hit.missed) {
-        // Fall back to full processScan (API resolve) — restores pre-batch reliability.
         const ok = await processScan(code, {
           silent: true,
           noFeedback: true,
@@ -1438,8 +1501,6 @@
     }
 
     if (missedCodes.length) addUnmatchedCodes(missedCodes);
-    // Keep Item code focused for the next gun dump; scroll after focus restore.
-    if (inventoryArmed) focusManualCapture();
     if (lastRow) scrollRowIntoView(lastRow);
     wedgeDebugLog(
       `batch matched=${matched} already=${already} missed=${missed} codes=${codes.length}`
@@ -1453,17 +1514,7 @@
           (missed ? `, ${missed} not on PO` : ''),
         missed ? 'warn' : 'ok'
       );
-      setStatusBar(
-        inventoryArmed ? 'armed' : 'ok',
-        `Matched ${matched}`,
-        `${remainingLines()} remaining`,
-        { sticky: inventoryArmed }
-      );
-      if (inventoryArmed) {
-        clearTimeout(statusResetTimer);
-        statusResetTimer = setTimeout(() => refreshIdleStatusBar(), 1200);
-        scheduleManualCaptureFocus();
-      }
+      setStatusBar('ok', `Matched ${matched}`, `${remainingLines()} remaining`);
       return true;
     }
 
@@ -1471,27 +1522,16 @@
       playAlreadyFeedback();
       showToast(`Already received (${already})`, 'warn');
       setStatusBar('already', 'Already received', `${remainingLines()} remaining`);
-      if (inventoryArmed) {
-        clearTimeout(statusResetTimer);
-        statusResetTimer = setTimeout(() => refreshIdleStatusBar(), 1200);
-        scheduleManualCaptureFocus();
-      }
       return true;
     }
 
     if (missedCodes.length) {
       showToast(`${missedCodes.length} tag(s) not on this PO`, 'warn');
       setStatusBar('error', 'Not on PO', `${remainingLines()} remaining`);
-      if (inventoryArmed) {
-        clearTimeout(statusResetTimer);
-        statusResetTimer = setTimeout(() => refreshIdleStatusBar(), 1200);
-        scheduleManualCaptureFocus();
-      }
       return false;
     }
 
     showScanError('not_on_po', 'No tags matched');
-    if (inventoryArmed) scheduleManualCaptureFocus();
     return false;
   };
 
@@ -1511,37 +1551,24 @@
     if (!codes.length) return;
     lastBurstSize = codes.length;
     refreshWedgeDebug();
-    if (inventoryArmed) {
-      setStatusBar(
-        'armed',
-        codes.length === 1
-          ? 'Heard 1 tag (gun may be single-read)'
-          : `Heard ${codes.length} tags`,
-        `${remainingLines()} remaining`,
-        { sticky: true }
-      );
-      if (codes.length === 1) {
-        showToast(
-          'Heard 1 tag — if you expected many, set gun to Inventory/Multi-tag + Enter suffix.',
-          'warn'
-        );
-      }
-    }
-    void processInventoryBatch(codes).finally(() => {
-      if (inventoryArmed) scheduleManualCaptureFocus();
-    });
+    void processInventoryBatch(codes);
   };
 
   enqueueWedgeCodes = (raw) => {
     const parts = splitWedgeCodes(raw);
     if (!parts.length) return;
+
+    // Hold-trigger / Listening: match unique EPCs immediately — do not wait 2s.
+    if (inventoryArmed) {
+      void ingestArmedCodesLive(parts).finally(() => {
+        if (inventoryArmed) focusManualCapture();
+      });
+      return;
+    }
+
     for (const part of parts) batchCodes.push(part);
     clearTimeout(batchTimer);
-    batchTimer = setTimeout(flushInventoryBatch, batchIdleMs());
-    if (inventoryArmed && batchCodes.length > 0) {
-      updateRemainingMeta();
-      wedgeDebugLog(`burst pending=${batchCodes.length} (wait ${batchIdleMs()}ms)`);
-    }
+    batchTimer = setTimeout(flushInventoryBatch, BATCH_IDLE_MS);
   };
 
   const flushWedgeBuffer = (opts) => {
