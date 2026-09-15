@@ -95,6 +95,13 @@
                             <button type="button" class="scan-manual-btn" id="scanManualBtn">Go</button>
                         }
                     </div>
+                    @if (!scanSubmitted)
+                    {
+                        <p class="scan-rfid-tip">
+                            Multi-tag: set the gun to <strong>Inventory / Multi-tag</strong>, HID keyboard, suffix <strong>Enter</strong>. Hold trigger over tags, then wait ~2s.
+                            Verify dumps with <code>?scanDebug=1</code> on this URL.
+                        </p>
+                    }
                 </div>
                 <div class="scan-detail-field scan-detail-field--scan-only">
                     <div class="scan-detail-scan-row">
@@ -239,10 +246,15 @@
             }
 
             <details id="scanWedgeDebug" class="scan-wedge-debug">
-                <summary>Listener debug</summary>
+                <summary>Listener debug (add ?scanDebug=1 to auto-open)</summary>
+                <p class="scan-wedge-debug-help">
+                    Hold the trigger over several tags once. If <strong>Burst pending</strong> / last flush shows only 1 code, the gun is still single-read — fix gun Inventory mode (web app cannot invent tags). If N &gt; 1, batch match is working.
+                </p>
                 <div class="scan-wedge-debug-grid">
                     <div><span class="scan-wedge-debug-label">Armed</span> <code id="scanDebugArmed">no</code></div>
                     <div><span class="scan-wedge-debug-label">Focus</span> <code id="scanDebugFocus">—</code></div>
+                    <div><span class="scan-wedge-debug-label">Burst pending</span> <code id="scanDebugBurst">0</code></div>
+                    <div><span class="scan-wedge-debug-label">Last burst size</span> <code id="scanDebugBurstSize">—</code></div>
                     <div class="scan-wedge-debug-wide"><span class="scan-wedge-debug-label">Live buffer</span> <code id="scanDebugBuffer">(empty)</code></div>
                     <div class="scan-wedge-debug-wide"><span class="scan-wedge-debug-label">Last flush</span> <code id="scanDebugLastFlush">(none)</code></div>
                 </div>

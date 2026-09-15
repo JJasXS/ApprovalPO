@@ -42,6 +42,8 @@
   const debugFocusEl = document.getElementById('scanDebugFocus');
   const debugBufferEl = document.getElementById('scanDebugBuffer');
   const debugLastFlushEl = document.getElementById('scanDebugLastFlush');
+  const debugBurstEl = document.getElementById('scanDebugBurst');
+  const debugBurstSizeEl = document.getElementById('scanDebugBurstSize');
   const debugLogEl = document.getElementById('scanDebugLog');
   let statusResetTimer = null;
   let inventoryArmed = false;
@@ -55,6 +57,10 @@
   let wedgeBuf = '';
   let lastWedgeFlush = '';
   let lastWedgeCodes = [];
+  let lastBurstSize = 0;
+  /** @type {string[]} */
+  let batchCodes = [];
+  let batchTimer = null;
   let captureIdleTimer = null;
   let captureRefocusTimer = null;
 
@@ -214,9 +220,13 @@
       const cap = inventoryArmed && manualInput ? String(manualInput.value || '') : '';
       debugBufferEl.textContent = wedgeBuf || cap || '(empty)';
     }
+    if (debugBurstEl) debugBurstEl.textContent = String(batchCodes.length);
+    if (debugBurstSizeEl) {
+      debugBurstSizeEl.textContent = lastBurstSize > 0 ? String(lastBurstSize) : '—';
+    }
     if (debugLastFlushEl) {
       debugLastFlushEl.textContent = lastWedgeFlush
-        ? `${lastWedgeFlush} → [${lastWedgeCodes.join(', ') || '—'}]`
+        ? `${lastWedgeFlush} → [${lastWedgeCodes.join(', ') || '—'}] (${lastWedgeCodes.length})`
         : '(none)';
     }
     if (debugLogEl) debugLogEl.textContent = wedgeDebugLines.join('\n') || '(no events yet)';
@@ -1341,8 +1351,6 @@
   };
 
   let wedgeTimer = null;
-  let batchCodes = [];
-  let batchTimer = null;
   // Assemble one HID burst (one EPC typing stream).
   const WEDGE_IDLE_MS = 70;
   // Slower Bluetooth / inventory dumps: wait longer between keystrokes while Listening.
@@ -1501,6 +1509,8 @@
       codes.push(code);
     }
     if (!codes.length) return;
+    lastBurstSize = codes.length;
+    refreshWedgeDebug();
     if (inventoryArmed) {
       setStatusBar(
         'armed',
@@ -1510,6 +1520,12 @@
         `${remainingLines()} remaining`,
         { sticky: true }
       );
+      if (codes.length === 1) {
+        showToast(
+          'Heard 1 tag — if you expected many, set gun to Inventory/Multi-tag + Enter suffix.',
+          'warn'
+        );
+      }
     }
     void processInventoryBatch(codes).finally(() => {
       if (inventoryArmed) scheduleManualCaptureFocus();

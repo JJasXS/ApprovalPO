@@ -645,6 +645,19 @@ body {
   min-width: 0;
 }
 
+.scan-rfid-tip {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #64748b;
+}
+.scan-rfid-tip code {
+  font-size: 11px;
+  background: #f1f5f9;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
 .scan-manual-input {
   flex: 1 1 auto;
   min-width: 0;
@@ -1305,6 +1318,12 @@ button.scan-status-bar:focus-visible {
   cursor: pointer;
   font-weight: 700;
   color: #475569;
+}
+.scan-wedge-debug-help {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #64748b;
 }
 .scan-wedge-debug-grid {
   display: grid;
