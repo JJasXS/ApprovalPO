@@ -62,6 +62,24 @@
 
             <div id="scanPanelScan" class="scan-detail-panel" role="tabpanel" aria-labelledby="scanTabScan">
             <div class="scan-detail-meta">
+                @if (!scanSubmitted)
+                {
+                    <div class="scan-meta-menu-wrap">
+                        <button type="button"
+                                id="scanActionsMenuBtn"
+                                class="scan-meta-kebab-btn"
+                                aria-label="Scan actions"
+                                aria-haspopup="true"
+                                aria-expanded="false"
+                                aria-controls="scanActionsMenuPanel">
+                            <span></span><span></span><span></span>
+                        </button>
+                        <div id="scanActionsMenuPanel" class="scan-meta-menu-panel" hidden>
+                            <button type="button" id="scanUndoLastBtn" class="scan-meta-menu-item" disabled>Undo last scan</button>
+                            <button type="button" id="scanResetBtn" class="scan-meta-menu-item scan-meta-menu-item--danger" disabled>Reset scan</button>
+                        </div>
+                    </div>
+                }
                 <div class="scan-detail-field">
                     <label>PO #</label>
                     <span>@o.PoNumber</span>
@@ -99,8 +117,6 @@
                                 </svg>
                                 <span>Scan</span>
                             </button>
-                            <button type="button" id="scanUndoLastBtn" class="scan-detail-action-btn" disabled>Undo</button>
-                            <button type="button" id="scanResetBtn" class="scan-detail-action-btn scan-detail-action-btn--danger" disabled>Reset</button>
                             <form method="post" asp-page="/ScanPODetail" asp-page-handler="Submit" class="scan-detail-submit-form" id="scanDetailSubmitForm">
                                 <input type="hidden" name="docKey" value="@Model.DocKey" />
                                 <input type="hidden" name="scanCountsJson" id="scanCountsJson" value="" />
@@ -366,6 +382,10 @@
             var open = !panel.hidden;
             panel.hidden = open;
             btn.setAttribute('aria-expanded', String(!open));
+            var actionsPanel = document.getElementById('scanActionsMenuPanel');
+            var actionsBtn = document.getElementById('scanActionsMenuBtn');
+            if (actionsPanel) actionsPanel.hidden = true;
+            if (actionsBtn) actionsBtn.setAttribute('aria-expanded', 'false');
         });
         document.addEventListener('click', function () {
             panel.hidden = true;

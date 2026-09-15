@@ -1236,9 +1236,11 @@
     if (!inventoryArmed || readOnly) return;
     const rt = e.relatedTarget;
     if (rt instanceof Element) {
-      if (rt.id === 'scanUndoLastBtn' || rt.id === 'scanResetBtn' || rt.id === 'scanDetailSubmitBtn')
+      if (rt.id === 'scanActionsMenuBtn' || rt.id === 'scanUndoLastBtn' || rt.id === 'scanResetBtn' || rt.id === 'scanDetailSubmitBtn')
         return;
-      if (rt.classList.contains('scan-detail-action-btn') || rt.classList.contains('scan-detail-submit-btn'))
+      if (rt.classList.contains('scan-meta-kebab-btn') || rt.classList.contains('scan-meta-menu-item') || rt.classList.contains('scan-detail-submit-btn'))
+        return;
+      if (rt.closest('.scan-meta-menu-panel'))
         return;
     }
     stopCaptureRefocus();
@@ -1249,9 +1251,11 @@
         return;
       if (ae && ae.classList?.contains('scan-status-bar'))
         return;
-      if (ae && (ae.id === 'scanUndoLastBtn' || ae.id === 'scanResetBtn' || ae.id === 'scanDetailSubmitBtn'))
+      if (ae && (ae.id === 'scanActionsMenuBtn' || ae.id === 'scanUndoLastBtn' || ae.id === 'scanResetBtn' || ae.id === 'scanDetailSubmitBtn'))
         return;
-      if (ae && (ae.classList?.contains('scan-detail-action-btn') || ae.classList?.contains('scan-detail-submit-btn')))
+      if (ae && (ae.classList?.contains('scan-meta-kebab-btn') || ae.classList?.contains('scan-meta-menu-item') || ae.classList?.contains('scan-detail-submit-btn')))
+        return;
+      if (ae && ae.closest?.('.scan-meta-menu-panel'))
         return;
       if (ae && ae.classList?.contains('scan-received-input'))
         return;
@@ -1529,6 +1533,38 @@
   }
   unmatchedClearBtn?.addEventListener('click', () => clearUnmatched());
 
+  const actionsMenuBtn = document.getElementById('scanActionsMenuBtn');
+  const actionsMenuPanel = document.getElementById('scanActionsMenuPanel');
+
+  const setActionsMenuOpen = (open) => {
+    if (!actionsMenuBtn || !actionsMenuPanel) return;
+    actionsMenuPanel.hidden = !open;
+    actionsMenuBtn.setAttribute('aria-expanded', String(!!open));
+  };
+  const closeActionsMenu = () => setActionsMenuOpen(false);
+
+  if (actionsMenuBtn && actionsMenuPanel) {
+    actionsMenuBtn.addEventListener('pointerdown', (e) => {
+      stopCaptureRefocus();
+      e.stopPropagation();
+    });
+    actionsMenuBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const willOpen = actionsMenuPanel.hasAttribute('hidden') || !!actionsMenuPanel.hidden;
+      setActionsMenuOpen(willOpen);
+      const headerPanel = document.getElementById('scanMenuPanel');
+      const headerBtn = document.getElementById('scanMenuBtn');
+      if (headerPanel) headerPanel.hidden = true;
+      if (headerBtn) headerBtn.setAttribute('aria-expanded', 'false');
+    });
+    actionsMenuPanel.addEventListener('click', (e) => e.stopPropagation());
+    document.addEventListener('click', () => closeActionsMenu());
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeActionsMenu();
+    });
+  }
+
   const stopRefocusOnActionPointer = (btn) => {
     btn?.addEventListener('pointerdown', (e) => {
       stopCaptureRefocus();
@@ -1540,9 +1576,11 @@
   stopRefocusOnActionPointer(submitBtn);
 
   undoBtn?.addEventListener('click', () => {
+    closeActionsMenu();
     undoLastScan();
   });
   resetBtn?.addEventListener('click', () => {
+    closeActionsMenu();
     void resetScanSession();
   });
 
