@@ -669,23 +669,47 @@ body {
 
 .scan-lines-table th.scan-th-received,
 .scan-lines-table td.scan-line-status {
-  width: 5.5rem;
+  width: 3.25rem;
+  max-width: 3.5rem;
   text-align: right;
   vertical-align: middle;
+  padding-left: 4px;
+  padding-right: 6px;
+}
+
+.scan-lines-table th.num:not(.scan-th-received),
+.scan-lines-table td.scan-line-order-qty {
+  width: 3rem;
+  max-width: 3.25rem;
+  padding-left: 4px;
+  padding-right: 6px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .scan-received-input {
-  width: 4.5rem;
+  width: 2.75rem;
   max-width: 100%;
-  height: 36px;
-  padding: 0 6px;
+  height: 28px;
+  min-height: 0;
+  padding: 0 2px;
   font-size: 14px;
   font-weight: 600;
   font-family: inherit;
   text-align: right;
-  border: 1px solid var(--scan-border);
-  border-radius: 8px;
-  background: #fff;
+  color: #0f172a;
+  border: 0;
+  border-bottom: 1.5px solid #cbd5e1;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.scan-received-input::-webkit-outer-spin-button,
+.scan-received-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 @media (max-width: 720px) {
@@ -706,15 +730,16 @@ body {
   }
 
   .scan-lines-table--handheld .scan-received-input {
-    width: 5.25rem;
-    height: 44px;
-    font-size: 16px;
-    border-width: 2px;
+    width: 3rem;
+    height: 32px;
+    font-size: 15px;
+    border-width: 0;
+    border-bottom-width: 1.5px;
   }
 
   .scan-lines-table--handheld tr.scan-line-received .scan-received-input {
-    border-color: #22c55e;
-    background: #dcfce7;
+    border-bottom-color: #22c55e;
+    background: transparent;
   }
 
   .scan-status-bar {
@@ -726,35 +751,36 @@ body {
 
 .scan-received-input:focus {
   outline: none;
-  border-color: #38bdf8;
-  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.35);
+  border-bottom-color: #38bdf8;
+  box-shadow: none;
+  background: transparent;
 }
 
 .scan-received-input:disabled {
   opacity: 0.7;
-  background: #f8fafc;
+  background: transparent;
 }
 
 .scan-received-readonly {
   display: inline-block;
-  min-width: 2.5rem;
+  min-width: 2rem;
   font-weight: 700;
   color: #0f172a;
 }
 
 .scan-lines-table tr.scan-line-received .scan-received-input {
-  border-color: #86efac;
-  background: #f0fdf4;
+  border-bottom-color: #22c55e;
+  background: transparent;
 }
 
 .scan-lines-table tr.scan-line-partial .scan-received-input {
-  border-color: #fcd34d;
-  background: #fffbeb;
+  border-bottom-color: #eab308;
+  background: transparent;
 }
 
 .scan-lines-table tr.scan-line-over .scan-received-input {
-  border-color: #fca5a5;
-  background: #fef2f2;
+  border-bottom-color: #ef4444;
+  background: transparent;
 }
 
 .scan-line-tick {
