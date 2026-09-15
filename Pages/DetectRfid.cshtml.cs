@@ -13,7 +13,7 @@ public class DetectRfidModel : PageModel
         _stock = stock;
     }
 
-    /// <summary>Detect window in seconds (clamped 2–5).</summary>
+    /// <summary>Unused by continuous Start/Stop UI; kept for config compatibility.</summary>
     public int DetectSeconds { get; private set; } = 3;
 
     public void OnGet()

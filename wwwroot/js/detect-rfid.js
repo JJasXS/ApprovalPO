@@ -1,4 +1,4 @@
-/* detect-rfid.js — timed multi-tag RFID detect vs ST_ITEM EPC codes */
+/* detect-rfid.js — continuous multi-tag RFID session vs ST_ITEM EPC codes (HID wedge) */
 (function () {
   'use strict';
 
@@ -6,16 +6,19 @@
   if (!cfg || typeof ScanResolve === 'undefined') return;
 
   const expectedUrl = cfg.dataset.expectedUrl || '';
-  let detectSeconds = Math.clamp
-    ? Math.clamp(Number(cfg.dataset.detectSeconds) || 3, 2, 5)
-    : Math.min(5, Math.max(2, Number(cfg.dataset.detectSeconds) || 3));
+  const safetyTimeoutMs = Math.min(
+    30 * 60 * 1000,
+    Math.max(60 * 1000, Number(cfg.dataset.safetyTimeoutMs) || 300000)
+  );
 
-  const btn = document.getElementById('detectRfidBtn');
+  const startBtn = document.getElementById('detectRfidStartBtn');
+  const stopBtn = document.getElementById('detectRfidStopBtn');
   const statusEl = document.getElementById('detectRfidStatus');
-  const countdownWrap = document.getElementById('detectRfidCountdown');
-  const countdownNum = document.getElementById('detectRfidCountdownNum');
   const capture = document.getElementById('detectListenCapture');
   const expectedMeta = document.getElementById('detectExpectedMeta');
+  const livePanel = document.getElementById('detectLivePanel');
+  const liveCountEl = document.getElementById('detectLiveCount');
+  const liveList = document.getElementById('detectLiveList');
   const results = document.getElementById('detectResults');
   const matchedList = document.getElementById('detectMatchedList');
   const unknownList = document.getElementById('detectUnknownList');
@@ -30,10 +33,12 @@
   let detectedKeys = new Set();
   /** @type {Map<string, string>} */
   let detectedDisplay = new Map();
+  /** Insertion order for live list (unique keys). */
+  /** @type {string[]} */
+  let liveOrder = [];
 
   let sessionActive = false;
-  let sessionTimer = null;
-  let tickTimer = null;
+  let safetyTimer = null;
   let captureIdleTimer = null;
   let refocusTimer = null;
   const CAPTURE_IDLE_MS = 70;
@@ -48,6 +53,11 @@
     if (statusEl) statusEl.textContent = text;
   };
 
+  const setSessionButtons = (active) => {
+    if (startBtn) startBtn.disabled = !!active;
+    if (stopBtn) stopBtn.disabled = !active;
+  };
+
   const splitCodes = (raw) => {
     if (typeof ScanResolve.splitInventoryCodes === 'function')
       return ScanResolve.splitInventoryCodes(raw);
@@ -55,12 +65,47 @@
     return t ? [t] : [];
   };
 
+  const refreshLiveUi = () => {
+    if (liveCountEl) liveCountEl.textContent = String(detectedKeys.size);
+    if (!liveList) return;
+    liveList.innerHTML = '';
+    if (!liveOrder.length) {
+      const li = document.createElement('li');
+      li.className = 'detect-rfid-empty';
+      li.textContent = 'Waiting for tags…';
+      liveList.appendChild(li);
+      return;
+    }
+    for (const key of liveOrder) {
+      const code = detectedDisplay.get(key) || key;
+      const li = document.createElement('li');
+      const codeEl = document.createElement('code');
+      codeEl.title = code;
+      codeEl.textContent = shortCode(code);
+      li.appendChild(codeEl);
+      liveList.appendChild(li);
+    }
+    try {
+      liveList.scrollTop = liveList.scrollHeight;
+    } catch (_) { /* ignore */ }
+  };
+
   const ingestRaw = (raw) => {
+    let added = 0;
     for (const code of splitCodes(raw)) {
       const key = code.toUpperCase();
       if (!key) continue;
+      if (detectedKeys.has(key)) continue;
       detectedKeys.add(key);
-      if (!detectedDisplay.has(key)) detectedDisplay.set(key, code);
+      detectedDisplay.set(key, code);
+      liveOrder.push(key);
+      added += 1;
+    }
+    if (added > 0) {
+      refreshLiveUi();
+      if (sessionActive) {
+        setStatus(`Listening… ${detectedKeys.size} unique tag(s)`);
+      }
     }
   };
 
@@ -139,23 +184,24 @@
 
     if (results) results.hidden = false;
     setStatus(
-      `Done — heard ${detectedKeys.size}, matched ${matched.length}, unknown ${unknown.length}, missing ${missing.length}`
+      `Done — ${detectedKeys.size} unique, matched ${matched.length}, unknown ${unknown.length}, missing ${missing.length}`
     );
   };
 
-  const stopSession = () => {
-    sessionActive = false;
-    clearTimeout(sessionTimer);
-    clearInterval(tickTimer);
+  const clearSessionTimers = () => {
+    clearTimeout(safetyTimer);
     clearTimeout(captureIdleTimer);
     clearTimeout(refocusTimer);
-    sessionTimer = null;
-    tickTimer = null;
-    if (countdownWrap) countdownWrap.hidden = true;
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = 'Detect RFID';
-    }
+    safetyTimer = null;
+    captureIdleTimer = null;
+    refocusTimer = null;
+  };
+
+  const stopSession = () => {
+    if (!sessionActive) return;
+    sessionActive = false;
+    clearSessionTimers();
+    setSessionButtons(false);
     flushCapture();
     if (capture) {
       try { capture.blur(); } catch (_) { /* ignore */ }
@@ -172,27 +218,22 @@
 
     detectedKeys = new Set();
     detectedDisplay = new Map();
+    liveOrder = [];
     if (results) results.hidden = true;
+    if (livePanel) livePanel.hidden = false;
+    refreshLiveUi();
 
     sessionActive = true;
-    if (btn) {
-      btn.disabled = true;
-      btn.textContent = 'Detecting…';
-    }
-    if (countdownWrap) countdownWrap.hidden = false;
-
-    let left = detectSeconds;
-    if (countdownNum) countdownNum.textContent = String(left);
-    setStatus(`Listening… hold trigger (${left}s)`);
+    setSessionButtons(true);
+    setStatus('Listening… hold gun trigger (press Stop when done)');
     focusCapture();
 
-    tickTimer = setInterval(() => {
-      left -= 1;
-      if (countdownNum) countdownNum.textContent = String(Math.max(0, left));
-      if (left > 0) setStatus(`Listening… hold trigger (${left}s)`);
-    }, 1000);
-
-    sessionTimer = setTimeout(stopSession, detectSeconds * 1000);
+    clearTimeout(safetyTimer);
+    safetyTimer = setTimeout(() => {
+      if (!sessionActive) return;
+      setStatus('Safety timeout — stopping scan.');
+      stopSession();
+    }, safetyTimeoutMs);
   };
 
   const loadExpected = async () => {
@@ -215,16 +256,20 @@
       }
       if (expectedMeta) {
         expectedMeta.textContent =
-          `${expectedByKey.size} EPC-style item(s) in inventory (detect window ${detectSeconds}s)`;
+          `${expectedByKey.size} EPC-style item(s) in inventory — Start scan, then Stop to compare`;
       }
       setStatus('Ready');
+      setSessionButtons(false);
     } catch (e) {
       if (expectedMeta) expectedMeta.textContent = 'Failed to load inventory codes.';
       setStatus(e.message || 'Load failed');
+      if (startBtn) startBtn.disabled = true;
+      if (stopBtn) stopBtn.disabled = true;
     }
   };
 
-  btn?.addEventListener('click', () => startSession());
+  startBtn?.addEventListener('click', () => startSession());
+  stopBtn?.addEventListener('click', () => stopSession());
 
   if (capture) {
     capture.addEventListener('keydown', (e) => {
@@ -252,6 +297,7 @@
   document.addEventListener('keydown', (e) => {
     if (!sessionActive) return;
     if (e.target === capture) return;
+    if (e.target === startBtn || e.target === stopBtn) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === 'Enter' || e.key === 'Tab') {
       if (!wedgeBuf.trim()) return;

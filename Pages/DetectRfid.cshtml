@@ -15,7 +15,7 @@
 
 <div id="detectRfidConfig"
      data-expected-url="@expectedUrl"
-     data-detect-seconds="@Model.DetectSeconds"
+     data-safety-timeout-ms="300000"
      hidden></div>
 
 <main class="detect-rfid-page scan-page">
@@ -27,16 +27,16 @@
 
     <div class="detect-rfid-body">
         <p class="detect-rfid-lede">
-            Hold the trigger near tags. Detection runs for a few seconds, then compares what was heard
-            to EPC-style stock items in inventory (<code>ST_ITEM</code>).
+            Press <strong>Start scan</strong>, then hold the gun trigger in
+            <strong>Inventory / Multi-tag</strong> mode (HID + Enter suffix).
+            Unique EPCs are collected live. Press <strong>Stop scan</strong> to compare against
+            inventory (<code>ST_ITEM</code>).
         </p>
 
         <div class="detect-rfid-controls">
-            <button type="button" id="detectRfidBtn" class="detect-rfid-btn">Detect RFID</button>
+            <button type="button" id="detectRfidStartBtn" class="detect-rfid-btn">Start scan</button>
+            <button type="button" id="detectRfidStopBtn" class="detect-rfid-btn detect-rfid-btn--stop" disabled>Stop scan</button>
             <p id="detectRfidStatus" class="detect-rfid-status" aria-live="polite">Ready</p>
-            <div id="detectRfidCountdown" class="detect-rfid-countdown" hidden>
-                <span id="detectRfidCountdownNum">3</span>s
-            </div>
         </div>
 
         <input type="text"
@@ -51,6 +51,15 @@
                inputmode="none" />
 
         <p id="detectExpectedMeta" class="detect-rfid-meta">Loading inventory…</p>
+
+        <section id="detectLivePanel" class="detect-rfid-live" hidden>
+            <h2>
+                Unique tags
+                <span id="detectLiveCount" class="detect-rfid-count">0</span>
+            </h2>
+            <p class="detect-rfid-section-desc">Duplicates ignored · updates while scanning</p>
+            <ul id="detectLiveList" class="detect-rfid-list detect-rfid-live-list"></ul>
+        </section>
 
         <div id="detectResults" class="detect-rfid-results" hidden>
             <section class="detect-rfid-section detect-rfid-section--matched">
