@@ -1236,9 +1236,9 @@
     if (!inventoryArmed || readOnly) return;
     const rt = e.relatedTarget;
     if (rt instanceof Element) {
-      if (rt.id === 'scanUndoLastBtn' || rt.id === 'scanResetBtn')
+      if (rt.id === 'scanUndoLastBtn' || rt.id === 'scanResetBtn' || rt.id === 'scanDetailSubmitBtn')
         return;
-      if (rt.classList.contains('scan-detail-action-btn'))
+      if (rt.classList.contains('scan-detail-action-btn') || rt.classList.contains('scan-detail-submit-btn'))
         return;
     }
     stopCaptureRefocus();
@@ -1249,9 +1249,9 @@
         return;
       if (ae && ae.classList?.contains('scan-status-bar'))
         return;
-      if (ae && (ae.id === 'scanUndoLastBtn' || ae.id === 'scanResetBtn'))
+      if (ae && (ae.id === 'scanUndoLastBtn' || ae.id === 'scanResetBtn' || ae.id === 'scanDetailSubmitBtn'))
         return;
-      if (ae && ae.classList?.contains('scan-detail-action-btn'))
+      if (ae && (ae.classList?.contains('scan-detail-action-btn') || ae.classList?.contains('scan-detail-submit-btn')))
         return;
       if (ae && ae.classList?.contains('scan-received-input'))
         return;
@@ -1537,6 +1537,7 @@
   };
   stopRefocusOnActionPointer(undoBtn);
   stopRefocusOnActionPointer(resetBtn);
+  stopRefocusOnActionPointer(submitBtn);
 
   undoBtn?.addEventListener('click', () => {
     undoLastScan();

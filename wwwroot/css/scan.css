@@ -859,9 +859,15 @@ body {
   gap: 8px;
   min-width: 0;
 }
-.scan-detail-scan-row .scan-detail-scan-btn {
+.scan-detail-scan-row .scan-detail-submit-form {
+  margin: 0;
   flex: 0 0 auto;
-  width: auto;
+}
+.scan-detail-scan-row .scan-detail-submit-btn {
+  min-height: 44px;
+  padding: 8px 12px;
+  font-size: 13px;
+  box-shadow: none;
 }
 .scan-detail-action-btn {
   flex: 0 0 auto;
@@ -976,39 +982,14 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
   margin-top: 24px;
 }
 
-.scan-detail-back-btn {
-  margin-right: auto;
-}
-
 .scan-detail-submit-form,
 .scan-detail-reopen-form {
-  margin: 0 0 0 auto;
-}
-
-.scan-detail-back-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 0;
-  padding: 10px 18px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--scan-accent);
-  background: var(--scan-accent-soft);
-  border: 1px solid var(--scan-accent-mid);
-  border-radius: 10px;
-  text-decoration: none;
-  transition: background .15s, border-color .15s;
-}
-
-.scan-detail-back-btn:hover {
-  background: #f0f9ff;
-  border-color: #7dd3fc;
+  margin: 0;
 }
 
 .scan-detail-submit-btn {

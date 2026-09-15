@@ -101,6 +101,11 @@
                             </button>
                             <button type="button" id="scanUndoLastBtn" class="scan-detail-action-btn" disabled>Undo</button>
                             <button type="button" id="scanResetBtn" class="scan-detail-action-btn scan-detail-action-btn--danger" disabled>Reset</button>
+                            <form method="post" asp-page="/ScanPODetail" asp-page-handler="Submit" class="scan-detail-submit-form" id="scanDetailSubmitForm">
+                                <input type="hidden" name="docKey" value="@Model.DocKey" />
+                                <input type="hidden" name="scanCountsJson" id="scanCountsJson" value="" />
+                                <button type="submit" class="scan-detail-submit-btn" id="scanDetailSubmitBtn">Submit</button>
+                            </form>
                         }
                     </div>
                 </div>
@@ -258,24 +263,16 @@
                 <p class="scan-flash scan-flash--error" role="alert">@submitError</p>
             }
 
-            <div class="scan-detail-actions">
-                <a asp-page="/ScanPO" class="scan-detail-back-btn">&#8592; Back to list</a>
-                @if (!scanSubmitted)
-                {
-                    <form method="post" asp-page="/ScanPODetail" asp-page-handler="Submit" class="scan-detail-submit-form" id="scanDetailSubmitForm">
-                        <input type="hidden" name="docKey" value="@Model.DocKey" />
-                        <input type="hidden" name="scanCountsJson" id="scanCountsJson" value="" />
-                        <button type="submit" class="scan-detail-submit-btn" id="scanDetailSubmitBtn">Submit</button>
-                    </form>
-                }
-                else
-                {
+
+            @if (scanSubmitted)
+            {
+                <div class="scan-detail-actions">
                     <form method="post" asp-page="/ScanPODetail" asp-page-handler="Reopen" class="scan-detail-reopen-form" id="scanDetailReopenForm">
                         <input type="hidden" name="docKey" value="@Model.DocKey" />
                         <button type="submit" class="scan-detail-reopen-btn">Reopen for scanning</button>
                     </form>
-                }
-            </div>
+                </div>
+            }
 
             <details id="scanWedgeDebug" class="scan-wedge-debug">
                 <summary>Listener debug</summary>
