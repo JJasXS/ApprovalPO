@@ -54,7 +54,6 @@
         {
             var o = Model.Order;
             var scanSubmitted = Model.IsScanSubmitted;
-            var today = DateTime.Today.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture);
             <div class="scan-detail-meta">
                 @if (!scanSubmitted)
                 {
@@ -74,17 +73,9 @@
                         </div>
                     </div>
                 }
-                <div class="scan-detail-field">
-                    <label>PO #</label>
-                    <span>@o.PoNumber</span>
-                </div>
                 <div class="scan-detail-field scan-detail-field--po-date">
                     <label>PO date</label>
                     <span>@o.OrderDate.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</span>
-                </div>
-                <div class="scan-detail-field">
-                    <label>Today's date</label>
-                    <span>@today</span>
                 </div>
                 <div class="scan-detail-field scan-detail-field--desc">
                     <label>Description</label>
