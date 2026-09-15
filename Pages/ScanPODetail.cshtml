@@ -55,12 +55,6 @@
             var o = Model.Order;
             var scanSubmitted = Model.IsScanSubmitted;
             var today = DateTime.Today.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture);
-            <div class="scan-detail-tabs" role="tablist" aria-label="Scan PO workflow">
-                <button type="button" class="scan-detail-tab is-active" id="scanTabScan" role="tab" aria-selected="true" aria-controls="scanPanelScan">Scan</button>
-                <button type="button" class="scan-detail-tab" id="scanTabReceive" role="tab" aria-selected="false" aria-controls="scanPanelReceive">Received qty</button>
-            </div>
-
-            <div id="scanPanelScan" class="scan-detail-panel" role="tabpanel" aria-labelledby="scanTabScan">
             <div class="scan-detail-meta">
                 @if (!scanSubmitted)
                 {
@@ -165,15 +159,6 @@
                     <span class="scan-status-bar-meta" id="scanStatusMeta">0 remaining</span>
                 </div>
             }
-            </div>
-
-            <div id="scanPanelReceive" class="scan-detail-panel" role="tabpanel" aria-labelledby="scanTabReceive" hidden>
-                <p class="scan-receive-hint">
-                    Enter the <strong>physical quantity received</strong> for each line.
-                    Scanning fills this from the label (e.g. 30); change it if you received less (e.g. 20).
-                    Goods Received is created using <strong>Received</strong> only, not PO qty.
-                </p>
-            </div>
 
             <div id="scanDetailConfig" hidden
                  data-doc-key="@Model.DocKey"

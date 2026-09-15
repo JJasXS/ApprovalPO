@@ -256,19 +256,6 @@
     captureRefocusTimer = null;
   };
 
-  const showScanTabForListen = () => {
-    const tabScan = document.getElementById('scanTabScan');
-    const tabReceive = document.getElementById('scanTabReceive');
-    const panelScan = document.getElementById('scanPanelScan');
-    const panelReceive = document.getElementById('scanPanelReceive');
-    tabScan?.classList.add('is-active');
-    tabReceive?.classList.remove('is-active');
-    tabScan?.setAttribute('aria-selected', 'true');
-    tabReceive?.setAttribute('aria-selected', 'false');
-    if (panelScan) panelScan.hidden = false;
-    if (panelReceive) panelReceive.hidden = true;
-  };
-
   const focusManualCapture = () => {
     if (!manualInput || readOnly || !inventoryArmed || manualInput.disabled) return;
     try {
@@ -358,7 +345,6 @@
     refreshIdleStatusBar();
     if (inventoryArmed) {
       if (!opts.quiet) showToast('Listening — scan Item code', 'ok');
-      showScanTabForListen();
       scheduleManualCaptureFocus();
     } else {
       if (!opts.quiet) showToast('Paused — tap bar to resume', 'warn');
@@ -1589,23 +1575,6 @@
     });
   }
 
-  const scanTabScan = document.getElementById('scanTabScan');
-  const scanTabReceive = document.getElementById('scanTabReceive');
-  const scanPanelScan = document.getElementById('scanPanelScan');
-  const scanPanelReceive = document.getElementById('scanPanelReceive');
-
-  const activateDetailTab = (which) => {
-    const isScan = which === 'scan';
-    scanTabScan?.classList.toggle('is-active', isScan);
-    scanTabReceive?.classList.toggle('is-active', !isScan);
-    scanTabScan?.setAttribute('aria-selected', String(isScan));
-    scanTabReceive?.setAttribute('aria-selected', String(!isScan));
-    if (scanPanelScan) scanPanelScan.hidden = !isScan;
-    if (scanPanelReceive) scanPanelReceive.hidden = isScan;
-  };
-
-  scanTabScan?.addEventListener('click', () => activateDetailTab('scan'));
-  scanTabReceive?.addEventListener('click', () => activateDetailTab('receive'));
 
   if (submitForm && scanCountsInput && submitBtn) {
     submitForm.addEventListener('submit', (e) => {
