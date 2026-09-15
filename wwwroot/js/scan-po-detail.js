@@ -154,11 +154,15 @@
     }
   };
 
+  const updateRemainingMeta = () => {
+    if (statusMeta) statusMeta.textContent = `${remainingLines()} remaining`;
+  };
+
   const setStatusBar = (state, mainText, metaText, opts = {}) => {
+    updateRemainingMeta();
     if (!statusBar) return;
     statusBar.dataset.state = state || 'ready';
     if (statusMain) statusMain.textContent = mainText || 'Ready to scan';
-    if (statusMeta) statusMeta.textContent = metaText ?? `${remainingLines()} remaining`;
     if (statusBar.getAttribute('aria-pressed') != null)
       statusBar.setAttribute('aria-pressed', inventoryArmed ? 'true' : 'false');
     clearTimeout(statusResetTimer);
@@ -176,6 +180,8 @@
   };
 
   const refreshIdleStatusBar = () => {
+    updateRemainingMeta();
+    if (!statusBar) return;
     if (readOnly) {
       setStatusBar('done', 'Submitted', `${remainingLines()} remaining`, { sticky: true });
       return;
@@ -347,7 +353,7 @@
       if (!opts.quiet) showToast('Listening — scan Item code', 'ok');
       scheduleManualCaptureFocus();
     } else {
-      if (!opts.quiet) showToast('Paused — tap bar to resume', 'warn');
+      if (!opts.quiet) showToast('Paused', 'warn');
       clearTimeout(captureIdleTimer);
     }
     wedgeDebugLog(inventoryArmed ? 'armed' : 'disarmed');
@@ -851,9 +857,11 @@
       const state = statusBar.dataset.state || 'ready';
       if (state === 'ready' || state === 'armed' || state === 'done' || !state) {
         refreshIdleStatusBar();
-      } else if (statusMeta) {
-        statusMeta.textContent = `${remainingLines()} remaining`;
+      } else {
+        updateRemainingMeta();
       }
+    } else {
+      updateRemainingMeta();
     }
     updateUndoButton();
     updateScanButton();

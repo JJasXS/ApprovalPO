@@ -81,6 +81,9 @@
                     <label>Description</label>
                     <span>@(string.IsNullOrWhiteSpace(o.Description) ? "â" : o.Description)</span>
                 </div>
+                <div class="scan-detail-field scan-detail-field--remaining">
+                    <span id="scanStatusMeta" class="scan-meta-remaining">@(scanSubmitted ? "0" : Model.Lines.Count.ToString()) remaining</span>
+                </div>
                 <div class="scan-detail-field scan-detail-field--manual">
                     <label>Item code</label>
                     <div class="scan-manual-row">
@@ -126,30 +129,6 @@
                     </div>
                 </div>
             </div>
-
-            @if (!scanSubmitted)
-            {
-                <button type="button"
-                        id="scanStatusBar"
-                        class="scan-status-bar scan-status-bar--toggle scan-status-bar--by-item"
-                        aria-live="polite"
-                        aria-pressed="false"
-                        data-state="ready"
-                        title="Tap to pause or resume Item code scanning.">
-                    <span class="scan-status-bar-main" id="scanStatusMain">Ready to scan</span>
-                    <span class="scan-status-bar-meta" id="scanStatusMeta">@Model.Lines.Count remaining</span>
-                </button>
-                <p id="scanListenHint" class="scan-listen-hint" hidden>
-                    Listening — scan into Item code. Tap the bar above to pause.
-                </p>
-            }
-            else
-            {
-                <div id="scanStatusBar" class="scan-status-bar scan-status-bar--by-item" role="status" aria-live="polite" data-state="done">
-                    <span class="scan-status-bar-main" id="scanStatusMain">Submitted</span>
-                    <span class="scan-status-bar-meta" id="scanStatusMeta">0 remaining</span>
-                </div>
-            }
 
             <div id="scanDetailConfig" hidden
                  data-doc-key="@Model.DocKey"

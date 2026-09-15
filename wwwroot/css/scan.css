@@ -632,6 +632,17 @@ body {
   white-space: nowrap;
 }
 
+.scan-detail-field--remaining {
+  grid-column: 1 / -1;
+  margin: -4px 0 2px;
+}
+.scan-meta-remaining {
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0369a1;
+}
+
 .scan-detail-field--manual {
   grid-column: 1 / -1;
 }
