@@ -181,7 +181,7 @@
       return;
     }
     if (inventoryArmed) {
-      setStatusBar('armed', 'Listening…', `${remainingLines()} remaining`, { sticky: true });
+      setStatusBar('armed', 'Listening… pull trigger', `${remainingLines()} remaining`, { sticky: true });
       return;
     }
     setStatusBar('ready', 'Ready to scan', `${remainingLines()} remaining`, { sticky: true });
@@ -256,16 +256,41 @@
     captureRefocusTimer = null;
   };
 
+  const showScanTabForListen = () => {
+    const tabScan = document.getElementById('scanTabScan');
+    const tabReceive = document.getElementById('scanTabReceive');
+    const panelScan = document.getElementById('scanPanelScan');
+    const panelReceive = document.getElementById('scanPanelReceive');
+    tabScan?.classList.add('is-active');
+    tabReceive?.classList.remove('is-active');
+    tabScan?.setAttribute('aria-selected', 'true');
+    tabReceive?.setAttribute('aria-selected', 'false');
+    if (panelScan) panelScan.hidden = false;
+    if (panelReceive) panelReceive.hidden = true;
+  };
+
   const focusManualCapture = () => {
     if (!manualInput || readOnly || !inventoryArmed || manualInput.disabled) return;
     try {
-      manualInput.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    } catch (_) { /* ignore */ }
+      manualInput.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    } catch (_) {
+      try { manualInput.scrollIntoView(true); } catch (__) { /* ignore */ }
+    }
     try {
-      manualInput.focus({ preventScroll: true });
+      manualInput.focus({ preventScroll: false });
     } catch (_) {
       try { manualInput.focus(); } catch (__) { /* ignore */ }
     }
+    try { manualInput.select(); } catch (_) { /* ignore */ }
+  };
+
+  const scheduleManualCaptureFocus = () => {
+    const run = () => focusManualCapture();
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => setTimeout(run, 40));
+      return;
+    }
+    setTimeout(run, 50);
   };
 
   const applyManualListeningUi = (armed) => {
@@ -319,7 +344,7 @@
     }
     refreshWedgeDebug();
     enqueueWedgeCodes(text);
-    if (inventoryArmed) focusManualCapture();
+    if (inventoryArmed) scheduleManualCaptureFocus();
   };
 
   const setInventoryArmed = (armed) => {
@@ -329,13 +354,10 @@
     applyManualListeningUi(inventoryArmed);
     refreshIdleStatusBar();
     if (inventoryArmed) {
-      showToast('Listening… Scan into Item code (same as typing).', 'ok');
+      showToast('Item code is active — scan now', 'ok');
       try { statusBar?.blur(); } catch (_) { /* ignore */ }
-      const scanTab = document.getElementById('scanTabScan');
-      if (scanTab && typeof scanTab.click === 'function') {
-        try { scanTab.click(); } catch (_) { /* ignore */ }
-      }
-      focusManualCapture();
+      showScanTabForListen();
+      scheduleManualCaptureFocus();
     } else {
       showToast('Inventory listening stopped.', 'warn');
       stopCaptureRefocus();
@@ -1165,7 +1187,7 @@
         return;
       if (ae && (ae.id === 'scanManualBtn' || ae.classList?.contains('scan-manual-btn')))
         return;
-      focusManualCapture();
+      scheduleManualCaptureFocus();
     }, 50);
   });
 

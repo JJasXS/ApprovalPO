@@ -116,6 +116,30 @@
                     </div>
                 </div>
             </div>
+
+            @if (!scanSubmitted)
+            {
+                <button type="button"
+                        id="scanStatusBar"
+                        class="scan-status-bar scan-status-bar--toggle scan-status-bar--by-item"
+                        aria-live="polite"
+                        aria-pressed="false"
+                        data-state="ready"
+                        title="Tap to listen. Scans go into the Item code box (same as typing).">
+                    <span class="scan-status-bar-main" id="scanStatusMain">Ready to scan</span>
+                    <span class="scan-status-bar-meta" id="scanStatusMeta">@Model.Lines.Count remaining</span>
+                </button>
+                <p id="scanListenHint" class="scan-listen-hint" hidden>
+                    Item code is active — pull the gun trigger now (same as typing into the box).
+                </p>
+            }
+            else
+            {
+                <div id="scanStatusBar" class="scan-status-bar scan-status-bar--by-item" role="status" aria-live="polite" data-state="done">
+                    <span class="scan-status-bar-main" id="scanStatusMain">Submitted</span>
+                    <span class="scan-status-bar-meta" id="scanStatusMeta">0 remaining</span>
+                </div>
+            }
             </div>
 
             <div id="scanPanelReceive" class="scan-detail-panel" role="tabpanel" aria-labelledby="scanTabReceive" hidden>
@@ -140,31 +164,6 @@
                  data-scan-counts-input-id="scanCountsJson"></div>
 
             <div id="scanToastRoot" class="scan-toast-root" aria-live="polite"></div>
-
-            @if (!scanSubmitted)
-            {
-                <button type="button"
-                        id="scanStatusBar"
-                        class="scan-status-bar scan-status-bar--toggle"
-                        aria-live="polite"
-                        aria-pressed="false"
-                        data-state="ready"
-                        title="Tap to listen. Scans go into the Item code box (same as typing).">
-                    <span class="scan-status-bar-main" id="scanStatusMain">Ready to scan</span>
-                    <span class="scan-status-bar-meta" id="scanStatusMeta">@Model.Lines.Count remaining</span>
-                </button>
-                <p id="scanListenHint" class="scan-listen-hint" hidden>
-                    Listening — scan into the <strong>Item code</strong> box above (same as typing).
-                    Keep that field focused; multi-tag needs gun inventory mode.
-                </p>
-            }
-            else
-            {
-                <div id="scanStatusBar" class="scan-status-bar" role="status" aria-live="polite" data-state="done">
-                    <span class="scan-status-bar-main" id="scanStatusMain">Submitted</span>
-                    <span class="scan-status-bar-meta" id="scanStatusMeta">0 remaining</span>
-                </div>
-            }
 
             <div class="scan-lines-head">
                 <p class="scan-lines-title">Line items (@Model.Lines.Count)</p>
