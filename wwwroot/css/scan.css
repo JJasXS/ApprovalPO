@@ -1049,6 +1049,25 @@ button.scan-status-bar:focus-visible {
   outline-offset: 2px;
 }
 
+.scan-listen-hint {
+  margin: -4px 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0369a1;
+}
+.scan-listen-capture {
+  position: absolute;
+  left: -10000px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
 .scan-unmatched-wrap {
   margin: 16px 0 8px;
   padding: 12px;

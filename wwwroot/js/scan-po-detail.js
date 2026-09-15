@@ -36,6 +36,8 @@
   const unmatchedWrap = document.getElementById('scanUnmatchedWrap');
   const unmatchedBody = document.getElementById('scanUnmatchedBody');
   const unmatchedClearBtn = document.getElementById('scanUnmatchedClear');
+  const listenCapture = document.getElementById('scanListenCapture');
+  const listenHint = document.getElementById('scanListenHint');
   const wedgeDebugEl = document.getElementById('scanWedgeDebug');
   const debugArmedEl = document.getElementById('scanDebugArmed');
   const debugFocusEl = document.getElementById('scanDebugFocus');
@@ -51,6 +53,8 @@
   let wedgeBuf = '';
   let lastWedgeFlush = '';
   let lastWedgeCodes = [];
+  let captureIdleTimer = null;
+  let captureRefocusTimer = null;
 
   if (docKey && typeof ScanResolve.clearCachedForDoc === 'function') {
     ScanResolve.clearCachedForDoc(docKey);
@@ -194,7 +198,10 @@
   const refreshWedgeDebug = () => {
     if (debugArmedEl) debugArmedEl.textContent = inventoryArmed ? 'yes' : 'no';
     if (debugFocusEl) debugFocusEl.textContent = focusLabel();
-    if (debugBufferEl) debugBufferEl.textContent = wedgeBuf || '(empty)';
+    if (debugBufferEl) {
+      const cap = inventoryArmed && listenCapture ? String(listenCapture.value || '') : '';
+      debugBufferEl.textContent = wedgeBuf || cap || '(empty)';
+    }
     if (debugLastFlushEl) {
       debugLastFlushEl.textContent = lastWedgeFlush
         ? `${lastWedgeFlush} → [${lastWedgeCodes.join(', ') || '—'}]`
@@ -242,17 +249,57 @@
     if (added > 0 || unmatchedKeys.size > 0) unmatchedWrap.hidden = false;
   };
 
+  const stopCaptureRefocus = () => {
+    clearTimeout(captureRefocusTimer);
+    captureRefocusTimer = null;
+  };
+
+  const focusListenCapture = () => {
+    if (!listenCapture || readOnly || !inventoryArmed) return;
+    try {
+      listenCapture.focus({ preventScroll: true });
+    } catch (_) {
+      try { listenCapture.focus(); } catch (__) { /* ignore */ }
+    }
+  };
+
+  const flushListenCapture = () => {
+    clearTimeout(captureIdleTimer);
+    captureIdleTimer = null;
+    if (!listenCapture) return;
+    const text = String(listenCapture.value || '').trim();
+    listenCapture.value = '';
+    refreshWedgeDebug();
+    if (readOnly || text.length < 3) {
+      if (text) wedgeDebugLog(`capture ignored short/readonly: ${text}`);
+      return;
+    }
+    lastWedgeFlush = text;
+    lastWedgeCodes = typeof ScanResolve.splitInventoryCodes === 'function'
+      ? ScanResolve.splitInventoryCodes(text)
+      : [text];
+    wedgeDebugLog(`capture flush "${text}" → ${lastWedgeCodes.length} code(s)`);
+    refreshWedgeDebug();
+    enqueueWedgeCodes(text);
+  };
+
   const setInventoryArmed = (armed) => {
     if (readOnly) return;
     inventoryArmed = !!armed;
+    if (listenHint) listenHint.hidden = !inventoryArmed;
     refreshIdleStatusBar();
     if (inventoryArmed) {
       showToast('Listening for tags… Tap bar again when done.', 'ok');
-      try {
-        statusBar?.blur();
-      } catch (_) { /* ignore */ }
+      try { statusBar?.blur(); } catch (_) { /* ignore */ }
+      focusListenCapture();
     } else {
       showToast('Inventory listening stopped.', 'warn');
+      stopCaptureRefocus();
+      clearTimeout(captureIdleTimer);
+      if (listenCapture) {
+        listenCapture.value = '';
+        try { listenCapture.blur(); } catch (_) { /* ignore */ }
+      }
     }
     wedgeDebugLog(inventoryArmed ? 'armed' : 'disarmed');
     refreshWedgeDebug();
@@ -1067,6 +1114,9 @@
     const type = String(el.type || 'text').toLowerCase();
     if (['checkbox', 'radio', 'button', 'submit', 'reset', 'file', 'hidden', 'image'].includes(type))
       return false;
+    // Hidden inventory capture owns typing while Listening.
+    if (el.id === 'scanListenCapture' || el.classList.contains('scan-listen-capture'))
+      return true;
     // Manual item field always owns its own typing.
     if (el.id === 'scanManualCode' || el.classList.contains('scan-manual-input'))
       return true;
@@ -1261,6 +1311,38 @@
     });
   }
   unmatchedClearBtn?.addEventListener('click', () => clearUnmatched());
+
+  if (listenCapture) {
+    listenCapture.addEventListener('keydown', (e) => {
+      if (!inventoryArmed || readOnly) return;
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        wedgeDebugLog(`capture key ${e.key}`);
+        flushListenCapture();
+      }
+    });
+    listenCapture.addEventListener('input', () => {
+      if (!inventoryArmed || readOnly) return;
+      refreshWedgeDebug();
+      clearTimeout(captureIdleTimer);
+      captureIdleTimer = setTimeout(flushListenCapture, WEDGE_IDLE_MS);
+    });
+    listenCapture.addEventListener('blur', () => {
+      if (!inventoryArmed || readOnly) return;
+      stopCaptureRefocus();
+      captureRefocusTimer = setTimeout(() => {
+        if (!inventoryArmed || readOnly) return;
+        const ae = document.activeElement;
+        if (ae && (ae.id === 'scanManualCode' || ae.classList?.contains('scan-manual-input')))
+          return;
+        if (ae && (ae.id === 'scanStatusBar' || ae.id === 'scanUnmatchedClear'))
+          return;
+        if (ae && ae.classList?.contains('scan-received-input'))
+          return;
+        focusListenCapture();
+      }, 50);
+    });
+  }
 
   undoBtn?.addEventListener('click', () => undoLastScan());
   resetBtn?.addEventListener('click', () => void resetScanSession());
