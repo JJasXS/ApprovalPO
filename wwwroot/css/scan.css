@@ -632,17 +632,6 @@ body {
   white-space: nowrap;
 }
 
-.scan-detail-field--remaining {
-  grid-column: 1 / -1;
-  margin: -4px 0 2px;
-}
-.scan-meta-remaining {
-  display: inline-block;
-  font-size: 13px;
-  font-weight: 600;
-  color: #0369a1;
-}
-
 .scan-detail-field--manual {
   grid-column: 1 / -1;
 }
@@ -982,6 +971,15 @@ body {
 .scan-detail-scan-row .scan-detail-submit-form {
   margin: 0;
   flex: 0 0 auto;
+}
+.scan-detail-scan-row .scan-meta-remaining {
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 700;
+  color: #dc2626;
+  white-space: nowrap;
+  padding-left: 8px;
 }
 .scan-detail-scan-row .scan-detail-submit-btn.is-busy {
   background: #f1f5f9;

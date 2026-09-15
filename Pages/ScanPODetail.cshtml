@@ -81,9 +81,6 @@
                     <label>Description</label>
                     <span>@(string.IsNullOrWhiteSpace(o.Description) ? "â" : o.Description)</span>
                 </div>
-                <div class="scan-detail-field scan-detail-field--remaining">
-                    <span id="scanStatusMeta" class="scan-meta-remaining">@(scanSubmitted ? "0" : Model.Lines.Count.ToString()) remaining</span>
-                </div>
                 <div class="scan-detail-field scan-detail-field--manual">
                     <label>Item code</label>
                     <div class="scan-manual-row">
@@ -126,6 +123,7 @@
                                 <button type="submit" class="scan-detail-submit-btn" id="scanDetailSubmitBtn">Submit</button>
                             </form>
                         }
+                        <span id="scanStatusMeta" class="scan-meta-remaining">@(scanSubmitted ? "0" : Model.Lines.Count.ToString()) remaining</span>
                     </div>
                 </div>
             </div>
