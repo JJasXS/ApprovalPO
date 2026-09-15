@@ -68,7 +68,27 @@
                 </div>
                 <div class="scan-detail-field">
                     <label>PO date</label>
-                    <span>@o.OrderDate.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</span>
+                    <div class="scan-po-date-row">
+                        <span>@o.OrderDate.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</span>
+                        @if (!scanSubmitted)
+                        {
+                            <div class="scan-actions-menu-wrap">
+                                <button type="button"
+                                        id="scanActionsMenuBtn"
+                                        class="scan-actions-kebab-btn"
+                                        aria-label="Scan actions"
+                                        aria-haspopup="true"
+                                        aria-expanded="false"
+                                        aria-controls="scanActionsMenuPanel">
+                                    <span></span><span></span><span></span>
+                                </button>
+                                <div id="scanActionsMenuPanel" class="scan-actions-menu-panel" hidden>
+                                    <button type="button" id="scanUndoLastBtn" class="scan-actions-menu-item" hidden>Undo last scan</button>
+                                    <button type="button" id="scanResetBtn" class="scan-actions-menu-item scan-actions-menu-item--danger">Reset scan</button>
+                                </div>
+                            </div>
+                        }
+                    </div>
                 </div>
                 <div class="scan-detail-field">
                     <label>Today's date</label>
@@ -172,13 +192,6 @@
                     · Total received: <strong id="scanSessionTotal">0</strong>
                     <span class="scan-session-hint">Draft saves to server; submit creates Goods Received from Received qty. Clear Received to undo a line.</span>
                 </p>
-                @if (!scanSubmitted)
-                {
-                    <div class="scan-lines-actions">
-                        <button type="button" id="scanResetBtn" class="scan-reset-btn">Reset scan</button>
-                        <button type="button" id="scanUndoLastBtn" class="scan-undo-btn" hidden>Undo last scan</button>
-                    </div>
-                }
             </div>
 
             <details class="scan-audit-panel" id="scanAuditPanel" hidden>
