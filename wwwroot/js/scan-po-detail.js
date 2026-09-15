@@ -1529,12 +1529,23 @@
 
   if (actionsMenuBtn && actionsMenuPanel) {
     actionsMenuBtn.addEventListener('click', (e) => {
+      e.preventDefault();
       e.stopPropagation();
-      setActionsMenuOpen(actionsMenuPanel.hidden);
+      const willOpen = actionsMenuPanel.hasAttribute('hidden') || actionsMenuPanel.hidden;
+      setActionsMenuOpen(willOpen);
+      // Close the header hamburger if it was open.
+      const headerPanel = document.getElementById('scanMenuPanel');
+      const headerBtn = document.getElementById('scanMenuBtn');
+      if (headerPanel) headerPanel.hidden = true;
+      if (headerBtn) headerBtn.setAttribute('aria-expanded', 'false');
     });
     document.addEventListener('click', (e) => {
       if (actionsMenuPanel.hidden) return;
       const t = e.target;
+      if (!(t instanceof Node)) {
+        closeActionsMenu();
+        return;
+      }
       if (actionsMenuBtn.contains(t) || actionsMenuPanel.contains(t)) return;
       closeActionsMenu();
     });

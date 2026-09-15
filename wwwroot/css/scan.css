@@ -525,6 +525,7 @@ body {
   border: 1px solid var(--scan-border);
   border-radius: 14px;
   box-shadow: 0 4px 16px rgba(14, 116, 183, 0.07);
+  overflow: visible;
 }
 
 .scan-detail-field {
@@ -821,57 +822,63 @@ body {
   cursor: not-allowed;
 }
 
-.scan-po-date-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
+.scan-detail-field--po-date {
+  position: relative;
+  padding-right: 40px;
+  overflow: visible;
 }
 .scan-actions-menu-wrap {
   position: relative;
   flex-shrink: 0;
 }
+.scan-actions-menu-wrap--field {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 230;
+}
 .scan-actions-kebab-btn {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   padding: 0;
-  border: 1px solid transparent;
+  border: 1px solid var(--scan-border);
   border-radius: 8px;
-  background: transparent;
+  background: #fff;
   display: inline-flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 3px;
   cursor: pointer;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 .scan-actions-kebab-btn span {
   display: block;
-  width: 3px;
-  height: 3px;
+  width: 3.5px;
+  height: 3.5px;
   border-radius: 50%;
   background: #64748b;
 }
 .scan-actions-kebab-btn:hover,
 .scan-actions-kebab-btn[aria-expanded="true"] {
-  background: #f1f5f9;
-  border-color: #e2e8f0;
+  background: var(--scan-accent-soft);
+  border-color: var(--scan-accent-mid);
 }
 .scan-actions-kebab-btn:hover span,
 .scan-actions-kebab-btn[aria-expanded="true"] span {
-  background: #0f172a;
+  background: var(--scan-accent);
 }
 .scan-actions-menu-panel {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
-  min-width: 168px;
+  min-width: 180px;
   background: #fff;
   border: 1px solid var(--scan-border);
   border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
   overflow: hidden;
-  z-index: 220;
+  z-index: 300;
 }
 .scan-actions-menu-item {
   display: block;

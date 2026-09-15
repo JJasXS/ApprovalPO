@@ -66,29 +66,27 @@
                     <label>PO #</label>
                     <span>@o.PoNumber</span>
                 </div>
-                <div class="scan-detail-field">
+                <div class="scan-detail-field scan-detail-field--po-date">
                     <label>PO date</label>
-                    <div class="scan-po-date-row">
-                        <span>@o.OrderDate.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</span>
-                        @if (!scanSubmitted)
-                        {
-                            <div class="scan-actions-menu-wrap">
-                                <button type="button"
-                                        id="scanActionsMenuBtn"
-                                        class="scan-actions-kebab-btn"
-                                        aria-label="Scan actions"
-                                        aria-haspopup="true"
-                                        aria-expanded="false"
-                                        aria-controls="scanActionsMenuPanel">
-                                    <span></span><span></span><span></span>
-                                </button>
-                                <div id="scanActionsMenuPanel" class="scan-actions-menu-panel" hidden>
-                                    <button type="button" id="scanUndoLastBtn" class="scan-actions-menu-item" hidden>Undo last scan</button>
-                                    <button type="button" id="scanResetBtn" class="scan-actions-menu-item scan-actions-menu-item--danger">Reset scan</button>
-                                </div>
+                    <span>@o.OrderDate.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</span>
+                    @if (!scanSubmitted)
+                    {
+                        <div class="scan-actions-menu-wrap scan-actions-menu-wrap--field">
+                            <button type="button"
+                                    id="scanActionsMenuBtn"
+                                    class="scan-actions-kebab-btn"
+                                    aria-label="Scan actions"
+                                    aria-haspopup="true"
+                                    aria-expanded="false"
+                                    aria-controls="scanActionsMenuPanel">
+                                <span></span><span></span><span></span>
+                            </button>
+                            <div id="scanActionsMenuPanel" class="scan-actions-menu-panel" hidden>
+                                <button type="button" id="scanUndoLastBtn" class="scan-actions-menu-item" hidden>Undo last scan</button>
+                                <button type="button" id="scanResetBtn" class="scan-actions-menu-item scan-actions-menu-item--danger">Reset scan</button>
                             </div>
-                        }
-                    </div>
+                        </div>
+                    }
                 </div>
                 <div class="scan-detail-field">
                     <label>Today's date</label>
@@ -385,7 +383,15 @@
             var open = !panel.hidden;
             panel.hidden = open;
             btn.setAttribute('aria-expanded', String(!open));
+            // Close scan-actions kebab when opening the header menu.
+            var actionsPanel = document.getElementById('scanActionsMenuPanel');
+            var actionsBtn = document.getElementById('scanActionsMenuBtn');
+            if (actionsPanel) actionsPanel.hidden = true;
+            if (actionsBtn) actionsBtn.setAttribute('aria-expanded', 'false');
         });
-        document.addEventListener('click', function () { panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); });
+        document.addEventListener('click', function () {
+            panel.hidden = true;
+            btn.setAttribute('aria-expanded', 'false');
+        });
     })();
 </script>
