@@ -824,97 +824,49 @@ body {
 
 .scan-detail-field--po-date {
   position: relative;
-  padding-right: 48px;
+  padding-right: 108px;
   overflow: visible;
 }
-.scan-actions-menu-wrap {
-  position: relative;
-  flex-shrink: 0;
-}
-.scan-actions-menu-wrap--field {
+.scan-detail-actions {
   position: absolute;
   top: 0;
   right: 0;
-  z-index: 230;
-}
-.scan-actions-kebab-btn {
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
-  min-height: 44px;
-  padding: 0;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
-  display: inline-flex;
+  z-index: 5;
+  display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 72px;
+}
+.scan-detail-action-btn {
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--scan-border);
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  box-shadow: none;
+  white-space: nowrap;
 }
-.scan-actions-kebab-btn span {
-  display: block;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: #64748b;
-}
-.scan-actions-kebab-btn:hover,
-.scan-actions-kebab-btn[aria-expanded="true"] {
-  background: transparent;
-}
-.scan-actions-kebab-btn:hover span,
-.scan-actions-kebab-btn[aria-expanded="true"] span {
-  background: var(--scan-accent);
-}
-.scan-actions-menu-panel {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  min-width: 180px;
-  background: #fff;
-  border: 1px solid var(--scan-border);
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
-  overflow: hidden;
-  z-index: 300;
-}
-.scan-actions-menu-panel.is-open,
-body > .scan-actions-menu-panel.is-open {
-  /* JS portals to body + position:fixed above sticky Listening bar */
-  display: block;
-  position: fixed;
-  z-index: 2000;
-}
-.scan-actions-menu-item {
-  display: block;
-  width: 100%;
-  padding: 10px 14px;
-  border: 0;
-  background: none;
-  text-align: left;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  color: #334155;
-  cursor: pointer;
-}
-.scan-actions-menu-item:hover:not(:disabled) {
+.scan-detail-action-btn:hover:not(:disabled) {
   background: #f8fafc;
+  border-color: #94a3b8;
 }
-.scan-actions-menu-item:disabled {
+.scan-detail-action-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
-.scan-actions-menu-item--danger {
+.scan-detail-action-btn--danger {
   color: #dc2626;
 }
-.scan-actions-menu-item--danger:hover:not(:disabled) {
+.scan-detail-action-btn--danger:hover:not(:disabled) {
   background: #fef2f2;
+  border-color: #fca5a5;
   color: #b91c1c;
 }
 

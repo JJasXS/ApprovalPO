@@ -57,8 +57,6 @@
   let lastWedgeCodes = [];
   let captureIdleTimer = null;
   let captureRefocusTimer = null;
-  /** Blocks Listening Item-code refocus while opening the scan-actions kebab. */
-  let actionsMenuGuardUntil = 0;
 
   if (docKey && typeof ScanResolve.clearCachedForDoc === 'function') {
     ScanResolve.clearCachedForDoc(docKey);
@@ -702,7 +700,7 @@
   const updateUndoButton = () => {
     if (!undoBtn || readOnly) return;
     const canUndo = scanHistory.length > 0 && totalScans() > 0;
-    undoBtn.hidden = !canUndo;
+    undoBtn.hidden = false;
     undoBtn.disabled = !canUndo;
   };
 
@@ -1238,25 +1236,22 @@
     if (!inventoryArmed || readOnly) return;
     const rt = e.relatedTarget;
     if (rt instanceof Element) {
-      if (rt.id === 'scanActionsMenuBtn' || rt.classList.contains('scan-actions-kebab-btn'))
+      if (rt.id === 'scanUndoLastBtn' || rt.id === 'scanResetBtn')
         return;
-      if (rt.closest('.scan-actions-menu-panel'))
+      if (rt.classList.contains('scan-detail-action-btn'))
         return;
     }
     stopCaptureRefocus();
     captureRefocusTimer = setTimeout(() => {
       if (!inventoryArmed || readOnly) return;
-      if (Date.now() < actionsMenuGuardUntil) return;
-      const menuPanel = document.getElementById('scanActionsMenuPanel');
-      if (menuPanel && !menuPanel.hidden) return;
       const ae = document.activeElement;
       if (ae && (ae.id === 'scanStatusBar' || ae.id === 'scanUnmatchedClear'))
         return;
       if (ae && ae.classList?.contains('scan-status-bar'))
         return;
-      if (ae && (ae.id === 'scanActionsMenuBtn' || ae.classList?.contains('scan-actions-kebab-btn')))
+      if (ae && (ae.id === 'scanUndoLastBtn' || ae.id === 'scanResetBtn'))
         return;
-      if (ae && ae.closest?.('.scan-actions-menu-panel'))
+      if (ae && ae.classList?.contains('scan-detail-action-btn'))
         return;
       if (ae && ae.classList?.contains('scan-received-input'))
         return;
@@ -1534,118 +1529,19 @@
   }
   unmatchedClearBtn?.addEventListener('click', () => clearUnmatched());
 
-  const actionsMenuBtn = document.getElementById('scanActionsMenuBtn');
-  const actionsMenuPanel = document.getElementById('scanActionsMenuPanel');
-  const actionsMenuWrap = actionsMenuBtn?.parentElement || null;
-  let actionsMenuFromPointer = false;
-  let actionsMenuToggleAt = 0;
-  let actionsMenuIgnoreOutsideUntil = 0;
-
-  const positionActionsMenuPanel = () => {
-    if (!actionsMenuBtn || !actionsMenuPanel) return;
-    const r = actionsMenuBtn.getBoundingClientRect();
-    const width = Math.max(180, actionsMenuPanel.offsetWidth || 180);
-    let left = r.right - width;
-    if (left < 8) left = 8;
-    if (left + width > window.innerWidth - 8)
-      left = Math.max(8, window.innerWidth - 8 - width);
-    actionsMenuPanel.style.position = 'fixed';
-    actionsMenuPanel.style.top = `${Math.round(r.bottom + 6)}px`;
-    actionsMenuPanel.style.left = `${Math.round(left)}px`;
-    actionsMenuPanel.style.right = 'auto';
-    actionsMenuPanel.style.zIndex = '2000';
-    actionsMenuPanel.style.display = 'block';
-  };
-
-  const clearActionsMenuPosition = () => {
-    if (!actionsMenuPanel) return;
-    actionsMenuPanel.style.position = '';
-    actionsMenuPanel.style.top = '';
-    actionsMenuPanel.style.left = '';
-    actionsMenuPanel.style.right = '';
-    actionsMenuPanel.style.zIndex = '';
-    actionsMenuPanel.style.display = '';
-  };
-
-  const setActionsMenuOpen = (open) => {
-    if (!actionsMenuBtn || !actionsMenuPanel) return;
-    if (open) {
-      actionsMenuPanel.removeAttribute('hidden');
-      actionsMenuPanel.hidden = false;
-      actionsMenuIgnoreOutsideUntil = Date.now() + 450;
-      actionsMenuGuardUntil = Date.now() + 800;
+  const stopRefocusOnActionPointer = (btn) => {
+    btn?.addEventListener('pointerdown', (e) => {
       stopCaptureRefocus();
-      actionsMenuPanel.classList.add('is-open');
-      if (actionsMenuPanel.parentElement !== document.body)
-        document.body.appendChild(actionsMenuPanel);
-      positionActionsMenuPanel();
-    } else {
-      actionsMenuPanel.hidden = true;
-      actionsMenuPanel.setAttribute('hidden', '');
-      actionsMenuPanel.classList.remove('is-open');
-      clearActionsMenuPosition();
-      if (actionsMenuWrap && actionsMenuPanel.parentElement !== actionsMenuWrap)
-        actionsMenuWrap.appendChild(actionsMenuPanel);
-    }
-    actionsMenuBtn.setAttribute('aria-expanded', String(!!open));
-  };
-  const closeActionsMenu = () => setActionsMenuOpen(false);
-
-  const toggleActionsMenu = () => {
-    const now = Date.now();
-    if (now - actionsMenuToggleAt < 350) return;
-    actionsMenuToggleAt = now;
-    const willOpen = actionsMenuPanel.hasAttribute('hidden') || !!actionsMenuPanel.hidden;
-    setActionsMenuOpen(willOpen);
-    const headerPanel = document.getElementById('scanMenuPanel');
-    const headerBtn = document.getElementById('scanMenuBtn');
-    if (headerPanel) headerPanel.hidden = true;
-    if (headerBtn) headerBtn.setAttribute('aria-expanded', 'false');
-  };
-
-  if (actionsMenuBtn && actionsMenuPanel) {
-    // Open on pointerdown so the tap is not lost to keyboard-dismiss / blur on phone.
-    actionsMenuBtn.addEventListener('pointerdown', (e) => {
-      if (e.button != null && e.button !== 0) return;
-      e.preventDefault();
       e.stopPropagation();
-      actionsMenuGuardUntil = Date.now() + 800;
-      stopCaptureRefocus();
-      actionsMenuFromPointer = true;
-      toggleActionsMenu();
-      setTimeout(() => { actionsMenuFromPointer = false; }, 400);
     });
-    actionsMenuBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (actionsMenuFromPointer) return;
-      toggleActionsMenu();
-    });
-    document.addEventListener('pointerdown', (e) => {
-      if (actionsMenuPanel.hidden) return;
-      if (Date.now() < actionsMenuIgnoreOutsideUntil) return;
-      const t = e.target;
-      if (!(t instanceof Node)) {
-        closeActionsMenu();
-        return;
-      }
-      if (actionsMenuBtn.contains(t) || actionsMenuPanel.contains(t)) return;
-      closeActionsMenu();
-    });
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') closeActionsMenu();
-    });
-    window.addEventListener('resize', () => {
-      if (!actionsMenuPanel.hidden) closeActionsMenu();
-    });
-  }
+  };
+  stopRefocusOnActionPointer(undoBtn);
+  stopRefocusOnActionPointer(resetBtn);
 
   undoBtn?.addEventListener('click', () => {
-    closeActionsMenu();
     undoLastScan();
   });
   resetBtn?.addEventListener('click', () => {
-    closeActionsMenu();
     void resetScanSession();
   });
 

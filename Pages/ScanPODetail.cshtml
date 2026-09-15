@@ -71,20 +71,9 @@
                     <span>@o.OrderDate.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</span>
                     @if (!scanSubmitted)
                     {
-                        <div class="scan-actions-menu-wrap scan-actions-menu-wrap--field">
-                            <button type="button"
-                                    id="scanActionsMenuBtn"
-                                    class="scan-actions-kebab-btn"
-                                    aria-label="Scan actions"
-                                    aria-haspopup="true"
-                                    aria-expanded="false"
-                                    aria-controls="scanActionsMenuPanel">
-                                <span></span><span></span><span></span>
-                            </button>
-                            <div id="scanActionsMenuPanel" class="scan-actions-menu-panel" hidden>
-                                <button type="button" id="scanUndoLastBtn" class="scan-actions-menu-item" hidden>Undo last scan</button>
-                                <button type="button" id="scanResetBtn" class="scan-actions-menu-item scan-actions-menu-item--danger">Reset scan</button>
-                            </div>
+                        <div class="scan-detail-actions">
+                            <button type="button" id="scanUndoLastBtn" class="scan-detail-action-btn" disabled>Undo</button>
+                            <button type="button" id="scanResetBtn" class="scan-detail-action-btn scan-detail-action-btn--danger" disabled>Reset</button>
                         </div>
                     }
                 </div>
@@ -383,24 +372,6 @@
             var open = !panel.hidden;
             panel.hidden = open;
             btn.setAttribute('aria-expanded', String(!open));
-            // Close scan-actions kebab when opening the header menu.
-            var actionsPanel = document.getElementById('scanActionsMenuPanel');
-            var actionsBtn = document.getElementById('scanActionsMenuBtn');
-            var actionsWrap = document.querySelector('.scan-actions-menu-wrap');
-            if (actionsPanel) {
-                actionsPanel.hidden = true;
-                actionsPanel.setAttribute('hidden', '');
-                actionsPanel.classList.remove('is-open');
-                actionsPanel.style.position = '';
-                actionsPanel.style.top = '';
-                actionsPanel.style.left = '';
-                actionsPanel.style.right = '';
-                actionsPanel.style.zIndex = '';
-                actionsPanel.style.display = '';
-                if (actionsWrap && actionsPanel.parentElement !== actionsWrap)
-                    actionsWrap.appendChild(actionsPanel);
-            }
-            if (actionsBtn) actionsBtn.setAttribute('aria-expanded', 'false');
         });
         document.addEventListener('click', function () {
             panel.hidden = true;
