@@ -57,6 +57,8 @@
   let lastWedgeCodes = [];
   let captureIdleTimer = null;
   let captureRefocusTimer = null;
+  /** Blocks Listening Item-code refocus while opening the scan-actions kebab. */
+  let actionsMenuGuardUntil = 0;
 
   if (docKey && typeof ScanResolve.clearCachedForDoc === 'function') {
     ScanResolve.clearCachedForDoc(docKey);
@@ -1232,11 +1234,21 @@
     if (!isBufferCompleteForIdleFlush(text)) return;
     captureIdleTimer = setTimeout(() => flushManualCapture(), wedgeIdleMs());
   });
-  manualInput?.addEventListener('blur', () => {
+  manualInput?.addEventListener('blur', (e) => {
     if (!inventoryArmed || readOnly) return;
+    const rt = e.relatedTarget;
+    if (rt instanceof Element) {
+      if (rt.id === 'scanActionsMenuBtn' || rt.classList.contains('scan-actions-kebab-btn'))
+        return;
+      if (rt.closest('.scan-actions-menu-panel'))
+        return;
+    }
     stopCaptureRefocus();
     captureRefocusTimer = setTimeout(() => {
       if (!inventoryArmed || readOnly) return;
+      if (Date.now() < actionsMenuGuardUntil) return;
+      const menuPanel = document.getElementById('scanActionsMenuPanel');
+      if (menuPanel && !menuPanel.hidden) return;
       const ae = document.activeElement;
       if (ae && (ae.id === 'scanStatusBar' || ae.id === 'scanUnmatchedClear'))
         return;
@@ -1524,6 +1536,7 @@
 
   const actionsMenuBtn = document.getElementById('scanActionsMenuBtn');
   const actionsMenuPanel = document.getElementById('scanActionsMenuPanel');
+  const actionsMenuWrap = actionsMenuBtn?.parentElement || null;
   let actionsMenuFromPointer = false;
   let actionsMenuToggleAt = 0;
 
@@ -1556,11 +1569,17 @@
     actionsMenuPanel.hidden = !open;
     actionsMenuBtn.setAttribute('aria-expanded', String(!!open));
     if (open) {
+      actionsMenuGuardUntil = Date.now() + 600;
+      stopCaptureRefocus();
       actionsMenuPanel.classList.add('is-open');
+      if (actionsMenuPanel.parentElement !== document.body)
+        document.body.appendChild(actionsMenuPanel);
       positionActionsMenuPanel();
     } else {
       actionsMenuPanel.classList.remove('is-open');
       clearActionsMenuPosition();
+      if (actionsMenuWrap && actionsMenuPanel.parentElement !== actionsMenuWrap)
+        actionsMenuWrap.appendChild(actionsMenuPanel);
     }
   };
   const closeActionsMenu = () => setActionsMenuOpen(false);
@@ -1579,6 +1598,7 @@
 
   if (actionsMenuBtn && actionsMenuPanel) {
     actionsMenuBtn.addEventListener('pointerdown', (e) => {
+      actionsMenuGuardUntil = Date.now() + 600;
       stopCaptureRefocus();
       e.stopPropagation();
     });
@@ -1609,9 +1629,6 @@
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') closeActionsMenu();
     });
-    window.addEventListener('scroll', () => {
-      if (!actionsMenuPanel.hidden) closeActionsMenu();
-    }, true);
     window.addEventListener('resize', () => {
       if (!actionsMenuPanel.hidden) closeActionsMenu();
     });
