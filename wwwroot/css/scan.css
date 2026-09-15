@@ -824,28 +824,28 @@ body {
 
 .scan-detail-field--po-date {
   position: relative;
-  padding-right: 108px;
   overflow: visible;
 }
-.scan-detail-actions {
-  position: absolute;
-  top: 0;
-  right: 0;
-  z-index: 5;
+.scan-detail-scan-row {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 6px;
-  min-width: 72px;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.scan-detail-scan-row .scan-detail-scan-btn {
+  flex: 0 0 auto;
+  width: auto;
 }
 .scan-detail-action-btn {
-  min-height: 36px;
-  padding: 6px 10px;
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 8px 12px;
   border: 1px solid var(--scan-border);
-  border-radius: 8px;
+  border-radius: 10px;
   background: #fff;
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: #334155;
   cursor: pointer;
