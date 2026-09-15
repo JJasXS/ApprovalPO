@@ -148,7 +148,11 @@
   const scrollRowIntoView = (row) => {
     if (!row || typeof row.scrollIntoView !== 'function') return;
     try {
-      row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      // Instant scroll while listening — smooth scroll can steal focus from Item code mid-burst.
+      row.scrollIntoView({
+        block: 'nearest',
+        behavior: inventoryArmed ? 'auto' : 'smooth',
+      });
     } catch (_) {
       row.scrollIntoView(false);
     }
@@ -339,6 +343,12 @@
       : [text];
     wedgeDebugLog(`manual flush "${text}" → ${lastWedgeCodes.length} code(s)`);
     refreshWedgeDebug();
+    // Listening: enqueue into the burst window — do not match the first tag alone.
+    if (inventoryArmed) {
+      enqueueWedgeCodes(text);
+      scheduleManualCaptureFocus();
+      return;
+    }
     void processManualCodes(text);
   };
 
@@ -355,6 +365,8 @@
     } else {
       if (!opts.quiet) showToast('Paused', 'warn');
       clearTimeout(captureIdleTimer);
+      // Flush any tags already heard in this burst before pausing.
+      if (batchCodes.length || batchTimer) flushInventoryBatch();
     }
     wedgeDebugLog(inventoryArmed ? 'armed' : 'disarmed');
     refreshWedgeDebug();
@@ -388,7 +400,7 @@
   const confirmLineMatch = (row, code, qtyRaw, opts = {}) => {
     if (!row) return { ok: false };
     const display = shortCode(code || row.dataset.itemCode || '');
-    scrollRowIntoView(row);
+    if (!opts.skipScroll) scrollRowIntoView(row);
 
     if (lineAlreadyComplete(row)) {
       if (!opts.silent && !opts.fromQueue) {
@@ -409,7 +421,7 @@
       skipHistory: opts.fromQueue || opts.skipHistory,
       quietFlash: opts.quietFlash,
     });
-    scrollRowIntoView(row);
+    if (!opts.skipScroll) scrollRowIntoView(row);
 
     if (!opts.silent && !opts.fromQueue) {
       const proj = projectNorm(row.dataset.project || opts.project || '');
@@ -1203,17 +1215,41 @@
       showToast(inventoryArmed ? 'Scan a tag into Item code.' : 'Enter an item code.', 'warn');
       return;
     }
-    // Primary path that worked before: Enter/Go → processScan (multi-split when needed).
+    // Go button: match immediately (typed codes, not a gun inventory burst).
     clearTimeout(captureIdleTimer);
     captureIdleTimer = null;
     if (manualInput) manualInput.value = '';
     void processManualCodes(text);
   };
 
+  /** While listening, Enter/Tab enqueue into the burst — wait for more gun tags. */
+  const enqueueArmedManualField = () => {
+    if (readOnly || !manualInput) return;
+    clearTimeout(captureIdleTimer);
+    captureIdleTimer = null;
+    const text = String(manualInput.value || '').trim();
+    manualInput.value = '';
+    refreshWedgeDebug();
+    if (text.length >= 3) {
+      lastWedgeFlush = text;
+      lastWedgeCodes = typeof ScanResolve.splitInventoryCodes === 'function'
+        ? ScanResolve.splitInventoryCodes(text)
+        : [text];
+      wedgeDebugLog(`armed enqueue "${text}" → ${lastWedgeCodes.length} code(s)`);
+      refreshWedgeDebug();
+      enqueueWedgeCodes(text);
+    }
+    scheduleManualCaptureFocus();
+  };
+
   manualBtn?.addEventListener('click', runManual);
   manualInput?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === 'Tab') {
       e.preventDefault();
+      if (inventoryArmed) {
+        enqueueArmedManualField();
+        return;
+      }
       runManual();
     }
   });
@@ -1251,7 +1287,8 @@
         return;
       if (ae && ae.closest?.('.scan-meta-menu-panel'))
         return;
-      if (ae && ae.classList?.contains('scan-received-input'))
+      // While listening, reclaim focus even from Received qty so gun dumps aren't dropped.
+      if (ae && ae.classList?.contains('scan-received-input') && !inventoryArmed)
         return;
       if (ae && (ae.id === 'scanManualBtn' || ae.classList?.contains('scan-manual-btn')))
         return;
@@ -1292,7 +1329,8 @@
   const WEDGE_IDLE_ARMED_MS = 180;
   // After each code/Enter, wait for more inventory tags from the same trigger hold.
   const BATCH_IDLE_MS = 280;
-  const BATCH_IDLE_ARMED_MS = 900;
+  // Inventory dump: hold ~2s after the last tag before matching the whole burst.
+  const BATCH_IDLE_ARMED_MS = 2000;
 
   const wedgeIdleMs = () => (inventoryArmed ? WEDGE_IDLE_ARMED_MS : WEDGE_IDLE_MS);
   const batchIdleMs = () => (inventoryArmed ? BATCH_IDLE_ARMED_MS : BATCH_IDLE_MS);
@@ -1311,6 +1349,7 @@
       silent: true,
       noFeedback: true,
       quietFlash: true,
+      skipScroll: true,
     });
     return {
       ok: result.ok,
@@ -1332,7 +1371,12 @@
 
     for (const code of codes) {
       if (code.includes(';') || (typeof ScanResolve.isUrl === 'function' && ScanResolve.isUrl(code))) {
-        const ok = await processScan(code, { silent: true, noFeedback: true });
+        const ok = await processScan(code, {
+          silent: true,
+          noFeedback: true,
+          quietFlash: true,
+          skipScroll: true,
+        });
         if (ok) matched += 1;
         else {
           missed += 1;
@@ -1344,7 +1388,12 @@
       const hit = matchOneInventoryCode(code);
       if (hit.missed) {
         // Fall back to full processScan (API resolve) — restores pre-batch reliability.
-        const ok = await processScan(code, { silent: true, noFeedback: true, quietFlash: true });
+        const ok = await processScan(code, {
+          silent: true,
+          noFeedback: true,
+          quietFlash: true,
+          skipScroll: true,
+        });
         if (ok) {
           matched += 1;
           continue;
@@ -1361,6 +1410,8 @@
     }
 
     if (missedCodes.length) addUnmatchedCodes(missedCodes);
+    // Keep Item code focused for the next gun dump; scroll after focus restore.
+    if (inventoryArmed) focusManualCapture();
     if (lastRow) scrollRowIntoView(lastRow);
     wedgeDebugLog(
       `batch matched=${matched} already=${already} missed=${missed} codes=${codes.length}`
@@ -1383,6 +1434,7 @@
       if (inventoryArmed) {
         clearTimeout(statusResetTimer);
         statusResetTimer = setTimeout(() => refreshIdleStatusBar(), 1200);
+        scheduleManualCaptureFocus();
       }
       return true;
     }
@@ -1394,6 +1446,7 @@
       if (inventoryArmed) {
         clearTimeout(statusResetTimer);
         statusResetTimer = setTimeout(() => refreshIdleStatusBar(), 1200);
+        scheduleManualCaptureFocus();
       }
       return true;
     }
@@ -1404,11 +1457,13 @@
       if (inventoryArmed) {
         clearTimeout(statusResetTimer);
         statusResetTimer = setTimeout(() => refreshIdleStatusBar(), 1200);
+        scheduleManualCaptureFocus();
       }
       return false;
     }
 
     showScanError('not_on_po', 'No tags matched');
+    if (inventoryArmed) scheduleManualCaptureFocus();
     return false;
   };
 
@@ -1436,7 +1491,9 @@
         { sticky: true }
       );
     }
-    void processInventoryBatch(codes);
+    void processInventoryBatch(codes).finally(() => {
+      if (inventoryArmed) scheduleManualCaptureFocus();
+    });
   };
 
   enqueueWedgeCodes = (raw) => {
@@ -1445,6 +1502,10 @@
     for (const part of parts) batchCodes.push(part);
     clearTimeout(batchTimer);
     batchTimer = setTimeout(flushInventoryBatch, batchIdleMs());
+    if (inventoryArmed && batchCodes.length > 0) {
+      updateRemainingMeta();
+      wedgeDebugLog(`burst pending=${batchCodes.length} (wait ${batchIdleMs()}ms)`);
+    }
   };
 
   const flushWedgeBuffer = (opts) => {
