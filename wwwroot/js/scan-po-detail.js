@@ -279,23 +279,26 @@
     captureRefocusTimer = null;
   };
 
-  const focusManualCapture = () => {
+  const focusManualCapture = (opts = {}) => {
     if (!manualInput || readOnly || !inventoryArmed || manualInput.disabled) return;
-    try {
-      manualInput.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    } catch (_) {
-      try { manualInput.scrollIntoView(true); } catch (__) { /* ignore */ }
+    // During live RFID ingest, never scroll — smooth scrollIntoView drops the next HID dump.
+    if (!opts.noScroll) {
+      try {
+        manualInput.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      } catch (_) {
+        try { manualInput.scrollIntoView(true); } catch (__) { /* ignore */ }
+      }
     }
     try {
-      manualInput.focus({ preventScroll: false });
+      manualInput.focus({ preventScroll: true });
     } catch (_) {
       try { manualInput.focus(); } catch (__) { /* ignore */ }
     }
     // Do not select() — that races HID keystrokes and drops RFID characters.
   };
 
-  const scheduleManualCaptureFocus = () => {
-    const run = () => focusManualCapture();
+  const scheduleManualCaptureFocus = (opts = {}) => {
+    const run = () => focusManualCapture(opts);
     if (typeof requestAnimationFrame === 'function') {
       requestAnimationFrame(() => setTimeout(run, 40));
       return;
@@ -359,7 +362,7 @@
     // Listening: enqueue into the burst window — do not match the first tag alone.
     if (inventoryArmed) {
       enqueueWedgeCodes(text);
-      scheduleManualCaptureFocus();
+      scheduleManualCaptureFocus({ noScroll: true });
       return;
     }
     void processManualCodes(text);
@@ -1275,7 +1278,7 @@
       refreshWedgeDebug();
       enqueueWedgeCodes(text);
     }
-    scheduleManualCaptureFocus();
+    scheduleManualCaptureFocus({ noScroll: true });
   };
 
   manualBtn?.addEventListener('click', runManual);
@@ -1379,7 +1382,7 @@
     const result = confirmLineMatch(row, code, null, {
       silent: true,
       noFeedback: true,
-      quietFlash: false,
+      quietFlash: true,
       skipScroll: true,
     });
     return {
@@ -1389,6 +1392,23 @@
       row: result.row,
       code,
     };
+  };
+
+  let liveScrollTimer = null;
+  let livePendingScrollRow = null;
+
+  const scheduleLiveRowScroll = (row) => {
+    if (!row) return;
+    livePendingScrollRow = row;
+    clearTimeout(liveScrollTimer);
+    // Wait until the gun dump has gone idle before scrolling — avoids dropping tag 2+.
+    liveScrollTimer = setTimeout(() => {
+      const target = livePendingScrollRow;
+      livePendingScrollRow = null;
+      liveScrollTimer = null;
+      if (target) scrollRowIntoView(target);
+      focusManualCapture({ noScroll: true });
+    }, 600);
   };
 
   /** Hold-trigger: match each unique EPC as soon as it is typed (no 2s wait). */
@@ -1401,7 +1421,7 @@
       fresh.push(code);
     }
     if (!fresh.length) {
-      focusManualCapture();
+      focusManualCapture({ noScroll: true });
       return false;
     }
 
@@ -1418,7 +1438,7 @@
         const ok = await processScan(code, {
           silent: true,
           noFeedback: true,
-          quietFlash: false,
+          quietFlash: true,
           skipScroll: true,
         });
         if (ok) matched += 1;
@@ -1431,7 +1451,7 @@
         const ok = await processScan(code, {
           silent: true,
           noFeedback: true,
-          quietFlash: false,
+          quietFlash: true,
           skipScroll: true,
         });
         if (ok) matched += 1;
@@ -1446,8 +1466,8 @@
 
     if (missedCodes.length) addUnmatchedCodes(missedCodes);
     updateRemainingMeta();
-    focusManualCapture();
-    if (lastRow) scrollRowIntoView(lastRow);
+    focusManualCapture({ noScroll: true });
+    if (lastRow) scheduleLiveRowScroll(lastRow);
     wedgeDebugLog(`live matched=${matched} missed=${missedCodes.length} remaining=${remainingLines()}`);
     return matched > 0;
   };
@@ -1561,7 +1581,7 @@
     // Hold-trigger / Listening: match unique EPCs immediately — do not wait 2s.
     if (inventoryArmed) {
       void ingestArmedCodesLive(parts).finally(() => {
-        if (inventoryArmed) focusManualCapture();
+        if (inventoryArmed) focusManualCapture({ noScroll: true });
       });
       return;
     }
