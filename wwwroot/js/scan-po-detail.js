@@ -47,7 +47,7 @@
   let inventoryArmed = false;
   const manualPlaceholderDefault =
     (manualInput && manualInput.getAttribute('placeholder')) || 'Type item code';
-  const MANUAL_PLACEHOLDER_LISTENING = 'Listening — scan tags here…';
+  const MANUAL_PLACEHOLDER_LISTENING = 'Scan tags here (multi OK)…';
   /** @type {Set<string>} */
   const unmatchedKeys = new Set();
   /** @type {string[]} */
@@ -181,10 +181,10 @@
       return;
     }
     if (inventoryArmed) {
-      setStatusBar('armed', 'Listening… pull trigger', `${remainingLines()} remaining`, { sticky: true });
+      setStatusBar('armed', 'Listening… scan more tags', `${remainingLines()} remaining`, { sticky: true });
       return;
     }
-    setStatusBar('ready', 'Ready to scan', `${remainingLines()} remaining`, { sticky: true });
+    setStatusBar('ready', 'Paused — tap to resume', `${remainingLines()} remaining`, { sticky: true });
   };
 
   const focusDebug = () => {
@@ -322,7 +322,8 @@
     captureIdleTimer = null;
     if (!manualInput) return;
     const text = String(manualInput.value || '').trim();
-    if (!force && inventoryArmed && isLikelyIncompleteEpc(text)) {
+    // Always wait out mid-EPC typing (continuous Item code path).
+    if (!force && isLikelyIncompleteEpc(text)) {
       captureIdleTimer = setTimeout(() => flushManualCapture({ force: true }), WEDGE_IDLE_ARMED_MS);
       return;
     }
@@ -337,29 +338,33 @@
       ? ScanResolve.splitInventoryCodes(text)
       : [text];
     wedgeDebugLog(`manual flush "${text}" → ${lastWedgeCodes.length} code(s)`);
-    if (inventoryArmed && lastWedgeCodes.length === 1) {
+    if (lastWedgeCodes.length === 1) {
       wedgeDebugLog(
         'hint: 1 code this burst — enable gun multi-tag/inventory mode for many EPCs per trigger'
       );
     }
     refreshWedgeDebug();
     enqueueWedgeCodes(text);
+    // Keep caret in Item code so the next tag can land immediately.
     if (inventoryArmed) scheduleManualCaptureFocus();
+    else if (document.activeElement === manualInput) {
+      try { manualInput.focus(); } catch (_) { /* ignore */ }
+    }
   };
 
-  const setInventoryArmed = (armed) => {
+  const setInventoryArmed = (armed, opts = {}) => {
     if (readOnly) return;
     inventoryArmed = !!armed;
     if (listenHint) listenHint.hidden = !inventoryArmed;
     applyManualListeningUi(inventoryArmed);
     refreshIdleStatusBar();
     if (inventoryArmed) {
-      showToast('Item code is active — scan now', 'ok');
+      if (!opts.quiet) showToast('Item code active — scan continuously (multi OK)', 'ok');
       try { statusBar?.blur(); } catch (_) { /* ignore */ }
       showScanTabForListen();
       scheduleManualCaptureFocus();
     } else {
-      showToast('Inventory listening stopped.', 'warn');
+      if (!opts.quiet) showToast('Paused. Tap Ready to scan to resume.', 'warn');
       stopCaptureRefocus();
       clearTimeout(captureIdleTimer);
     }
@@ -1149,28 +1154,25 @@
   }
 
   const runManual = () => {
-    if (inventoryArmed) {
-      flushManualCapture({ force: true });
+    if (readOnly) return;
+    const text = (manualInput?.value || '').trim();
+    if (!text) {
+      showToast(inventoryArmed ? 'Scan a tag into Item code.' : 'Enter an item code.', 'warn');
       return;
     }
-    const code = (manualInput?.value || '').trim();
-    if (!code) {
-      showToast('Enter an item code.', 'warn');
-      return;
-    }
-    void processScan(code);
-    if (manualInput) manualInput.value = '';
+    // Always continuous multi-code path (split + batch + keep going).
+    flushManualCapture({ force: true });
   };
 
   manualBtn?.addEventListener('click', runManual);
   manualInput?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || (inventoryArmed && e.key === 'Tab')) {
+    if (e.key === 'Enter' || e.key === 'Tab') {
       e.preventDefault();
       runManual();
     }
   });
   manualInput?.addEventListener('input', () => {
-    if (!inventoryArmed || readOnly) return;
+    if (readOnly) return;
     refreshWedgeDebug();
     clearTimeout(captureIdleTimer);
     captureIdleTimer = setTimeout(() => flushManualCapture(), wedgeIdleMs());
@@ -1255,8 +1257,6 @@
 
   const processInventoryBatch = async (codes) => {
     if (!codes.length) return false;
-    // Unarmed: one code keeps the normal single-scan path (toasts / resolve).
-    if (!inventoryArmed && codes.length === 1) return processScan(codes[0]);
 
     let matched = 0;
     let already = 0;
@@ -1288,7 +1288,7 @@
       }
     }
 
-    if (inventoryArmed && missedCodes.length) addUnmatchedCodes(missedCodes);
+    if (missedCodes.length) addUnmatchedCodes(missedCodes);
     if (lastRow) scrollRowIntoView(lastRow);
     wedgeDebugLog(
       `batch matched=${matched} already=${already} missed=${missed} codes=${codes.length}`
@@ -1302,7 +1302,16 @@
           (missed ? `, ${missed} not on PO` : ''),
         missed ? 'warn' : 'ok'
       );
-      setStatusBar('ok', `Matched ${matched}`, `${remainingLines()} remaining`);
+      setStatusBar(
+        inventoryArmed ? 'armed' : 'ok',
+        `Matched ${matched}`,
+        `${remainingLines()} remaining`,
+        { sticky: inventoryArmed }
+      );
+      if (inventoryArmed) {
+        clearTimeout(statusResetTimer);
+        statusResetTimer = setTimeout(() => refreshIdleStatusBar(), 1200);
+      }
       return true;
     }
 
@@ -1310,16 +1319,24 @@
       playAlreadyFeedback();
       showToast(`Already received (${already})`, 'warn');
       setStatusBar('already', 'Already received', `${remainingLines()} remaining`);
+      if (inventoryArmed) {
+        clearTimeout(statusResetTimer);
+        statusResetTimer = setTimeout(() => refreshIdleStatusBar(), 1200);
+      }
       return true;
     }
 
-    if (inventoryArmed && missedCodes.length) {
+    if (missedCodes.length) {
       showToast(`${missedCodes.length} tag(s) not on this PO`, 'warn');
       setStatusBar('error', 'Not on PO', `${remainingLines()} remaining`);
+      if (inventoryArmed) {
+        clearTimeout(statusResetTimer);
+        statusResetTimer = setTimeout(() => refreshIdleStatusBar(), 1200);
+      }
       return false;
     }
 
-    showScanError('not_on_po', missed ? `${missed} tag(s) not on this PO` : 'No tags matched');
+    showScanError('not_on_po', 'No tags matched');
     return false;
   };
 
@@ -1531,6 +1548,8 @@
     if (!readOnly) loadLocalSession();
     applyAllRowVisuals();
     await flushOfflineQueue();
+    // Start continuous Item code scanning — no extra Ready to scan tap required.
+    if (!readOnly) setInventoryArmed(true, { quiet: true });
   };
 
   window.addEventListener('online', () => {
