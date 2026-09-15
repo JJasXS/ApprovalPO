@@ -149,11 +149,14 @@
                         aria-live="polite"
                         aria-pressed="false"
                         data-state="ready"
-                        title="Tap to start multi-tag inventory listening">
+                        title="Tap to listen. Multi-tag per trigger needs gun inventory/multi-read mode.">
                     <span class="scan-status-bar-main" id="scanStatusMain">Ready to scan</span>
                     <span class="scan-status-bar-meta" id="scanStatusMeta">@Model.Lines.Count remaining</span>
                 </button>
-                <p id="scanListenHint" class="scan-listen-hint" hidden>Listening for RFID — keep tags near the gun</p>
+                <p id="scanListenHint" class="scan-listen-hint" hidden>
+                    Listening for RFID — keep tags near the gun.
+                    One trigger yields many EPCs only if the gun is in multi-tag / inventory mode (not single-read).
+                </p>
                 <input type="text"
                        id="scanListenCapture"
                        class="scan-listen-capture"

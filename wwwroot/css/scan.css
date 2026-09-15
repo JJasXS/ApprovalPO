@@ -1054,6 +1054,7 @@ button.scan-status-bar:focus-visible {
   font-size: 12px;
   font-weight: 600;
   color: #0369a1;
+  line-height: 1.4;
 }
 .scan-listen-capture {
   position: absolute;

@@ -263,11 +263,24 @@
     }
   };
 
-  const flushListenCapture = () => {
+  const isLikelyIncompleteEpc = (text) => {
+    const t = String(text || '').trim();
+    if (!t || /[\s,|]/.test(t) || t.includes(';')) return false;
+    // Mid-stream hex EPC (typical 24) — wait for more keystrokes before flush.
+    if (/^[A-Fa-f0-9]+$/.test(t) && t.length < 24) return true;
+    return false;
+  };
+
+  const flushListenCapture = (opts) => {
+    const force = !!(opts && opts.force);
     clearTimeout(captureIdleTimer);
     captureIdleTimer = null;
     if (!listenCapture) return;
     const text = String(listenCapture.value || '').trim();
+    if (!force && inventoryArmed && isLikelyIncompleteEpc(text)) {
+      captureIdleTimer = setTimeout(() => flushListenCapture({ force: true }), WEDGE_IDLE_ARMED_MS);
+      return;
+    }
     listenCapture.value = '';
     refreshWedgeDebug();
     if (readOnly || text.length < 3) {
@@ -279,6 +292,11 @@
       ? ScanResolve.splitInventoryCodes(text)
       : [text];
     wedgeDebugLog(`capture flush "${text}" → ${lastWedgeCodes.length} code(s)`);
+    if (inventoryArmed && lastWedgeCodes.length === 1) {
+      wedgeDebugLog(
+        'hint: 1 code this burst — enable gun multi-tag/inventory mode for many EPCs per trigger'
+      );
+    }
     refreshWedgeDebug();
     enqueueWedgeCodes(text);
   };
@@ -289,7 +307,10 @@
     if (listenHint) listenHint.hidden = !inventoryArmed;
     refreshIdleStatusBar();
     if (inventoryArmed) {
-      showToast('Listening for tags… Tap bar again when done.', 'ok');
+      showToast(
+        'Listening… Hold trigger near tags. Multi-tag needs gun inventory mode.',
+        'ok'
+      );
       try { statusBar?.blur(); } catch (_) { /* ignore */ }
       focusListenCapture();
     } else {
@@ -1133,8 +1154,14 @@
   let batchTimer = null;
   // Assemble one HID burst (one EPC typing stream).
   const WEDGE_IDLE_MS = 70;
-  // After each code/Enter, wait briefly for more inventory tags from the same trigger.
+  // Slower Bluetooth / inventory dumps: wait longer between keystrokes while Listening.
+  const WEDGE_IDLE_ARMED_MS = 180;
+  // After each code/Enter, wait for more inventory tags from the same trigger hold.
   const BATCH_IDLE_MS = 280;
+  const BATCH_IDLE_ARMED_MS = 900;
+
+  const wedgeIdleMs = () => (inventoryArmed ? WEDGE_IDLE_ARMED_MS : WEDGE_IDLE_MS);
+  const batchIdleMs = () => (inventoryArmed ? BATCH_IDLE_ARMED_MS : BATCH_IDLE_MS);
 
   const splitWedgeCodes = (raw) => {
     if (typeof ScanResolve.splitInventoryCodes === 'function')
@@ -1244,6 +1271,16 @@
       codes.push(code);
     }
     if (!codes.length) return;
+    if (inventoryArmed) {
+      setStatusBar(
+        'armed',
+        codes.length === 1
+          ? 'Heard 1 tag (gun may be single-read)'
+          : `Heard ${codes.length} tags`,
+        `${remainingLines()} remaining`,
+        { sticky: true }
+      );
+    }
     void processInventoryBatch(codes);
   };
 
@@ -1252,13 +1289,18 @@
     if (!parts.length) return;
     for (const part of parts) batchCodes.push(part);
     clearTimeout(batchTimer);
-    batchTimer = setTimeout(flushInventoryBatch, BATCH_IDLE_MS);
+    batchTimer = setTimeout(flushInventoryBatch, batchIdleMs());
   };
 
-  const flushWedgeBuffer = () => {
+  const flushWedgeBuffer = (opts) => {
+    const force = !!(opts && opts.force);
     clearTimeout(wedgeTimer);
     wedgeTimer = null;
     const text = wedgeBuf.trim();
+    if (!force && inventoryArmed && isLikelyIncompleteEpc(text)) {
+      wedgeTimer = setTimeout(() => flushWedgeBuffer({ force: true }), WEDGE_IDLE_ARMED_MS);
+      return;
+    }
     wedgeBuf = '';
     refreshWedgeDebug();
     if (readOnly || text.length < 3) {
@@ -1268,6 +1310,11 @@
     lastWedgeFlush = text;
     lastWedgeCodes = splitWedgeCodes(text);
     wedgeDebugLog(`flush "${text}" → ${lastWedgeCodes.length} code(s)`);
+    if (inventoryArmed && lastWedgeCodes.length === 1) {
+      wedgeDebugLog(
+        'hint: 1 code this burst — enable gun multi-tag/inventory mode for many EPCs per trigger'
+      );
+    }
     refreshWedgeDebug();
     enqueueWedgeCodes(text);
   };
@@ -1284,7 +1331,7 @@
       if (!wedgeBuf.trim()) return;
       e.preventDefault();
       wedgeDebugLog(`key ${e.key} (flush)`);
-      flushWedgeBuffer();
+      flushWedgeBuffer({ force: true });
       return;
     }
 
@@ -1293,7 +1340,7 @@
       e.preventDefault();
     wedgeBuf += e.key;
     clearTimeout(wedgeTimer);
-    wedgeTimer = setTimeout(flushWedgeBuffer, WEDGE_IDLE_MS);
+    wedgeTimer = setTimeout(flushWedgeBuffer, wedgeIdleMs());
     refreshWedgeDebug();
   });
 
@@ -1318,14 +1365,14 @@
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault();
         wedgeDebugLog(`capture key ${e.key}`);
-        flushListenCapture();
+        flushListenCapture({ force: true });
       }
     });
     listenCapture.addEventListener('input', () => {
       if (!inventoryArmed || readOnly) return;
       refreshWedgeDebug();
       clearTimeout(captureIdleTimer);
-      captureIdleTimer = setTimeout(flushListenCapture, WEDGE_IDLE_MS);
+      captureIdleTimer = setTimeout(() => flushListenCapture(), wedgeIdleMs());
     });
     listenCapture.addEventListener('blur', () => {
       if (!inventoryArmed || readOnly) return;

@@ -285,8 +285,17 @@
   /** Typical UHF EPC hex length when used as ST_ITEM / item code. */
   const EPC_HEX_LEN = 24;
 
-  function expandGluedHexEpcs(token) {
+  /** Peel a leading/trailing wrapper so glued hex EPCs still expand. */
+  function peelHexRun(token) {
     const t = String(token || '').trim();
+    if (!t) return '';
+    if (/^[A-Fa-f0-9]+$/.test(t)) return t;
+    const m = t.match(/[A-Fa-f0-9]{16,}/);
+    return m ? m[0] : t;
+  }
+
+  function expandGluedHexEpcs(token) {
+    const t = peelHexRun(token);
     if (!t) return [];
     if (/^[A-Fa-f0-9]{48,}$/.test(t) && t.length % EPC_HEX_LEN === 0) {
       const parts = [];
@@ -300,14 +309,17 @@
   /**
    * Split a HID wedge dump into discrete inventory codes.
    * QR semicolon payloads stay as a single string for existing parsers.
-   * Supports newline/comma/pipe/space separators and glued 24-char hex EPCs.
+   * Supports newline/CR/comma/pipe/space separators and glued 24-char hex EPCs.
    */
   function splitInventoryCodes(raw) {
-    const text = String(raw || '').trim();
+    const text = String(raw || '').replace(/^\uFEFF/, '').trim();
     if (!text) return [];
     if (text.includes(';')) return [text];
 
-    const tokens = text.split(/[\s,|]+/).map((s) => s.trim()).filter(Boolean);
+    const tokens = text
+      .split(/[\s,|\u0000-\u001f]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
     const expanded = [];
     for (const token of tokens) {
       for (const part of expandGluedHexEpcs(token))
