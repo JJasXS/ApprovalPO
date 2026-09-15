@@ -33,7 +33,13 @@
   const statusBar = document.getElementById('scanStatusBar');
   const statusMain = document.getElementById('scanStatusMain');
   const statusMeta = document.getElementById('scanStatusMeta');
+  const unmatchedWrap = document.getElementById('scanUnmatchedWrap');
+  const unmatchedBody = document.getElementById('scanUnmatchedBody');
+  const unmatchedClearBtn = document.getElementById('scanUnmatchedClear');
   let statusResetTimer = null;
+  let inventoryArmed = false;
+  /** @type {Set<string>} */
+  const unmatchedKeys = new Set();
 
   if (docKey && typeof ScanResolve.clearCachedForDoc === 'function') {
     ScanResolve.clearCachedForDoc(docKey);
@@ -131,18 +137,82 @@
     }
   };
 
-  const setStatusBar = (state, mainText, metaText) => {
+  const setStatusBar = (state, mainText, metaText, opts = {}) => {
     if (!statusBar) return;
     statusBar.dataset.state = state || 'ready';
     if (statusMain) statusMain.textContent = mainText || 'Ready to scan';
     if (statusMeta) statusMeta.textContent = metaText ?? `${remainingLines()} remaining`;
+    if (statusBar.getAttribute('aria-pressed') != null)
+      statusBar.setAttribute('aria-pressed', inventoryArmed ? 'true' : 'false');
     clearTimeout(statusResetTimer);
-    if (state && state !== 'ready') {
+    const sticky =
+      opts.sticky === true ||
+      state === 'ready' ||
+      state === 'armed' ||
+      state === 'done';
+    if (!sticky && state) {
       statusResetTimer = setTimeout(() => {
         if (readOnly) return;
-        setStatusBar('ready', 'Ready to scan', `${remainingLines()} remaining`);
+        refreshIdleStatusBar();
       }, 2200);
     }
+  };
+
+  const refreshIdleStatusBar = () => {
+    if (readOnly) {
+      setStatusBar('done', 'Submitted', `${remainingLines()} remaining`, { sticky: true });
+      return;
+    }
+    if (inventoryArmed) {
+      setStatusBar('armed', 'Listening…', `${remainingLines()} remaining`, { sticky: true });
+      return;
+    }
+    setStatusBar('ready', 'Ready to scan', `${remainingLines()} remaining`, { sticky: true });
+  };
+
+  const clearUnmatched = () => {
+    unmatchedKeys.clear();
+    if (unmatchedBody) unmatchedBody.innerHTML = '';
+    if (unmatchedWrap) unmatchedWrap.hidden = true;
+  };
+
+  const addUnmatchedCodes = (codes) => {
+    if (!unmatchedBody || !unmatchedWrap) return;
+    let added = 0;
+    for (const raw of codes || []) {
+      const code = String(raw || '').trim();
+      if (!code) continue;
+      const key = code.toUpperCase();
+      if (unmatchedKeys.has(key)) continue;
+      unmatchedKeys.add(key);
+      added += 1;
+      const tr = document.createElement('tr');
+      const tdN = document.createElement('td');
+      tdN.textContent = String(unmatchedKeys.size);
+      const tdCode = document.createElement('td');
+      tdCode.className = 'scan-unmatched-code';
+      tdCode.title = code;
+      tdCode.textContent = shortCode(code);
+      const tdNote = document.createElement('td');
+      tdNote.className = 'scan-unmatched-note';
+      tdNote.textContent = 'Not on this PO';
+      tr.append(tdN, tdCode, tdNote);
+      unmatchedBody.appendChild(tr);
+    }
+    if (added > 0 || unmatchedKeys.size > 0) unmatchedWrap.hidden = false;
+  };
+
+  const setInventoryArmed = (armed) => {
+    if (readOnly) return;
+    inventoryArmed = !!armed;
+    refreshIdleStatusBar();
+    if (inventoryArmed) showToast('Listening for tags… Tap bar again when done.', 'ok');
+    else showToast('Inventory listening stopped.', 'warn');
+  };
+
+  const toggleInventoryArmed = () => {
+    if (readOnly) return;
+    setInventoryArmed(!inventoryArmed);
   };
 
   const playAlreadyFeedback = () => {
@@ -513,6 +583,9 @@
     if (!window.confirm(msg)) return;
 
     clearLocalScanSession();
+    inventoryArmed = false;
+    clearUnmatched();
+    refreshIdleStatusBar();
 
     if (resetScanUrl && docKey && navigator.onLine) {
       try {
@@ -622,14 +695,13 @@
       linesProgressEl.textContent =
         total > 0 ? `${withScan} of ${total} lines with received qty` : '';
     }
-    if (statusBar && (!statusBar.dataset.state || statusBar.dataset.state === 'ready')) {
-      setStatusBar(
-        readOnly ? 'done' : 'ready',
-        readOnly ? 'Submitted' : 'Ready to scan',
-        `${remainingLines()} remaining`
-      );
-    } else if (statusMeta && statusBar?.dataset.state === 'ready') {
-      statusMeta.textContent = `${remainingLines()} remaining`;
+    if (statusBar) {
+      const state = statusBar.dataset.state || 'ready';
+      if (state === 'ready' || state === 'armed' || state === 'done' || !state) {
+        refreshIdleStatusBar();
+      } else if (statusMeta) {
+        statusMeta.textContent = `${remainingLines()} remaining`;
+      }
     }
     updateUndoButton();
     updateScanButton();
@@ -990,24 +1062,30 @@
 
   const processInventoryBatch = async (codes) => {
     if (!codes.length) return false;
-    if (codes.length === 1) return processScan(codes[0]);
+    // Unarmed: one code keeps the normal single-scan path (toasts / resolve).
+    if (!inventoryArmed && codes.length === 1) return processScan(codes[0]);
 
     let matched = 0;
     let already = 0;
     let missed = 0;
     let lastRow = null;
+    const missedCodes = [];
 
     for (const code of codes) {
       if (code.includes(';') || (typeof ScanResolve.isUrl === 'function' && ScanResolve.isUrl(code))) {
         const ok = await processScan(code, { silent: true, noFeedback: true });
         if (ok) matched += 1;
-        else missed += 1;
+        else {
+          missed += 1;
+          missedCodes.push(code);
+        }
         continue;
       }
 
       const hit = matchOneInventoryCode(code);
       if (hit.missed) {
         missed += 1;
+        missedCodes.push(code);
         continue;
       }
       if (hit.already) already += 1;
@@ -1017,6 +1095,7 @@
       }
     }
 
+    if (inventoryArmed && missedCodes.length) addUnmatchedCodes(missedCodes);
     if (lastRow) scrollRowIntoView(lastRow);
 
     if (matched > 0) {
@@ -1036,6 +1115,12 @@
       showToast(`Already received (${already})`, 'warn');
       setStatusBar('already', 'Already received', `${remainingLines()} remaining`);
       return true;
+    }
+
+    if (inventoryArmed && missedCodes.length) {
+      showToast(`${missedCodes.length} tag(s) not on this PO`, 'warn');
+      setStatusBar('error', 'Not on PO', `${remainingLines()} remaining`);
+      return false;
     }
 
     showScanError('not_on_po', missed ? `${missed} tag(s) not on this PO` : 'No tags matched');
@@ -1093,6 +1178,14 @@
     clearTimeout(wedgeTimer);
     wedgeTimer = setTimeout(flushWedgeBuffer, WEDGE_IDLE_MS);
   });
+
+  if (!readOnly && statusBar && statusBar.tagName === 'BUTTON') {
+    statusBar.addEventListener('click', (e) => {
+      e.preventDefault();
+      toggleInventoryArmed();
+    });
+  }
+  unmatchedClearBtn?.addEventListener('click', () => clearUnmatched());
 
   undoBtn?.addEventListener('click', () => undoLastScan());
   resetBtn?.addEventListener('click', () => void resetScanSession());

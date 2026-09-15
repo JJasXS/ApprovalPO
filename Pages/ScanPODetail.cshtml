@@ -141,10 +141,26 @@
 
             <div id="scanToastRoot" class="scan-toast-root" aria-live="polite"></div>
 
-            <div id="scanStatusBar" class="scan-status-bar" role="status" aria-live="polite" data-state="ready">
-                <span class="scan-status-bar-main" id="scanStatusMain">Ready to scan</span>
-                <span class="scan-status-bar-meta" id="scanStatusMeta">@Model.Lines.Count remaining</span>
-            </div>
+            @if (!scanSubmitted)
+            {
+                <button type="button"
+                        id="scanStatusBar"
+                        class="scan-status-bar scan-status-bar--toggle"
+                        aria-live="polite"
+                        aria-pressed="false"
+                        data-state="ready"
+                        title="Tap to start multi-tag inventory listening">
+                    <span class="scan-status-bar-main" id="scanStatusMain">Ready to scan</span>
+                    <span class="scan-status-bar-meta" id="scanStatusMeta">@Model.Lines.Count remaining</span>
+                </button>
+            }
+            else
+            {
+                <div id="scanStatusBar" class="scan-status-bar" role="status" aria-live="polite" data-state="done">
+                    <span class="scan-status-bar-main" id="scanStatusMain">Submitted</span>
+                    <span class="scan-status-bar-meta" id="scanStatusMeta">0 remaining</span>
+                </div>
+            }
 
             <div class="scan-lines-head">
                 <p class="scan-lines-title">Line items (@Model.Lines.Count)</p>
@@ -215,6 +231,25 @@
                             }
                         </tbody>
                     </table>
+                </div>
+
+                <div id="scanUnmatchedWrap" class="scan-unmatched-wrap" hidden>
+                    <div class="scan-unmatched-head">
+                        <p class="scan-unmatched-title">Not on this PO</p>
+                        <button type="button" id="scanUnmatchedClear" class="scan-unmatched-clear">Clear</button>
+                    </div>
+                    <div class="scan-table-wrap">
+                        <table class="scan-unmatched-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Code</th>
+                                    <th>Note</th>
+                                </tr>
+                            </thead>
+                            <tbody id="scanUnmatchedBody"></tbody>
+                        </table>
+                    </div>
                 </div>
             }
 
