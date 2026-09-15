@@ -1535,33 +1535,99 @@
 
   const actionsMenuBtn = document.getElementById('scanActionsMenuBtn');
   const actionsMenuPanel = document.getElementById('scanActionsMenuPanel');
+  const actionsMenuWrap = actionsMenuBtn?.parentElement || null;
+  let actionsMenuIgnoreOutsideUntil = 0;
+  let actionsMenuFromPointer = false;
+
+  const positionActionsMenuPanel = () => {
+    if (!actionsMenuBtn || !actionsMenuPanel) return;
+    const r = actionsMenuBtn.getBoundingClientRect();
+    const width = Math.max(180, actionsMenuPanel.offsetWidth || 180);
+    let left = r.right - width;
+    if (left < 8) left = 8;
+    if (left + width > window.innerWidth - 8)
+      left = Math.max(8, window.innerWidth - 8 - width);
+    actionsMenuPanel.style.position = 'fixed';
+    actionsMenuPanel.style.top = `${Math.round(r.bottom + 6)}px`;
+    actionsMenuPanel.style.left = `${Math.round(left)}px`;
+    actionsMenuPanel.style.right = 'auto';
+    actionsMenuPanel.style.zIndex = '3000';
+    actionsMenuPanel.style.display = 'block';
+  };
+
+  const clearActionsMenuPosition = () => {
+    if (!actionsMenuPanel) return;
+    actionsMenuPanel.style.position = '';
+    actionsMenuPanel.style.top = '';
+    actionsMenuPanel.style.left = '';
+    actionsMenuPanel.style.right = '';
+    actionsMenuPanel.style.zIndex = '';
+    actionsMenuPanel.style.display = '';
+  };
 
   const setActionsMenuOpen = (open) => {
     if (!actionsMenuBtn || !actionsMenuPanel) return;
-    actionsMenuPanel.hidden = !open;
+    if (open) {
+      actionsMenuIgnoreOutsideUntil = Date.now() + 500;
+      stopCaptureRefocus();
+      actionsMenuPanel.removeAttribute('hidden');
+      actionsMenuPanel.hidden = false;
+      actionsMenuPanel.classList.add('is-open');
+      if (actionsMenuPanel.parentElement !== document.body)
+        document.body.appendChild(actionsMenuPanel);
+      positionActionsMenuPanel();
+    } else {
+      actionsMenuPanel.hidden = true;
+      actionsMenuPanel.setAttribute('hidden', '');
+      actionsMenuPanel.classList.remove('is-open');
+      clearActionsMenuPosition();
+      if (actionsMenuWrap && actionsMenuPanel.parentElement !== actionsMenuWrap)
+        actionsMenuWrap.appendChild(actionsMenuPanel);
+    }
     actionsMenuBtn.setAttribute('aria-expanded', String(!!open));
   };
   const closeActionsMenu = () => setActionsMenuOpen(false);
 
+  const toggleActionsMenu = () => {
+    const willOpen = actionsMenuPanel.hasAttribute('hidden') || !!actionsMenuPanel.hidden;
+    setActionsMenuOpen(willOpen);
+    const headerPanel = document.getElementById('scanMenuPanel');
+    const headerBtn = document.getElementById('scanMenuBtn');
+    if (headerPanel) headerPanel.hidden = true;
+    if (headerBtn) headerBtn.setAttribute('aria-expanded', 'false');
+  };
+
   if (actionsMenuBtn && actionsMenuPanel) {
     actionsMenuBtn.addEventListener('pointerdown', (e) => {
-      stopCaptureRefocus();
+      if (e.button != null && e.button !== 0) return;
+      e.preventDefault();
       e.stopPropagation();
+      stopCaptureRefocus();
+      actionsMenuFromPointer = true;
+      toggleActionsMenu();
+      setTimeout(() => { actionsMenuFromPointer = false; }, 400);
     });
     actionsMenuBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const willOpen = actionsMenuPanel.hasAttribute('hidden') || !!actionsMenuPanel.hidden;
-      setActionsMenuOpen(willOpen);
-      const headerPanel = document.getElementById('scanMenuPanel');
-      const headerBtn = document.getElementById('scanMenuBtn');
-      if (headerPanel) headerPanel.hidden = true;
-      if (headerBtn) headerBtn.setAttribute('aria-expanded', 'false');
+      if (actionsMenuFromPointer) return;
+      toggleActionsMenu();
     });
+    actionsMenuPanel.addEventListener('pointerdown', (e) => e.stopPropagation());
     actionsMenuPanel.addEventListener('click', (e) => e.stopPropagation());
-    document.addEventListener('click', () => closeActionsMenu());
+    document.addEventListener('pointerdown', (e) => {
+      if (actionsMenuPanel.hidden) return;
+      if (Date.now() < actionsMenuIgnoreOutsideUntil) return;
+      const t = e.target;
+      if (t instanceof Node && (actionsMenuBtn.contains(t) || actionsMenuPanel.contains(t)))
+        return;
+      closeActionsMenu();
+    });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') closeActionsMenu();
+    });
+    window.addEventListener('resize', () => {
+      if (!actionsMenuPanel.hidden) closeActionsMenu();
     });
   }
 
