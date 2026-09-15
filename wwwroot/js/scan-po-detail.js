@@ -181,10 +181,10 @@
       return;
     }
     if (inventoryArmed) {
-      setStatusBar('armed', 'Listening… scan more tags', `${remainingLines()} remaining`, { sticky: true });
+      setStatusBar('armed', 'Listening… tap to pause', `${remainingLines()} remaining`, { sticky: true });
       return;
     }
-    setStatusBar('ready', 'Paused — tap to resume', `${remainingLines()} remaining`, { sticky: true });
+    setStatusBar('ready', 'Tap to resume scanning', `${remainingLines()} remaining`, { sticky: true });
   };
 
   const focusDebug = () => {
@@ -351,26 +351,31 @@
 
   const setInventoryArmed = (armed, opts = {}) => {
     if (readOnly) return;
+    stopCaptureRefocus();
     inventoryArmed = !!armed;
     if (listenHint) listenHint.hidden = !inventoryArmed;
     applyManualListeningUi(inventoryArmed);
     refreshIdleStatusBar();
     if (inventoryArmed) {
-      if (!opts.quiet) showToast('Item code active — scan continuously (multi OK)', 'ok');
-      try { statusBar?.blur(); } catch (_) { /* ignore */ }
+      if (!opts.quiet) showToast('Listening — scan Item code', 'ok');
       showScanTabForListen();
       scheduleManualCaptureFocus();
     } else {
-      if (!opts.quiet) showToast('Paused. Tap Ready to scan to resume.', 'warn');
-      stopCaptureRefocus();
+      if (!opts.quiet) showToast('Paused — tap bar to resume', 'warn');
       clearTimeout(captureIdleTimer);
     }
     wedgeDebugLog(inventoryArmed ? 'armed' : 'disarmed');
     refreshWedgeDebug();
   };
 
+  let lastArmToggleAt = 0;
+  const TOGGLE_DEBOUNCE_MS = 350;
+
   const toggleInventoryArmed = () => {
     if (readOnly) return;
+    const now = Date.now();
+    if (now - lastArmToggleAt < TOGGLE_DEBOUNCE_MS) return;
+    lastArmToggleAt = now;
     setInventoryArmed(!inventoryArmed);
   };
 
@@ -1235,6 +1240,8 @@
       const ae = document.activeElement;
       if (ae && (ae.id === 'scanStatusBar' || ae.id === 'scanUnmatchedClear'))
         return;
+      if (ae && ae.classList?.contains('scan-status-bar'))
+        return;
       if (ae && ae.classList?.contains('scan-received-input'))
         return;
       if (ae && (ae.id === 'scanManualBtn' || ae.classList?.contains('scan-manual-btn')))
@@ -1487,8 +1494,25 @@
   document.addEventListener('focusout', () => setTimeout(refreshWedgeDebug, 0));
 
   if (!readOnly && statusBar && statusBar.tagName === 'BUTTON') {
+    // Cancel Item-code steal-back as soon as the finger/mouse hits the bar.
+    statusBar.addEventListener('pointerdown', (e) => {
+      stopCaptureRefocus();
+      // Keep the bar as the event target; don't let focus bounce to Item code mid-tap.
+      e.stopPropagation();
+    });
+    let toggleFromPointer = false;
+    statusBar.addEventListener('pointerup', (e) => {
+      if (e.button != null && e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      toggleFromPointer = true;
+      toggleInventoryArmed();
+      // Ignore the synthetic click that follows pointerup on many browsers.
+      setTimeout(() => { toggleFromPointer = false; }, TOGGLE_DEBOUNCE_MS);
+    });
     statusBar.addEventListener('click', (e) => {
       e.preventDefault();
+      if (toggleFromPointer) return;
       toggleInventoryArmed();
     });
   }
