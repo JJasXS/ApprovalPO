@@ -1107,6 +1107,51 @@ button.scan-status-bar:focus-visible {
   white-space: nowrap;
 }
 
+.scan-wedge-debug {
+  margin: 18px 0 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px dashed #94a3b8;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 12px;
+}
+.scan-wedge-debug > summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: #475569;
+}
+.scan-wedge-debug-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+  margin-top: 10px;
+}
+.scan-wedge-debug-wide { grid-column: 1 / -1; }
+.scan-wedge-debug-label {
+  display: inline-block;
+  min-width: 5.5rem;
+  font-weight: 600;
+  color: #64748b;
+}
+.scan-wedge-debug code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+.scan-wedge-debug-log {
+  margin: 10px 0 0;
+  max-height: 160px;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 11px;
+  line-height: 1.35;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
 .scan-line-code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;

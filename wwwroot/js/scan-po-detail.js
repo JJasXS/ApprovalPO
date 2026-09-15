@@ -36,10 +36,21 @@
   const unmatchedWrap = document.getElementById('scanUnmatchedWrap');
   const unmatchedBody = document.getElementById('scanUnmatchedBody');
   const unmatchedClearBtn = document.getElementById('scanUnmatchedClear');
+  const wedgeDebugEl = document.getElementById('scanWedgeDebug');
+  const debugArmedEl = document.getElementById('scanDebugArmed');
+  const debugFocusEl = document.getElementById('scanDebugFocus');
+  const debugBufferEl = document.getElementById('scanDebugBuffer');
+  const debugLastFlushEl = document.getElementById('scanDebugLastFlush');
+  const debugLogEl = document.getElementById('scanDebugLog');
   let statusResetTimer = null;
   let inventoryArmed = false;
   /** @type {Set<string>} */
   const unmatchedKeys = new Set();
+  /** @type {string[]} */
+  const wedgeDebugLines = [];
+  let wedgeBuf = '';
+  let lastWedgeFlush = '';
+  let lastWedgeCodes = [];
 
   if (docKey && typeof ScanResolve.clearCachedForDoc === 'function') {
     ScanResolve.clearCachedForDoc(docKey);
@@ -170,6 +181,35 @@
     setStatusBar('ready', 'Ready to scan', `${remainingLines()} remaining`, { sticky: true });
   };
 
+  const focusDebug = () => {
+    const el = document.activeElement;
+    if (!el || el === document.body) return 'body';
+    const id = el.id ? `#${el.id}` : '';
+    const cls = el.className && typeof el.className === 'string'
+      ? '.' + el.className.trim().split(/\s+/).slice(0, 2).join('.')
+      : '';
+    return `${(el.tagName || '?').toLowerCase()}${id}${cls}`.slice(0, 80);
+  };
+
+  const refreshWedgeDebug = () => {
+    if (debugArmedEl) debugArmedEl.textContent = inventoryArmed ? 'yes' : 'no';
+    if (debugFocusEl) debugFocusEl.textContent = focusLabel();
+    if (debugBufferEl) debugBufferEl.textContent = wedgeBuf || '(empty)';
+    if (debugLastFlushEl) {
+      debugLastFlushEl.textContent = lastWedgeFlush
+        ? `${lastWedgeFlush} → [${lastWedgeCodes.join(', ') || '—'}]`
+        : '(none)';
+    }
+    if (debugLogEl) debugLogEl.textContent = wedgeDebugLines.join('\n') || '(no events yet)';
+  };
+
+  const wedgeDebugLog = (msg) => {
+    const stamp = new Date().toISOString().slice(11, 23);
+    wedgeDebugLines.push(`${stamp} ${msg}`);
+    while (wedgeDebugLines.length > 30) wedgeDebugLines.shift();
+    refreshWedgeDebug();
+  };
+
   const clearUnmatched = () => {
     unmatchedKeys.clear();
     if (unmatchedBody) unmatchedBody.innerHTML = '';
@@ -206,8 +246,16 @@
     if (readOnly) return;
     inventoryArmed = !!armed;
     refreshIdleStatusBar();
-    if (inventoryArmed) showToast('Listening for tags… Tap bar again when done.', 'ok');
-    else showToast('Inventory listening stopped.', 'warn');
+    if (inventoryArmed) {
+      showToast('Listening for tags… Tap bar again when done.', 'ok');
+      try {
+        statusBar?.blur();
+      } catch (_) { /* ignore */ }
+    } else {
+      showToast('Inventory listening stopped.', 'warn');
+    }
+    wedgeDebugLog(inventoryArmed ? 'armed' : 'disarmed');
+    refreshWedgeDebug();
   };
 
   const toggleInventoryArmed = () => {
@@ -261,7 +309,7 @@
       showToast(`Matched: ${display}${locPart} — received ${qty}`, 'ok');
       setStatusBar('ok', `Received ${qty}`, display);
     } else {
-      setStatusBar('ready', 'Ready to scan', `${remainingLines()} remaining`);
+      refreshIdleStatusBar();
     }
     return { ok: true, already: false, row, qty };
   };
@@ -1019,15 +1067,17 @@
     const type = String(el.type || 'text').toLowerCase();
     if (['checkbox', 'radio', 'button', 'submit', 'reset', 'file', 'hidden', 'image'].includes(type))
       return false;
-    // Manual item field and Received qty have their own handlers.
+    // Manual item field always owns its own typing.
     if (el.id === 'scanManualCode' || el.classList.contains('scan-manual-input'))
       return true;
+    // While inventory listening, allow page-wide capture even from Received qty.
+    if (inventoryArmed && el.classList.contains('scan-received-input'))
+      return false;
     if (el.classList.contains('scan-received-input'))
       return true;
     return true;
   };
 
-  let wedgeBuf = '';
   let wedgeTimer = null;
   let batchCodes = [];
   let batchTimer = null;
@@ -1097,6 +1147,9 @@
 
     if (inventoryArmed && missedCodes.length) addUnmatchedCodes(missedCodes);
     if (lastRow) scrollRowIntoView(lastRow);
+    wedgeDebugLog(
+      `batch matched=${matched} already=${already} missed=${missed} codes=${codes.length}`
+    );
 
     if (matched > 0) {
       playMatchFeedback();
@@ -1157,27 +1210,49 @@
     wedgeTimer = null;
     const text = wedgeBuf.trim();
     wedgeBuf = '';
-    if (readOnly || text.length < 3) return;
+    refreshWedgeDebug();
+    if (readOnly || text.length < 3) {
+      if (text) wedgeDebugLog(`flush ignored short/readonly: ${text}`);
+      return;
+    }
+    lastWedgeFlush = text;
+    lastWedgeCodes = splitWedgeCodes(text);
+    wedgeDebugLog(`flush "${text}" → ${lastWedgeCodes.length} code(s)`);
+    refreshWedgeDebug();
     enqueueWedgeCodes(text);
   };
 
   document.addEventListener('keydown', (e) => {
     if (readOnly) return;
-    if (isWedgeTypingField(e.target)) return;
+    if (isWedgeTypingField(e.target)) {
+      refreshWedgeDebug();
+      return;
+    }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
 
     if (e.key === 'Enter' || e.key === 'Tab') {
       if (!wedgeBuf.trim()) return;
       e.preventDefault();
+      wedgeDebugLog(`key ${e.key} (flush)`);
       flushWedgeBuffer();
       return;
     }
 
     if (e.key.length !== 1) return;
+    if (inventoryArmed && e.target?.classList?.contains('scan-received-input'))
+      e.preventDefault();
     wedgeBuf += e.key;
     clearTimeout(wedgeTimer);
     wedgeTimer = setTimeout(flushWedgeBuffer, WEDGE_IDLE_MS);
+    refreshWedgeDebug();
   });
+
+  if (wedgeDebugEl && new URLSearchParams(location.search).get('scanDebug') === '1') {
+    wedgeDebugEl.open = true;
+  }
+  refreshWedgeDebug();
+  document.addEventListener('focusin', () => refreshWedgeDebug());
+  document.addEventListener('focusout', () => setTimeout(refreshWedgeDebug, 0));
 
   if (!readOnly && statusBar && statusBar.tagName === 'BUTTON') {
     statusBar.addEventListener('click', (e) => {

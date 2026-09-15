@@ -276,6 +276,17 @@
                     </form>
                 }
             </div>
+
+            <details id="scanWedgeDebug" class="scan-wedge-debug">
+                <summary>Listener debug</summary>
+                <div class="scan-wedge-debug-grid">
+                    <div><span class="scan-wedge-debug-label">Armed</span> <code id="scanDebugArmed">no</code></div>
+                    <div><span class="scan-wedge-debug-label">Focus</span> <code id="scanDebugFocus">—</code></div>
+                    <div class="scan-wedge-debug-wide"><span class="scan-wedge-debug-label">Live buffer</span> <code id="scanDebugBuffer">(empty)</code></div>
+                    <div class="scan-wedge-debug-wide"><span class="scan-wedge-debug-label">Last flush</span> <code id="scanDebugLastFlush">(none)</code></div>
+                </div>
+                <pre id="scanDebugLog" class="scan-wedge-debug-log" aria-live="polite"></pre>
+            </details>
         }
     </div>
 </main>
