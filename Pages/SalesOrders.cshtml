@@ -37,12 +37,6 @@
         <div class="po-header__inner">
             <div class="po-header__titles">
                 <h1 class="po-header__title">Sales order approvals</h1>
-                <a href="/PurchaseOrders" class="po-module-switch-btn">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/>
-                    </svg>
-                    Purchase Approval
-                </a>
             </div>
             <div class="po-header__actions">
                 <div class="po-header__menu">
@@ -76,13 +70,13 @@
                         <label class="po-toolbar-select-all" title="Select every pending SO shown in the list">
                             <input type="checkbox" id="bulkSelectAll" disabled aria-label="Select all visible pending sales orders" />
                         </label>
-                        <button type="button" id="bulkApproveBtn" class="po-btn po-btn--bulk" disabled>Bulk approve</button>
                         <button type="button" id="filterClearBtn" class="po-btn po-btn--icon" aria-label="Refresh list and clear date filter" title="Refresh list and clear date filter">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                 <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
                                 <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
                             </svg>
                         </button>
+                        <button type="button" id="bulkApproveBtn" class="po-btn po-btn--bulk" disabled>Bulk approve</button>
                     </div>
                     <div class="po-toolbar__group">
                         <input id="filterDateFrom" class="po-filter-input po-toolbar__date" type="date" aria-label="From date" />

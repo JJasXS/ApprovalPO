@@ -22,7 +22,6 @@
   const resultCount = document.getElementById('scanResultCount');
   const searchInput = document.getElementById('scanSearch');
   const listSentinel = document.getElementById('scanListSentinel');
-  const listHint = document.getElementById('scanListHint');
   const tabToScan = document.getElementById('scanTabToScan');
   const tabSubmitted = document.getElementById('scanTabSubmitted');
   const countToScan = document.getElementById('scanCountToScan');
@@ -88,13 +87,6 @@
     }
     if (searchInput) {
       searchInput.placeholder = 'Search PO #…';
-    }
-    if (listHint) {
-      if (submitted) {
-        listHint.textContent = 'Submitted POs (newest first) — tap to view or reopen for scanning.';
-      } else {
-        listHint.textContent = 'ERP-approved POs to scan — tap a row to open lines.';
-      }
     }
     if (emptyState) {
       if (submitted) emptyState.textContent = 'No submitted POs yet.';

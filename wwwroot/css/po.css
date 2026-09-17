@@ -114,31 +114,6 @@ body {
   color: var(--po-text);
 }
 
-/* Module switcher button in the PO / SO header */
-.po-module-switch-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--po-text-muted);
-  background: #f8fafc;
-  border: 1px solid var(--po-border);
-  border-radius: 999px;
-  padding: 4px 12px 4px 9px;
-  text-decoration: none;
-  letter-spacing: 0.01em;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-  width: fit-content;
-}
-
-.po-module-switch-btn:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
-  color: var(--po-text);
-}
-
 .po-header__subtitle {
   margin: var(--po-space-1) 0 0;
   font-size: 0.8125rem;
@@ -451,7 +426,7 @@ body {
 }
 
 .po-toolbar {
-  margin-bottom: var(--po-space-2);
+  margin-bottom: 0;
 }
 
 .po-toolbar__cluster {
@@ -863,7 +838,7 @@ select.po-filter-input {
 /* ——— Table region ——— */
 
 .po-table-wrap__head {
-  padding: 8px 0 14px;
+  padding: 4px 0 6px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -910,7 +885,7 @@ select.po-filter-input {
   overflow: visible;
   min-height: 0;
   width: 100%;
-  padding-top: 12px;
+  padding-top: 8px;
   z-index: 1;
 }
 
