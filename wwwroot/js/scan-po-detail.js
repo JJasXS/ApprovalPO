@@ -200,10 +200,10 @@
       return;
     }
     if (inventoryArmed) {
-      setStatusBar('armed', 'Listening… tap to pause', `${remainingLines()} remaining`, { sticky: true });
+      setStatusBar('armed', 'RFID Listening — tap to pause', `${remainingLines()} remaining`, { sticky: true });
       return;
     }
-    setStatusBar('ready', 'Tap to resume scanning', `${remainingLines()} remaining`, { sticky: true });
+    setStatusBar('ready', 'Paused — tap to resume', `${remainingLines()} remaining`, { sticky: true });
   };
 
   const focusDebug = () => {
@@ -217,29 +217,38 @@
   };
 
   const refreshWedgeDebug = () => {
-    if (debugArmedEl) debugArmedEl.textContent = inventoryArmed ? 'yes' : 'no';
-    if (debugFocusEl) debugFocusEl.textContent = focusLabel();
-    if (debugBufferEl) {
-      const cap = inventoryArmed && manualInput ? String(manualInput.value || '') : '';
-      debugBufferEl.textContent = wedgeBuf || cap || '(empty)';
-    }
-    if (debugBurstEl) debugBurstEl.textContent = String(batchCodes.length);
-    if (debugBurstSizeEl) {
-      debugBurstSizeEl.textContent = lastBurstSize > 0 ? String(lastBurstSize) : '—';
-    }
-    if (debugLastFlushEl) {
-      debugLastFlushEl.textContent = lastWedgeFlush
-        ? `${lastWedgeFlush} → [${lastWedgeCodes.join(', ') || '—'}] (${lastWedgeCodes.length})`
-        : '(none)';
-    }
-    if (debugLogEl) debugLogEl.textContent = wedgeDebugLines.join('\n') || '(no events yet)';
+    try {
+      if (debugArmedEl) debugArmedEl.textContent = inventoryArmed ? 'yes' : 'no';
+      if (debugFocusEl) debugFocusEl.textContent = focusDebug();
+      if (debugBufferEl) {
+        const cap = inventoryArmed && manualInput ? String(manualInput.value || '') : '';
+        debugBufferEl.textContent = wedgeBuf || cap || '(empty)';
+      }
+      if (debugBurstEl) debugBurstEl.textContent = String(batchCodes.length);
+      if (debugBurstSizeEl) {
+        debugBurstSizeEl.textContent = lastBurstSize > 0 ? String(lastBurstSize) : '—';
+      }
+      if (debugLastFlushEl) {
+        debugLastFlushEl.textContent = lastWedgeFlush
+          ? `${lastWedgeFlush} → [${lastWedgeCodes.join(', ') || '—'}] (${lastWedgeCodes.length})`
+          : '(none)';
+      }
+      if (debugLogEl) debugLogEl.textContent = wedgeDebugLines.join('\n') || '(no events yet)';
+    } catch (_) { /* never block HID listen */ }
   };
 
   const wedgeDebugLog = (msg) => {
     const stamp = new Date().toISOString().slice(11, 23);
     wedgeDebugLines.push(`${stamp} ${msg}`);
-    while (wedgeDebugLines.length > 30) wedgeDebugLines.shift();
+    while (wedgeDebugLines.length > 80) wedgeDebugLines.shift();
     refreshWedgeDebug();
+  };
+
+  const logHidFlush = (reason, raw, codes) => {
+    wedgeDebugLog(`RAW: ${raw}`);
+    wedgeDebugLog(`FLUSH: ${reason}`);
+    wedgeDebugLog(`CODES: ${(codes || []).length}`);
+    for (const code of codes || []) wedgeDebugLog(`EPC: ${code}`);
   };
 
   const clearUnmatched = () => {
@@ -357,9 +366,9 @@
     lastWedgeCodes = typeof ScanResolve.splitInventoryCodes === 'function'
       ? ScanResolve.splitInventoryCodes(text)
       : [text];
-    wedgeDebugLog(`manual flush "${text}" → ${lastWedgeCodes.length} code(s)`);
+    logHidFlush(force ? 'Enter' : 'idle', text, lastWedgeCodes);
     refreshWedgeDebug();
-    // Listening: enqueue into the burst window — do not match the first tag alone.
+    // Stay armed: flush this dump then keep listening for the next EPC.
     if (inventoryArmed) {
       enqueueWedgeCodes(text);
       scheduleManualCaptureFocus({ noScroll: true });
@@ -381,8 +390,9 @@
     } else {
       if (!opts.quiet) showToast('Paused', 'warn');
       clearTimeout(captureIdleTimer);
-      // Flush any tags already heard in this burst before pausing.
+      // Flush tags already in the unarmed batch; do not start a new listen.
       if (batchCodes.length || batchTimer) flushInventoryBatch();
+      try { manualInput?.blur(); } catch (_) { /* ignore */ }
     }
     wedgeDebugLog(inventoryArmed ? 'armed' : 'disarmed');
     refreshWedgeDebug();
@@ -1262,7 +1272,7 @@
   };
 
   /** While listening, Enter/Tab enqueue into the burst — wait for more gun tags. */
-  const enqueueArmedManualField = () => {
+  const enqueueArmedManualField = (reason) => {
     if (readOnly || !manualInput) return;
     clearTimeout(captureIdleTimer);
     captureIdleTimer = null;
@@ -1274,7 +1284,7 @@
       lastWedgeCodes = typeof ScanResolve.splitInventoryCodes === 'function'
         ? ScanResolve.splitInventoryCodes(text)
         : [text];
-      wedgeDebugLog(`armed enqueue "${text}" → ${lastWedgeCodes.length} code(s)`);
+      logHidFlush(reason === 'Tab' ? 'Tab' : 'Enter', text, lastWedgeCodes);
       refreshWedgeDebug();
       enqueueWedgeCodes(text);
     }
@@ -1286,14 +1296,14 @@
     if (e.key === 'Enter' || e.key === 'Tab') {
       e.preventDefault();
       if (inventoryArmed) {
-        enqueueArmedManualField();
+        enqueueArmedManualField(e.key);
         return;
       }
       runManual();
     }
   });
   manualInput?.addEventListener('input', () => {
-    if (readOnly) return;
+    if (readOnly || !inventoryArmed) return;
     refreshWedgeDebug();
     clearTimeout(captureIdleTimer);
     const text = String(manualInput?.value || '').trim();
@@ -1411,13 +1421,35 @@
     }, 600);
   };
 
-  /** Hold-trigger: match each unique EPC as soon as it is typed (no 2s wait). */
+  const lineDebugKey = (row) => {
+    const n = row && row.dataset ? String(row.dataset.lineNo || '') : '';
+    return n ? `L:${n}` : '—';
+  };
+
+  const matchArmedCode = async (code) => {
+    const quiet = { silent: true, noFeedback: true, quietFlash: true, skipScroll: true };
+    if (code.includes(';') || (typeof ScanResolve.isUrl === 'function' && ScanResolve.isUrl(code))) {
+      const ok = await processScan(code, quiet);
+      return { ok, missed: !ok, row: null };
+    }
+    const hit = matchOneInventoryCode(code);
+    if (!hit.missed) return hit;
+    const ok = await processScan(code, quiet);
+    return { ok, missed: !ok, row: null };
+  };
+
+  /** Hold-trigger: match each unique EPC as soon as it is typed. Stay armed. */
   const ingestArmedCodesLive = async (parts) => {
     const fresh = [];
     for (const code of parts) {
       const key = String(code || '').trim().toUpperCase();
-      if (!key || armedSeenEpcs.has(key)) continue;
+      if (!key) continue;
+      if (armedSeenEpcs.has(key)) {
+        wedgeDebugLog(`${key} DEDUP: seen`);
+        continue;
+      }
       armedSeenEpcs.add(key);
+      wedgeDebugLog(`${key} DEDUP: new`);
       fresh.push(code);
     }
     if (!fresh.length) {
@@ -1427,37 +1459,20 @@
 
     lastBurstSize = fresh.length;
     refreshWedgeDebug();
-    wedgeDebugLog(`live ingest ${fresh.length} unique (seen=${armedSeenEpcs.size})`);
 
     let matched = 0;
     let lastRow = null;
     const missedCodes = [];
 
     for (const code of fresh) {
-      if (code.includes(';') || (typeof ScanResolve.isUrl === 'function' && ScanResolve.isUrl(code))) {
-        const ok = await processScan(code, {
-          silent: true,
-          noFeedback: true,
-          quietFlash: true,
-          skipScroll: true,
-        });
-        if (ok) matched += 1;
-        else missedCodes.push(code);
-        continue;
-      }
-
-      const hit = matchOneInventoryCode(code);
+      const hit = await matchArmedCode(code);
+      const key = String(code || '').trim().toUpperCase();
       if (hit.missed) {
-        const ok = await processScan(code, {
-          silent: true,
-          noFeedback: true,
-          quietFlash: true,
-          skipScroll: true,
-        });
-        if (ok) matched += 1;
-        else missedCodes.push(code);
+        wedgeDebugLog(`${key} MISS`);
+        missedCodes.push(code);
         continue;
       }
+      wedgeDebugLog(`${key} MATCH: ${lineDebugKey(hit.row)}`);
       if (hit.ok && !hit.already) {
         matched += 1;
         lastRow = hit.row;
@@ -1468,7 +1483,7 @@
     updateRemainingMeta();
     focusManualCapture({ noScroll: true });
     if (lastRow) scheduleLiveRowScroll(lastRow);
-    wedgeDebugLog(`live matched=${matched} missed=${missedCodes.length} remaining=${remainingLines()}`);
+    wedgeDebugLog(`scanCounts ${totalScans()} remaining=${remainingLines()}`);
     return matched > 0;
   };
 
@@ -1609,7 +1624,7 @@
     }
     lastWedgeFlush = text;
     lastWedgeCodes = splitWedgeCodes(text);
-    wedgeDebugLog(`flush "${text}" → ${lastWedgeCodes.length} code(s)`);
+    logHidFlush(force ? 'Enter' : 'idle', text, lastWedgeCodes);
     refreshWedgeDebug();
     enqueueWedgeCodes(text);
   };
@@ -1620,12 +1635,12 @@
       refreshWedgeDebug();
       return;
     }
+    if (!inventoryArmed) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
 
     if (e.key === 'Enter' || e.key === 'Tab') {
       if (!wedgeBuf.trim()) return;
       e.preventDefault();
-      wedgeDebugLog(`key ${e.key} (flush)`);
       flushWedgeBuffer({ force: true });
       return;
     }

@@ -54,6 +54,19 @@
         {
             var o = Model.Order;
             var scanSubmitted = Model.IsScanSubmitted;
+            <button type="button"
+                    id="scanStatusBar"
+                    class="scan-status-bar"
+                    data-state="@(scanSubmitted ? "done" : "ready")"
+                    aria-pressed="false"
+                    aria-label="Pause or resume RFID listening"
+                    @(scanSubmitted ? "disabled" : null)>
+                <span id="scanStatusMain" class="scan-status-bar-main">@(scanSubmitted ? "Submitted" : "RFID Listening")</span>
+            </button>
+            @if (!scanSubmitted)
+            {
+                <p id="scanListenHint" class="scan-listen-hint" hidden>Hold the trigger. Unique tags match as they are typed.</p>
+            }
             <div class="scan-detail-meta">
                 @if (!scanSubmitted)
                 {

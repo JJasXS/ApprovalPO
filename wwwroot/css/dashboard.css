@@ -158,12 +158,13 @@
 .dash-card {
   background: var(--app-surface);
   border-radius: 16px;
-  padding: 28px 24px 24px;
+  padding: 22px 48px 22px 20px;
   border: 1.5px solid #e2e8f0;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   display: flex;
-  flex-direction: column;
-  gap: 16px;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 14px;
   position: relative;
   text-decoration: none;
   color: inherit;
@@ -187,13 +188,14 @@
 
 /* ─── Card icon ───────────────────────────────────────────── */
 .dash-card-icon-wrap {
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .dash-card-icon-wrap svg {
@@ -224,6 +226,7 @@
 /* ─── Card body ───────────────────────────────────────────── */
 .dash-card-body {
   flex: 1;
+  min-width: 0;
 }
 
 .dash-card-title {
@@ -243,8 +246,8 @@
 /* ─── Arrow ───────────────────────────────────────────────── */
 .dash-card-arrow {
   position: absolute;
-  top: 24px;
-  right: 22px;
+  top: 22px;
+  right: 18px;
   color: #93c5fd;
   transition: transform 0.18s;
 }
