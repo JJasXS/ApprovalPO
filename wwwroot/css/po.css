@@ -184,7 +184,7 @@ body {
   transform: scale(0.96);
 }
 
-.menu-btn span {
+.menu-btn span:not(.tab-bang) {
   display: block;
   width: 18px;
   height: 2px;
@@ -205,6 +205,88 @@ body {
 
 .menu-btn--head-toggle[aria-expanded="false"] .menu-btn__chev {
   transform: rotate(180deg);
+}
+
+.status-kebab {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.status-kebab-btn {
+  position: relative;
+  overflow: visible;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 2px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.status-kebab-btn span:not(.tab-bang) {
+  display: block;
+  width: 3.5px;
+  height: 3.5px;
+  margin: 0;
+  background: #334155;
+  border-radius: 50%;
+}
+
+.status-kebab-btn__bang {
+  position: absolute;
+  top: 0;
+  right: 0;
+  pointer-events: none;
+}
+
+.status-kebab-panel {
+  top: calc(100% + 4px);
+  right: 0;
+  width: min(220px, calc(100vw - 24px));
+  padding: 6px;
+  z-index: 170;
+}
+
+.status-kebab-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--po-text);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.status-kebab-item:hover {
+  background: #f8fafc;
+}
+
+.status-kebab-item.is-active {
+  background: var(--po-blue-soft);
+  color: #1d4ed8;
+}
+
+.status-kebab-item__label {
+  flex: 1;
+}
+
+.status-kebab-item__count {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--po-text-muted);
+}
+
+.status-kebab-item.is-active .status-kebab-item__count {
+  color: #1d4ed8;
 }
 
 .po-table-wrap__head.is-collapsed {
@@ -376,11 +458,18 @@ body {
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  gap: 8px;
   width: 100%;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
+  overflow: visible;
+}
+
+.po-toolbar__group {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 
 .po-toolbar__cluster::-webkit-scrollbar {
@@ -390,9 +479,10 @@ body {
 .po-toolbar__cluster .po-btn {
   flex: 0 0 auto;
   white-space: nowrap;
-  min-height: 36px;
-  padding: 7px 12px;
-  font-size: 0.75rem;
+  min-height: 32px;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 0.6875rem;
 }
 
 .po-toolbar-select-all {
@@ -499,26 +589,62 @@ body {
 }
 
 .po-toolbar__date {
-  flex: 0 0 7.5rem;
-  width: 7.5rem;
-  min-width: 7.5rem;
-  max-width: 9.5rem;
-  height: 36px;
-  min-height: 36px;
-  margin-left: auto;
-  padding: 0 8px 0 10px;
-  font-size: 0.6875rem;
+  flex: 0 0 auto;
+  width: 7rem;
+  min-width: 7rem;
+  max-width: 7rem;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 8px;
+  font-size: 0.75rem;
+  line-height: 32px;
 }
 
-.po-toolbar__cluster .po-btn--bulk,
-.po-toolbar__cluster .po-btn--icon {
-  height: 36px;
-  min-height: 36px;
+.po-toolbar__date::-webkit-datetime-edit,
+.po-toolbar__date::-webkit-datetime-edit-fields-wrapper,
+.po-toolbar__date::-webkit-datetime-edit-text,
+.po-toolbar__date::-webkit-datetime-edit-month-field,
+.po-toolbar__date::-webkit-datetime-edit-day-field,
+.po-toolbar__date::-webkit-datetime-edit-year-field {
+  padding: 0;
+}
+
+.po-toolbar__date::-webkit-calendar-picker-indicator {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  margin: 0 0 0 2px;
+  cursor: pointer;
+}
+
+.po-toolbar__cluster .po-btn--bulk {
+  height: 32px;
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 0.6875rem;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.22);
+}
+
+.po-toolbar__cluster .po-btn--icon,
+.po-toolbar__cluster .status-kebab-btn {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.po-toolbar__cluster .status-kebab-btn:hover {
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
 
 .po-toolbar-select-all input {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   cursor: pointer;
   accent-color: var(--po-blue);
   flex-shrink: 0;
@@ -737,7 +863,7 @@ select.po-filter-input {
 /* ——— Table region ——— */
 
 .po-table-wrap__head {
-  padding: 8px 0 10px;
+  padding: 8px 0 14px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -784,6 +910,7 @@ select.po-filter-input {
   overflow: visible;
   min-height: 0;
   width: 100%;
+  padding-top: 12px;
   z-index: 1;
 }
 
@@ -1046,11 +1173,11 @@ select.po-filter-input {
 }
 
 .po-btn--bulk {
-  padding: 8px 16px;
-  font-size: 0.8125rem;
+  padding: 0 10px;
+  font-size: 0.6875rem;
   background: linear-gradient(135deg, #1d4ed8, var(--po-blue));
   color: #fff;
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.22);
 }
 
 .po-btn--bulk:disabled {
@@ -1741,18 +1868,17 @@ tr.items-row--xfer-bad .items-check .po-check input:focus-visible + .po-check__b
 
   .po-table tbody tr.po-row {
     display: grid;
-    grid-template-columns: 46px minmax(0, 1fr) auto;
+    grid-template-columns: 22px 52px minmax(0, 1fr) auto;
     grid-template-areas:
-      'chk chk chk'
-      'stat po date'
-      'stat vend vend'
-      'stat agent amt'
-      'act act act';
-    gap: 10px var(--po-space-2);
+      'chk stat po date'
+      '. stat vend vend'
+      '. stat agent amt'
+      'act act act act';
+    gap: 6px 8px;
     align-items: start;
-    padding: var(--po-space-2) var(--po-space-3);
-    margin-bottom: var(--po-space-3);
-    border-radius: var(--po-radius-md);
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    border-radius: 14px;
     overflow: hidden;
   }
 
@@ -1765,14 +1891,14 @@ tr.items-row--xfer-bad .items-check .po-check input:focus-visible + .po-check__b
   .po-row .td-check {
     grid-area: chk;
     text-align: left;
-    padding: 0 0 var(--po-space-2);
-    border-bottom: 1px solid var(--po-border);
+    padding: 2px 0 0;
+    border-bottom: none;
   }
 
   .po-row .po-status-td {
     grid-area: stat;
     align-self: center;
-    padding: 0;
+    padding: 0 6px 0 0;
   }
 
   .po-row .po-num {
@@ -1815,26 +1941,27 @@ tr.items-row--xfer-bad .items-check .po-check input:focus-visible + .po-check__b
   }
 
   .po-row .po-status-icon {
-    width: 34px;
-    height: 34px;
-    background-size: 18px 18px;
+    width: 28px;
+    height: 28px;
+    background-size: 15px 15px;
   }
 
   .po-row .po-status-text {
     font-size: 0.5625rem;
     letter-spacing: 0.04em;
+    line-height: 1.2;
   }
 
   .po-row .actions {
     grid-area: act;
-    padding: var(--po-space-2) var(--po-space-3) var(--po-space-3);
-    margin-top: var(--po-space-2);
+    padding: 8px 0 0;
+    margin-top: 4px;
     border-top: 1px solid var(--po-border);
     background-color: var(--po-surface);
     isolation: isolate;
     position: relative;
     z-index: 1;
-    box-shadow: 0 -1px 0 #fff;
+    box-shadow: none;
   }
 
   .po-table tbody td::before {
@@ -1854,8 +1981,8 @@ tr.items-row--xfer-bad .items-check .po-check input:focus-visible + .po-check__b
   .po-row .actions-inner .po-btn {
     flex: 1 1 0;
     min-width: 0;
-    padding: 8px 6px;
-    min-height: 38px;
+    padding: 6px 4px;
+    min-height: 32px;
     font-size: 0.6875rem;
     line-height: 1.2;
   }
@@ -1961,30 +2088,42 @@ tr.items-row--xfer-bad .items-check .po-check input:focus-visible + .po-check__b
     padding: 0 2px;
   }
 
-  /* 16px minimum on iOS avoids focus-zoom; keep controls visually compact via height/padding */
-  .po-filter-input {
-    font-size: max(16px, 0.8125rem);
-  }
-
-  select.po-filter-input,
-  .po-filters input[type='date'] {
-    font-size: max(16px, 0.8125rem);
-  }
-
+  /* Icon-only date on phone; 16px font avoids iOS focus-zoom */
   .po-toolbar__date {
-    flex: 0 0 8.25rem;
-    width: 8.25rem;
-    min-width: 8.25rem;
-    height: 40px;
-    min-height: 40px;
-    font-size: max(16px, 0.8125rem);
+    position: relative;
+    width: 32px;
+    min-width: 32px;
+    max-width: 32px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0;
+    font-size: 16px;
+    line-height: 32px;
+    color: transparent;
+    caret-color: transparent;
   }
 
-  .po-toolbar__cluster .po-btn,
-  .po-toolbar__cluster .po-btn--bulk,
-  .po-toolbar__cluster .po-btn--icon {
-    min-height: 40px;
-    height: 40px;
+  .po-toolbar__date::-webkit-datetime-edit,
+  .po-toolbar__date::-webkit-datetime-edit-fields-wrapper,
+  .po-toolbar__date::-webkit-datetime-edit-text,
+  .po-toolbar__date::-webkit-datetime-edit-month-field,
+  .po-toolbar__date::-webkit-datetime-edit-day-field,
+  .po-toolbar__date::-webkit-datetime-edit-year-field {
+    display: none;
+    color: transparent;
+  }
+
+  .po-toolbar__date::-webkit-calendar-picker-indicator {
+    position: absolute;
+    inset: 0;
+    width: auto;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    background-position: center;
+    background-size: 16px 16px;
+    cursor: pointer;
+    opacity: 1;
   }
 
   .menu-btn {
@@ -1993,6 +2132,14 @@ tr.items-row--xfer-bad .items-check .po-check input:focus-visible + .po-check__b
   }
 
   /* Tighter card copy on small phones; buttons stay one row (see 900px rules) */
+  .po-table tbody tr.po-row {
+    grid-template-columns: 20px 48px minmax(0, 1fr) auto;
+    gap: 4px 6px;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    border-radius: 12px;
+  }
+
   .po-row .po-num .po-num-text {
     font-size: 0.75rem;
   }
@@ -2005,10 +2152,24 @@ tr.items-row--xfer-bad .items-check .po-check input:focus-visible + .po-check__b
     font-size: 0.75rem;
   }
 
+  .po-row .po-status-icon {
+    width: 26px;
+    height: 26px;
+    background-size: 14px 14px;
+  }
+
+  .po-row .actions {
+    padding-top: 6px;
+  }
+
+  .po-row .actions-inner {
+    gap: 4px;
+  }
+
   .po-row .actions-inner .po-btn {
-    padding: 7px 4px;
+    padding: 5px 3px;
     font-size: 0.625rem;
-    min-height: 36px;
+    min-height: 32px;
   }
 
   .review-grid {

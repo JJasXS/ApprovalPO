@@ -46,7 +46,7 @@
             </div>
             <div class="po-header__actions">
                 <div class="po-header__menu">
-                    <button id="poHeadToggleBtn" class="menu-btn menu-btn--head-toggle" type="button" aria-expanded="true" aria-controls="poTableHeadPanel" aria-label="Hide filters and tabs" title="Show or hide filters and tabs">
+                    <button id="poHeadToggleBtn" class="menu-btn menu-btn--head-toggle" type="button" aria-expanded="true" aria-controls="poTableHeadPanel" aria-label="Hide filters" title="Show or hide filters">
                         <svg class="menu-btn__chev" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                             <path d="M6 14l6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                         </svg>
@@ -72,22 +72,22 @@
         <div id="poTableHeadPanel" class="po-table-wrap__head">
             <div class="po-toolbar">
                 <div class="po-toolbar__cluster" id="poFilters">
-                    <label class="po-toolbar-select-all" title="Select every pending SO shown in the list">
-                        <input type="checkbox" id="bulkSelectAll" disabled aria-label="Select all visible pending sales orders" />
-                        <span class="po-toolbar-select-all__text">Select all</span>
-                    </label>
-                    <button type="button" id="bulkApproveBtn" class="po-btn po-btn--bulk" disabled>Bulk approve</button>
-                    <button type="button" id="filterClearBtn" class="po-btn po-btn--filter-clear">Clear</button>
-                    <input id="filterDateFrom" class="po-filter-input po-toolbar__date" type="date" aria-label="From date" />
-                </div>
-            </div>
-
-            <div class="tabs-wrap">
-                <div class="tabs" role="tablist" aria-label="SO status tabs">
-                    <button id="tabPending"   class="tab-btn is-active" type="button" role="tab" aria-selected="true">Pending (<span id="countPending">0</span>)</button>
-                    <button id="tabApproved"  class="tab-btn" type="button" role="tab" aria-selected="false">Approved (<span id="countApproved">0</span>)</button>
-                    <button id="tabCancelled" class="tab-btn" type="button" role="tab" aria-selected="false">Cancelled (<span id="countCancelled">0</span>)</button>
-                    <button id="tabRejected"  class="tab-btn" type="button" role="tab" aria-selected="false">Rejected (<span id="countRejected">0</span>)</button>
+                    <div class="po-toolbar__group">
+                        <label class="po-toolbar-select-all" title="Select every pending SO shown in the list">
+                            <input type="checkbox" id="bulkSelectAll" disabled aria-label="Select all visible pending sales orders" />
+                        </label>
+                        <button type="button" id="bulkApproveBtn" class="po-btn po-btn--bulk" disabled>Bulk approve</button>
+                        <button type="button" id="filterClearBtn" class="po-btn po-btn--icon" aria-label="Refresh list and clear date filter" title="Refresh list and clear date filter">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="po-toolbar__group">
+                        <input id="filterDateFrom" class="po-filter-input po-toolbar__date" type="date" aria-label="From date" />
+                        <partial name="_StatusKebab" model="@("so")" />
+                    </div>
                 </div>
             </div>
         </div>

@@ -1,0 +1,46 @@
+@model string
+@{
+    var isPo = !string.Equals(Model, "so", StringComparison.OrdinalIgnoreCase);
+}
+<div class="status-kebab">
+    <button id="statusKebabBtn"
+            class="po-btn po-btn--icon status-kebab-btn"
+            type="button"
+            aria-expanded="false"
+            aria-controls="statusKebabPanel"
+            aria-haspopup="true"
+            aria-label="Status: Pending"
+            title="Filter by status">
+        <span></span><span></span><span></span>
+        <span id="statusKebabBang" class="tab-bang status-kebab-btn__bang" hidden aria-label="Orders waiting for remaining approvals">!</span>
+    </button>
+    <div id="statusKebabPanel" class="menu-panel status-kebab-panel" hidden role="menu" aria-label="Filter by status">
+        <button type="button" role="menuitem" class="status-kebab-item is-active" id="tabPending" data-status-tab="Pending">
+            <span class="status-kebab-item__label">Pending</span>
+            <span class="status-kebab-item__count">(<span id="countPending">0</span>)</span>
+        </button>
+        @if (isPo)
+        {
+            <button type="button" role="menuitem" class="status-kebab-item" id="tabWaiting" data-status-tab="Waiting" title="Partially approved — waiting for remaining sign-offs">
+                <span class="status-kebab-item__label">Waiting</span>
+                <span id="bulkWaitingBang" class="tab-bang" hidden aria-label="Urgent: orders waiting for remaining approvals">!</span>
+                <span class="status-kebab-item__count">(<span id="countWaiting">0</span>)</span>
+            </button>
+        }
+        else
+        {
+            <button type="button" role="menuitem" class="status-kebab-item" id="tabCancelled" data-status-tab="Cancelled">
+                <span class="status-kebab-item__label">Cancelled</span>
+                <span class="status-kebab-item__count">(<span id="countCancelled">0</span>)</span>
+            </button>
+        }
+        <button type="button" role="menuitem" class="status-kebab-item" id="tabApproved" data-status-tab="Approved">
+            <span class="status-kebab-item__label">Approved</span>
+            <span class="status-kebab-item__count">(<span id="countApproved">0</span>)</span>
+        </button>
+        <button type="button" role="menuitem" class="status-kebab-item" id="tabRejected" data-status-tab="Rejected">
+            <span class="status-kebab-item__label">Rejected</span>
+            <span class="status-kebab-item__count">(<span id="countRejected">0</span>)</span>
+        </button>
+    </div>
+</div>

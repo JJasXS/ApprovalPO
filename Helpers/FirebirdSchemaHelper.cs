@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using FirebirdSql.Data.FirebirdClient;
+using Microsoft.Extensions.Logging;
 
 namespace ApprovalPO.Helpers;
 
@@ -69,4 +70,92 @@ public static class FirebirdSchemaHelper
         && columns.Contains("TODOCKEY")
         && columns.Contains("FROMDOCTYPE")
         && columns.Contains("TODOCTYPE");
+
+    public static async Task<bool> RelationExistsAsync(
+        FbConnection conn,
+        string tableName,
+        CancellationToken cancellationToken = default)
+    {
+        await using var cmd = new FbCommand(
+            """
+            SELECT 1
+            FROM RDB$RELATIONS
+            WHERE RDB$RELATION_NAME = @T
+              AND COALESCE(RDB$SYSTEM_FLAG, 0) = 0
+            """,
+            conn);
+        cmd.Parameters.Add("@T", FbDbType.Char).Value = tableName.Trim().ToUpperInvariant();
+        var row = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        return row is not null && row != DBNull.Value;
+    }
+
+    /// <summary>Adds a VARCHAR column when missing. Optional backfill of blank/null rows.</summary>
+    public static async Task<bool> EnsureVarcharColumnAsync(
+        FbConnection conn,
+        string tableName,
+        string columnName,
+        int length,
+        ILogger? logger = null,
+        string? backfillValue = null,
+        CancellationToken cancellationToken = default)
+    {
+        var table = tableName.Trim().ToUpperInvariant();
+        var column = columnName.Trim().ToUpperInvariant();
+        if (conn.State != System.Data.ConnectionState.Open)
+            await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+        if (!await RelationExistsAsync(conn, table, cancellationToken).ConfigureAwait(false))
+        {
+            logger?.LogWarning("{Table} not found; {Column} ensure skipped.", table, column);
+            return false;
+        }
+
+        var cols = await GetColumnNamesAsync(conn, table, cancellationToken).ConfigureAwait(false);
+        if (cols.Contains(column))
+            return true;
+
+        try
+        {
+            await using var add = new FbCommand($"ALTER TABLE {table} ADD {column} VARCHAR({length})", conn);
+            await add.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            logger?.LogInformation("Added {Table}.{Column} VARCHAR({Length}).", table, column, length);
+        }
+        catch (Exception ex)
+        {
+            var msg = ex.Message;
+            if (msg.Contains("already exists", StringComparison.OrdinalIgnoreCase)
+                || msg.Contains("duplicate", StringComparison.OrdinalIgnoreCase))
+            {
+                InvalidateColumnCache(table);
+                return true;
+            }
+
+            logger?.LogWarning(ex, "Could not add {Table}.{Column}.", table, column);
+            return false;
+        }
+
+        InvalidateColumnCache(table);
+        if (string.IsNullOrEmpty(backfillValue))
+            return true;
+
+        try
+        {
+            await using var backfill = new FbCommand(
+                $"""
+                UPDATE {table}
+                SET {column} = @V
+                WHERE {column} IS NULL
+                   OR TRIM(COALESCE({column}, '')) = ''
+                """,
+                conn);
+            backfill.Parameters.Add("@V", FbDbType.VarChar, length).Value = backfillValue;
+            await backfill.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning(ex, "{Table}.{Column} backfill skipped.", table, column);
+        }
+
+        return true;
+    }
 }

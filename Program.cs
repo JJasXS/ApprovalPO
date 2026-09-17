@@ -345,6 +345,7 @@ async Task WarmupTenantConnectionStringAsync()
         {
             await conn.OpenAsync().ConfigureAwait(false);
             await PhPoSchemaBootstrap.EnsureUdfPoStatusColumnAsync(conn, logger).ConfigureAwait(false);
+            await SlSoSchemaBootstrap.EnsureUdfSoStatusColumnAsync(conn, logger).ConfigureAwait(false);
         }
         logger.LogInformation(
             "Tenant Firebird connection string cached for {Tenant} in {ElapsedMs} ms (startup warmup).",

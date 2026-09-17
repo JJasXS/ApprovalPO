@@ -29,13 +29,18 @@
   const undoBtn = document.getElementById('undoBtn');
   const tabPending = document.getElementById('tabPending');
   const tabWaiting = document.getElementById('tabWaiting');
+  const tabCancelled = document.getElementById('tabCancelled');
   const tabApproved = document.getElementById('tabApproved');
   const tabRejected = document.getElementById('tabRejected');
   const countPending = document.getElementById('countPending');
   const countWaiting = document.getElementById('countWaiting');
+  const countCancelled = document.getElementById('countCancelled');
   const bulkWaitingBang = document.getElementById('bulkWaitingBang');
   const countApproved = document.getElementById('countApproved');
   const countRejected = document.getElementById('countRejected');
+  const statusKebabBtn = document.getElementById('statusKebabBtn');
+  const statusKebabPanel = document.getElementById('statusKebabPanel');
+  const statusKebabBang = document.getElementById('statusKebabBang');
   const poEmptyState = document.getElementById('poEmptyState');
   const poTableScroll = document.getElementById('poTableScroll');
   const poSkeleton = document.getElementById('poSkeleton');
@@ -55,7 +60,7 @@
 
   let rows = Array.from(document.querySelectorAll('.po-row'));
   let currentRow = null;
-  /** @type {'Pending' | 'Waiting' | 'Approved' | 'Rejected'} */
+  /** @type {'Pending' | 'Waiting' | 'Approved' | 'Rejected' | 'Cancelled'} */
   let activeListTab = 'Pending';
   let undoTimer = null;
   /** @type {null | (() => void)} */
@@ -174,7 +179,7 @@
     tableHeadEl.classList.toggle('is-collapsed', !!collapsed);
     const expanded = !collapsed;
     poHeadToggleBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-    poHeadToggleBtn.setAttribute('aria-label', expanded ? 'Hide filters and tabs' : 'Show filters and tabs');
+    poHeadToggleBtn.setAttribute('aria-label', expanded ? 'Hide filters' : 'Show filters');
     syncStickyHeights();
     try {
       localStorage.setItem('po-head-collapsed', collapsed ? '1' : '0');
@@ -262,7 +267,7 @@
   const listStatusFromSnapshot = (prev) => {
     const s = String(prev?.status ?? '').trim();
     if (s === 'Pending' || s === 'Approved' || s === 'Rejected') return s;
-    if (s === 'Cancelled') return 'Rejected';
+    if (s === 'Cancelled') return tabCancelled ? 'Cancelled' : 'Rejected';
     const t = String(prev?.transferable ?? '').trim();
     if (t === 'true') return 'Approved';
     if (t === 'false') return 'Rejected';
@@ -273,7 +278,7 @@
   const normalizeOrderStatus = (o) => {
     const s = String(o?.status ?? '').trim();
     if (s === 'Pending' || s === 'Approved' || s === 'Rejected') return s;
-    if (s === 'Cancelled') return 'Rejected';
+    if (s === 'Cancelled') return tabCancelled ? 'Cancelled' : 'Rejected';
     if (o?.transferable === true) return 'Approved';
     if (o?.transferable === false) return 'Rejected';
     return 'Pending';
@@ -284,7 +289,7 @@
     if (!tr?.dataset) return 'Pending';
     const s = String(tr.dataset.status ?? '').trim();
     if (s === 'Pending' || s === 'Approved' || s === 'Rejected') return s;
-    if (s === 'Cancelled') return 'Rejected';
+    if (s === 'Cancelled') return tabCancelled ? 'Cancelled' : 'Rejected';
     if (tr.dataset.transferable === 'true') return 'Approved';
     if (tr.dataset.transferable === 'false') return 'Rejected';
     return 'Pending';
@@ -410,21 +415,45 @@
     if (typeof fn === 'function') void Promise.resolve(fn()).catch(() => {});
   });
 
+  const setPanelOpen = (btn, panel, open) => {
+    if (!btn || !panel) return;
+    if (open) panel.removeAttribute('hidden');
+    else panel.setAttribute('hidden', '');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+
+  const closePanelIfOutside = (e, btn, panel) => {
+    if (!btn || !panel || panel.hasAttribute('hidden')) return;
+    if (panel.contains(e.target) || btn.contains(e.target)) return;
+    setPanelOpen(btn, panel, false);
+  };
+
   menuBtn?.addEventListener('click', (e) => {
     e.stopPropagation();
     if (!menuPanel) return;
     const next = menuPanel.hasAttribute('hidden');
-    if (next) menuPanel.removeAttribute('hidden');
-    else menuPanel.setAttribute('hidden', '');
-    menuBtn.setAttribute('aria-expanded', next ? 'true' : 'false');
+    setPanelOpen(menuBtn, menuPanel, next);
+    if (next) setPanelOpen(statusKebabBtn, statusKebabPanel, false);
+  });
+
+  statusKebabBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!statusKebabPanel) return;
+    const next = statusKebabPanel.hasAttribute('hidden');
+    setPanelOpen(statusKebabBtn, statusKebabPanel, next);
+    if (next) setPanelOpen(menuBtn, menuPanel, false);
+  });
+
+  statusKebabPanel?.addEventListener('click', (e) => {
+    const item = e.target.closest('[data-status-tab]');
+    if (!item || !statusKebabPanel.contains(item)) return;
+    setListTab(item.getAttribute('data-status-tab') || 'Pending');
+    setPanelOpen(statusKebabBtn, statusKebabPanel, false);
   });
 
   document.addEventListener('click', (e) => {
-    if (!menuPanel || !menuBtn) return;
-    if (menuPanel.hasAttribute('hidden')) return;
-    if (menuPanel.contains(e.target) || menuBtn.contains(e.target)) return;
-    menuPanel.setAttribute('hidden', '');
-    menuBtn.setAttribute('aria-expanded', 'false');
+    closePanelIfOutside(e, menuBtn, menuPanel);
+    closePanelIfOutside(e, statusKebabBtn, statusKebabPanel);
   });
 
   const getVisibleRowsInList = () => rows.filter((r) => !r.classList.contains('is-hidden'));
@@ -999,20 +1028,26 @@
     if (!tabPending || !tabApproved || !tabRejected) return;
     const pendingOn = activeListTab === 'Pending';
     const waitingOn = activeListTab === 'Waiting';
+    const cancelledOn = activeListTab === 'Cancelled';
     const approvedOn = activeListTab === 'Approved';
     const rejectedOn = activeListTab === 'Rejected';
     tabPending.classList.toggle('is-active', pendingOn);
     if (tabWaiting) tabWaiting.classList.toggle('is-active', waitingOn);
+    if (tabCancelled) tabCancelled.classList.toggle('is-active', cancelledOn);
     tabApproved.classList.toggle('is-active', approvedOn);
     tabRejected.classList.toggle('is-active', rejectedOn);
-    tabPending.setAttribute('aria-selected', pendingOn ? 'true' : 'false');
-    if (tabWaiting) tabWaiting.setAttribute('aria-selected', waitingOn ? 'true' : 'false');
-    tabApproved.setAttribute('aria-selected', approvedOn ? 'true' : 'false');
-    tabRejected.setAttribute('aria-selected', rejectedOn ? 'true' : 'false');
+    tabPending.setAttribute('aria-current', pendingOn ? 'true' : 'false');
+    if (tabWaiting) tabWaiting.setAttribute('aria-current', waitingOn ? 'true' : 'false');
+    if (tabCancelled) tabCancelled.setAttribute('aria-current', cancelledOn ? 'true' : 'false');
+    tabApproved.setAttribute('aria-current', approvedOn ? 'true' : 'false');
+    tabRejected.setAttribute('aria-current', rejectedOn ? 'true' : 'false');
+    if (statusKebabBtn)
+      statusKebabBtn.setAttribute('aria-label', `Status: ${activeListTab}`);
   };
 
   const setListTab = (tab) => {
     if (tab === 'Waiting') activeListTab = 'Waiting';
+    else if (tab === 'Cancelled') activeListTab = 'Cancelled';
     else if (tab === 'Approved') activeListTab = 'Approved';
     else if (tab === 'Rejected') activeListTab = 'Rejected';
     else activeListTab = 'Pending';
@@ -1044,6 +1079,23 @@
     }
   };
 
+  const rowMatchesActiveTab = (status, waiting) => {
+    if (activeListTab === 'Pending') return status === 'Pending' && !waiting;
+    if (activeListTab === 'Waiting') return waiting;
+    if (activeListTab === 'Approved') return status === 'Approved';
+    if (activeListTab === 'Cancelled') return status === 'Cancelled';
+    return status === 'Rejected';
+  };
+
+  const emptyListMessage = (inTabCount) => {
+    if (inTabCount > 0) return 'No purchase orders match your filters.';
+    if (activeListTab === 'Pending') return 'No pending purchase orders.';
+    if (activeListTab === 'Waiting') return 'No purchase orders waiting for remaining approvals.';
+    if (activeListTab === 'Approved') return 'No approved purchase orders.';
+    if (activeListTab === 'Cancelled') return 'No cancelled purchase orders.';
+    return 'No rejected purchase orders.';
+  };
+
   const refreshView = () => {
     const waitingRows = rows.filter((r) => rowIsWaitingForOthers(r));
     const pendingCount = rows.filter(
@@ -1052,9 +1104,12 @@
     const waitingCount = waitingRows.length;
     const approvedCount = rows.filter((r) => rowListStatus(r) === 'Approved').length;
     const rejectedCount = rows.filter((r) => rowListStatus(r) === 'Rejected').length;
+    const cancelledCount = rows.filter((r) => rowListStatus(r) === 'Cancelled').length;
     if (countPending) countPending.textContent = String(pendingCount);
     if (countWaiting) countWaiting.textContent = String(waitingCount);
+    if (countCancelled) countCancelled.textContent = String(cancelledCount);
     if (bulkWaitingBang) bulkWaitingBang.hidden = waitingCount === 0;
+    if (statusKebabBang) statusKebabBang.hidden = waitingCount === 0;
     if (countApproved) countApproved.textContent = String(approvedCount);
     if (countRejected) countRejected.textContent = String(rejectedCount);
 
@@ -1064,14 +1119,7 @@
       updateRowButtons(tr);
       const status = rowListStatus(tr);
       const waiting = rowIsWaitingForOthers(tr);
-      const matchesStatus =
-        activeListTab === 'Pending'
-          ? status === 'Pending' && !waiting
-          : activeListTab === 'Waiting'
-            ? waiting
-            : activeListTab === 'Approved'
-              ? status === 'Approved'
-              : status === 'Rejected';
+      const matchesStatus = rowMatchesActiveTab(status, waiting);
       if (matchesStatus) countInTab++;
       const matchesFilters = rowMatchesFilters(tr);
       const shouldShow = matchesStatus && matchesFilters;
@@ -1094,16 +1142,7 @@
       const emptyTextEl = poEmptyState.querySelector('.po-empty__text');
       if (visibleCount === 0) {
         poEmptyState.hidden = false;
-        const msg =
-          countInTab === 0
-            ? activeListTab === 'Pending'
-              ? 'No pending purchase orders.'
-              : activeListTab === 'Waiting'
-                ? 'No purchase orders waiting for remaining approvals.'
-                : activeListTab === 'Approved'
-                  ? 'No approved purchase orders.'
-                : 'No rejected purchase orders.'
-            : 'No purchase orders match your filters.';
+        const msg = emptyListMessage(countInTab);
         if (emptyTextEl) emptyTextEl.textContent = msg;
         else poEmptyState.textContent = msg;
         poTableScroll.hidden = true;
@@ -1159,14 +1198,6 @@
   modalPrevBtn?.addEventListener('click', () => void navigateModal(-1));
   modalNextBtn?.addEventListener('click', () => void navigateModal(1));
 
-  tableHeadEl?.addEventListener('click', (e) => {
-    const tabBtn = e.target.closest('.tab-btn');
-    if (!tabBtn || !tableHeadEl.contains(tabBtn)) return;
-    if (tabBtn.id === 'tabPending') setListTab('Pending');
-    else if (tabBtn.id === 'tabWaiting') setListTab('Waiting');
-    else if (tabBtn.id === 'tabApproved') setListTab('Approved');
-    else if (tabBtn.id === 'tabRejected') setListTab('Rejected');
-  });
   filterDateFrom?.addEventListener('change', () => {
     filters.dateFrom = filterDateFrom.value || '';
     refreshView();
