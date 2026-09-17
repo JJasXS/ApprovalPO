@@ -251,6 +251,20 @@
     for (const code of codes || []) wedgeDebugLog(`EPC: ${code}`);
   };
 
+  const splitWedgeCodes = (raw) => {
+    if (typeof ScanResolve.splitInventoryCodes === 'function')
+      return ScanResolve.splitInventoryCodes(raw);
+    const t = String(raw || '').trim();
+    return t ? [t] : [];
+  };
+
+  const recordHidFlush = (text, reason) => {
+    lastWedgeFlush = text;
+    lastWedgeCodes = splitWedgeCodes(text);
+    logHidFlush(reason, text, lastWedgeCodes);
+    refreshWedgeDebug();
+  };
+
   const clearUnmatched = () => {
     unmatchedKeys.clear();
     if (unmatchedBody) unmatchedBody.innerHTML = '';
@@ -362,12 +376,7 @@
       if (text) wedgeDebugLog(`manual ignored short/readonly: ${text}`);
       return;
     }
-    lastWedgeFlush = text;
-    lastWedgeCodes = typeof ScanResolve.splitInventoryCodes === 'function'
-      ? ScanResolve.splitInventoryCodes(text)
-      : [text];
-    logHidFlush(force ? 'Enter' : 'idle', text, lastWedgeCodes);
-    refreshWedgeDebug();
+    recordHidFlush(text, force ? 'Enter' : 'idle');
     // Stay armed: flush this dump then keep listening for the next EPC.
     if (inventoryArmed) {
       enqueueWedgeCodes(text);
@@ -1280,15 +1289,23 @@
     manualInput.value = '';
     refreshWedgeDebug();
     if (text.length >= 3) {
-      lastWedgeFlush = text;
-      lastWedgeCodes = typeof ScanResolve.splitInventoryCodes === 'function'
-        ? ScanResolve.splitInventoryCodes(text)
-        : [text];
-      logHidFlush(reason === 'Tab' ? 'Tab' : 'Enter', text, lastWedgeCodes);
-      refreshWedgeDebug();
+      recordHidFlush(text, reason === 'Tab' ? 'Tab' : 'Enter');
       enqueueWedgeCodes(text);
     }
     scheduleManualCaptureFocus({ noScroll: true });
+  };
+
+  const shouldSkipCaptureRefocus = (el) => {
+    if (!(el instanceof Element)) return false;
+    const id = el.id || '';
+    if (id === 'scanActionsMenuBtn' || id === 'scanUndoLastBtn' || id === 'scanResetBtn') return true;
+    if (id === 'scanDetailSubmitBtn' || id === 'scanStatusBar' || id === 'scanUnmatchedClear') return true;
+    if (id === 'scanManualBtn') return true;
+    const cls = el.classList;
+    if (cls.contains('scan-meta-kebab-btn') || cls.contains('scan-meta-menu-item')) return true;
+    if (cls.contains('scan-detail-submit-btn') || cls.contains('scan-status-bar')) return true;
+    if (cls.contains('scan-manual-btn')) return true;
+    return !!el.closest('.scan-meta-menu-panel');
   };
 
   manualBtn?.addEventListener('click', runManual);
@@ -1313,34 +1330,11 @@
   });
   manualInput?.addEventListener('blur', (e) => {
     if (!inventoryArmed || readOnly) return;
-    const rt = e.relatedTarget;
-    if (rt instanceof Element) {
-      if (rt.id === 'scanActionsMenuBtn' || rt.id === 'scanUndoLastBtn' || rt.id === 'scanResetBtn' || rt.id === 'scanDetailSubmitBtn')
-        return;
-      if (rt.classList.contains('scan-meta-kebab-btn') || rt.classList.contains('scan-meta-menu-item') || rt.classList.contains('scan-detail-submit-btn'))
-        return;
-      if (rt.closest('.scan-meta-menu-panel'))
-        return;
-    }
+    if (shouldSkipCaptureRefocus(e.relatedTarget)) return;
     stopCaptureRefocus();
     captureRefocusTimer = setTimeout(() => {
       if (!inventoryArmed || readOnly) return;
-      const ae = document.activeElement;
-      if (ae && (ae.id === 'scanStatusBar' || ae.id === 'scanUnmatchedClear'))
-        return;
-      if (ae && ae.classList?.contains('scan-status-bar'))
-        return;
-      if (ae && (ae.id === 'scanActionsMenuBtn' || ae.id === 'scanUndoLastBtn' || ae.id === 'scanResetBtn' || ae.id === 'scanDetailSubmitBtn'))
-        return;
-      if (ae && (ae.classList?.contains('scan-meta-kebab-btn') || ae.classList?.contains('scan-meta-menu-item') || ae.classList?.contains('scan-detail-submit-btn')))
-        return;
-      if (ae && ae.closest?.('.scan-meta-menu-panel'))
-        return;
-      // While listening, reclaim focus even from Received qty so gun dumps aren't dropped.
-      if (ae && ae.classList?.contains('scan-received-input') && !inventoryArmed)
-        return;
-      if (ae && (ae.id === 'scanManualBtn' || ae.classList?.contains('scan-manual-btn')))
-        return;
+      if (shouldSkipCaptureRefocus(document.activeElement)) return;
       scheduleManualCaptureFocus();
     }, 50);
   });
@@ -1378,13 +1372,6 @@
   const BATCH_IDLE_MS = 280;
 
   const wedgeIdleMs = () => (inventoryArmed ? WEDGE_IDLE_ARMED_MS : WEDGE_IDLE_MS);
-
-  const splitWedgeCodes = (raw) => {
-    if (typeof ScanResolve.splitInventoryCodes === 'function')
-      return ScanResolve.splitInventoryCodes(raw);
-    const t = String(raw || '').trim();
-    return t ? [t] : [];
-  };
 
   const matchOneInventoryCode = (code) => {
     const row = pickScanRow(code, '', null);
@@ -1487,60 +1474,11 @@
     return matched > 0;
   };
 
-  const processInventoryBatch = async (codes) => {
-    if (!codes.length) return false;
-
-    let matched = 0;
-    let already = 0;
-    let missed = 0;
-    let lastRow = null;
-    const missedCodes = [];
-
-    for (const code of codes) {
-      if (code.includes(';') || (typeof ScanResolve.isUrl === 'function' && ScanResolve.isUrl(code))) {
-        const ok = await processScan(code, {
-          silent: true,
-          noFeedback: true,
-          quietFlash: true,
-          skipScroll: true,
-        });
-        if (ok) matched += 1;
-        else {
-          missed += 1;
-          missedCodes.push(code);
-        }
-        continue;
-      }
-
-      const hit = matchOneInventoryCode(code);
-      if (hit.missed) {
-        const ok = await processScan(code, {
-          silent: true,
-          noFeedback: true,
-          quietFlash: true,
-          skipScroll: true,
-        });
-        if (ok) {
-          matched += 1;
-          continue;
-        }
-        missed += 1;
-        missedCodes.push(code);
-        continue;
-      }
-      if (hit.already) already += 1;
-      else if (hit.ok) {
-        matched += 1;
-        lastRow = hit.row;
-      }
-    }
-
+  const finishInventoryBatch = (matched, already, missedCodes, lastRow, total) => {
     if (missedCodes.length) addUnmatchedCodes(missedCodes);
     if (lastRow) scrollRowIntoView(lastRow);
-    wedgeDebugLog(
-      `batch matched=${matched} already=${already} missed=${missed} codes=${codes.length}`
-    );
-
+    const missed = missedCodes.length;
+    wedgeDebugLog(`batch matched=${matched} already=${already} missed=${missed} codes=${total}`);
     if (matched > 0) {
       playMatchFeedback();
       showToast(
@@ -1552,22 +1490,40 @@
       setStatusBar('ok', `Matched ${matched}`, `${remainingLines()} remaining`);
       return true;
     }
-
     if (already > 0 && missed === 0) {
       playAlreadyFeedback();
       showToast(`Already received (${already})`, 'warn');
       setStatusBar('already', 'Already received', `${remainingLines()} remaining`);
       return true;
     }
-
-    if (missedCodes.length) {
-      showToast(`${missedCodes.length} tag(s) not on this PO`, 'warn');
+    if (missed) {
+      showToast(`${missed} tag(s) not on this PO`, 'warn');
       setStatusBar('error', 'Not on PO', `${remainingLines()} remaining`);
       return false;
     }
-
     showScanError('not_on_po', 'No tags matched');
     return false;
+  };
+
+  const processInventoryBatch = async (codes) => {
+    if (!codes.length) return false;
+    let matched = 0;
+    let already = 0;
+    let lastRow = null;
+    const missedCodes = [];
+    for (const code of codes) {
+      const hit = await matchArmedCode(code);
+      if (hit.missed) {
+        missedCodes.push(code);
+        continue;
+      }
+      if (hit.already) already += 1;
+      else if (hit.ok) {
+        matched += 1;
+        lastRow = hit.row;
+      }
+    }
+    return finishInventoryBatch(matched, already, missedCodes, lastRow, codes.length);
   };
 
   const flushInventoryBatch = () => {
@@ -1622,10 +1578,7 @@
       if (text) wedgeDebugLog(`flush ignored short/readonly: ${text}`);
       return;
     }
-    lastWedgeFlush = text;
-    lastWedgeCodes = splitWedgeCodes(text);
-    logHidFlush(force ? 'Enter' : 'idle', text, lastWedgeCodes);
-    refreshWedgeDebug();
+    recordHidFlush(text, force ? 'Enter' : 'idle');
     enqueueWedgeCodes(text);
   };
 
