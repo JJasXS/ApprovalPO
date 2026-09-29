@@ -140,5 +140,12 @@
             }
 
         </div>
+        @if (Model.ShowScanPo || Model.ShowReceivedGoods)
+        {
+            <p class="dash-rfid-download">
+                <a href="/downloads/ChainwayC5-RFID.apk" download>Download RFID Scanner</a>
+                Chainway C5 only. Desktop and other phones do not need this app.
+            </p>
+        }
     </main>
 </div>

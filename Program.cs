@@ -10,6 +10,7 @@ using Amazon;
 using Amazon.SecretsManager;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.StaticFiles;
 using System.Security.Cryptography.X509Certificates;
 
 // Optional .env: TENANT_CODE, FIREBIRD_PASSWORD (see .env.example). Other defaults in appsettings.json.
@@ -277,7 +278,9 @@ if (!app.Environment.IsDevelopment())
 if (!app.Environment.IsDevelopment())
     app.UseWebOptimizer();
 
-app.UseStaticFiles();
+var apkContentTypes = new FileExtensionContentTypeProvider();
+apkContentTypes.Mappings[".apk"] = "application/vnd.android.package-archive";
+app.UseStaticFiles(new StaticFileOptions { ContentTypeProvider = apkContentTypes });
 app.UseRouting();
 app.UseAuthentication();
 

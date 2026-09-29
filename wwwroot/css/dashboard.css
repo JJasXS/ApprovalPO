@@ -257,6 +257,19 @@
   height: 18px;
 }
 
+.dash-rfid-download {
+  margin: 16px 0 0;
+  max-width: 680px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #64748b;
+}
+
+.dash-rfid-download a {
+  font-weight: 600;
+  margin-right: 8px;
+}
+
 /* ─── Responsive ──────────────────────────────────────────── */
 @media (max-width: 600px) {
   .dash-main {

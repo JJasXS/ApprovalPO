@@ -202,6 +202,8 @@
     sessionActive = false;
     clearSessionTimers();
     setSessionButtons(false);
+    if (typeof window.approvalSetChainwayMode === 'function')
+      window.approvalSetChainwayMode('single');
     flushCapture();
     if (capture) {
       try { capture.blur(); } catch (_) { /* ignore */ }
@@ -225,6 +227,8 @@
 
     sessionActive = true;
     setSessionButtons(true);
+    if (typeof window.approvalSetChainwayMode === 'function')
+      window.approvalSetChainwayMode('continuous');
     setStatus('Listening… hold gun trigger (press Stop when done)');
     focusCapture();
 
@@ -315,6 +319,11 @@
       wedgeBuf = '';
     }, CAPTURE_IDLE_MS);
   });
+
+  window.approvalOnChainwayEpc = (epc) => {
+    if (!sessionActive) return;
+    ingestRaw(epc);
+  };
 
   void loadExpected();
 })();

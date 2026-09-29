@@ -61,6 +61,10 @@ Thumbs.db
 .env
 .env.*.local
 
+# Chainway companion signing material and built packages
+*.keystore
+wwwroot/downloads/*.apk
+
 # OCR captures (private; served only when signed in)
 Data/ocr-captures/
 wwwroot/ocr-captures/

@@ -405,6 +405,8 @@
     }
     wedgeDebugLog(inventoryArmed ? 'armed' : 'disarmed');
     refreshWedgeDebug();
+    if (typeof window.approvalSetChainwayMode === 'function')
+      window.approvalSetChainwayMode(inventoryArmed ? 'continuous' : 'single');
   };
 
   let lastArmToggleAt = 0;
@@ -1560,6 +1562,10 @@
     for (const part of parts) batchCodes.push(part);
     clearTimeout(batchTimer);
     batchTimer = setTimeout(flushInventoryBatch, BATCH_IDLE_MS);
+  };
+
+  window.approvalOnChainwayEpc = (epc) => {
+    enqueueWedgeCodes(epc);
   };
 
   const flushWedgeBuffer = (opts) => {
