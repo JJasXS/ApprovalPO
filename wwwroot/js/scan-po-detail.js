@@ -1794,6 +1794,9 @@
       icon.setAttribute('aria-hidden', 'true');
       statusBar.appendChild(icon);
     }
+    const menuWrap = document.querySelector('.scan-meta-menu-wrap');
+    if (statusBar && menuWrap && statusBar.parentElement !== menuWrap)
+      menuWrap.insertBefore(statusBar, menuWrap.firstChild);
     document.querySelector('.scan-rfid-tip')?.remove();
     document.getElementById('scanListenHint')?.remove();
     document.getElementById('scanWedgeDebug')?.remove();

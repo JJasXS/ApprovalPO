@@ -523,7 +523,7 @@ body {
   align-items: start;
   margin-bottom: 24px;
   padding: 16px 18px;
-  padding-right: 36px;
+  padding-right: 64px;
   background: linear-gradient(145deg, #ffffff 0%, #f8fcff 100%);
   border: 1px solid var(--scan-border);
   border-radius: 14px;
@@ -533,9 +533,33 @@ body {
 
 .scan-meta-menu-wrap {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 4px;
+  right: 4px;
   z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+.scan-meta-menu-wrap .scan-status-bar,
+.scan-meta-menu-wrap button.scan-status-bar {
+  position: static;
+  top: auto;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+}
+.scan-meta-menu-wrap .scan-listen-icon {
+  width: 14px;
+  height: 14px;
+}
+.scan-meta-menu-wrap .scan-status-bar[data-state="armed"] {
+  background: transparent;
+  border-color: transparent;
+  color: #0284c7;
 }
 .scan-meta-kebab-btn {
   width: 28px;

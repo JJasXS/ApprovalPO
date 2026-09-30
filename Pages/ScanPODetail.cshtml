@@ -54,20 +54,20 @@
         {
             var o = Model.Order;
             var scanSubmitted = Model.IsScanSubmitted;
-            <button type="button"
-                    id="scanStatusBar"
-                    class="scan-status-bar"
-                    data-state="@(scanSubmitted ? "done" : "ready")"
-                    aria-pressed="false"
-                    aria-label="Pause or resume RFID listening"
-                    @(scanSubmitted ? "disabled" : null)>
-                <span id="scanStatusMain" class="scan-status-bar-main">@(scanSubmitted ? "Submitted" : "Listening")</span>
-                <span class="scan-listen-icon" aria-hidden="true"></span>
-            </button>
             <div class="scan-detail-meta">
-                @if (!scanSubmitted)
-                {
-                    <div class="scan-meta-menu-wrap">
+                <div class="scan-meta-menu-wrap">
+                    <button type="button"
+                            id="scanStatusBar"
+                            class="scan-status-bar"
+                            data-state="@(scanSubmitted ? "done" : "ready")"
+                            aria-pressed="false"
+                            aria-label="Pause or resume RFID listening"
+                            @(scanSubmitted ? "disabled" : null)>
+                        <span id="scanStatusMain" class="scan-status-bar-main">@(scanSubmitted ? "Submitted" : "Listening")</span>
+                        <span class="scan-listen-icon" aria-hidden="true"></span>
+                    </button>
+                    @if (!scanSubmitted)
+                    {
                         <button type="button"
                                 id="scanActionsMenuBtn"
                                 class="scan-meta-kebab-btn"
@@ -81,8 +81,8 @@
                             <button type="button" id="scanUndoLastBtn" class="scan-meta-menu-item" disabled>Undo last scan</button>
                             <button type="button" id="scanResetBtn" class="scan-meta-menu-item scan-meta-menu-item--danger" disabled>Reset scan</button>
                         </div>
-                    </div>
-                }
+                    }
+                </div>
                 <div class="scan-detail-field scan-detail-field--po-date">
                     <label>PO date</label>
                     <span>@o.OrderDate.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</span>
