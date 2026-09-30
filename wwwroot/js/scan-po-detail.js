@@ -76,6 +76,9 @@
   /** @type {{ lineKey: string, code: string, project: string, count: number }[]} */
   let scanHistory = [];
   let draftTimer = null;
+  let draftEpoch = 0;
+  let draftChain = Promise.resolve();
+  let actionConfirmOpen = false;
   let readOnly = isSubmitted;
   let submitInProgress = false;
 
@@ -771,6 +774,32 @@
     applyAllRowVisuals();
   };
 
+  const confirmAction = (message, okLabel, okClass) => new Promise((resolve) => {
+    actionConfirmOpen = true;
+    stopCaptureRefocus();
+    const root = document.createElement('div');
+    root.className = 'scan-confirm';
+    root.innerHTML =
+      '<div class="scan-confirm-card" role="dialog" aria-modal="true">' +
+      '<p class="scan-confirm-msg"></p>' +
+      '<div class="scan-confirm-actions">' +
+      '<button type="button" class="scan-confirm-cancel">Cancel</button>' +
+      '<button type="button" class="scan-confirm-ok"></button>' +
+      '</div></div>';
+    root.querySelector('.scan-confirm-msg').textContent = message;
+    const okBtn = root.querySelector('.scan-confirm-ok');
+    okBtn.textContent = okLabel || 'OK';
+    if (okClass) okBtn.classList.add(okClass);
+    const finish = (ok) => {
+      actionConfirmOpen = false;
+      root.remove();
+      resolve(ok);
+    };
+    root.querySelector('.scan-confirm-cancel').addEventListener('click', () => finish(false));
+    okBtn.addEventListener('click', () => finish(true));
+    document.body.appendChild(root);
+  });
+
   const resetScanSession = async () => {
     if (readOnly) {
       showScanError('already_submitted');
@@ -786,7 +815,12 @@
       lines > 0
         ? `Clear all received qty for this PO (${withScan} of ${lines} lines)?`
         : 'Clear all received qty for this PO?';
-    if (!window.confirm(msg)) return;
+    const confirmed = await confirmAction(msg, 'Reset');
+    if (!confirmed) return;
+
+    draftEpoch += 1;
+    clearTimeout(draftTimer);
+    try { await draftChain; } catch (_) { /* draft save already finished or failed */ }
 
     clearLocalScanSession();
     clearUnmatched();
@@ -810,6 +844,8 @@
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.ok) {
           showToast(data.error || 'Could not reset on server.', 'error');
+          await loadServerState();
+          applyAllRowVisuals();
           return;
         }
       } catch (_) {
@@ -823,13 +859,17 @@
 
   const scheduleDraftSave = () => {
     if (readOnly || !saveDraftUrl || !docKey) return;
+    const epoch = draftEpoch;
     clearTimeout(draftTimer);
-    draftTimer = setTimeout(() => void persistDraft(), 1500);
+    draftTimer = setTimeout(() => {
+      if (epoch !== draftEpoch) return;
+      void persistDraft(epoch);
+    }, 1500);
   };
 
-  const persistDraft = async () => {
-    if (readOnly || !navigator.onLine) return;
-    try {
+  const persistDraft = (epoch = draftEpoch) => {
+    const run = draftChain.then(async () => {
+      if (readOnly || !navigator.onLine || epoch !== draftEpoch || !saveDraftUrl) return;
       const body = new URLSearchParams();
       body.set('docKey', docKey);
       body.set('scanCountsJson', JSON.stringify(scanCounts));
@@ -841,7 +881,9 @@
         headers,
         body: body.toString(),
       });
-    } catch (_) { /* offline — local session only */ }
+    }).catch(() => { /* offline — local session only */ });
+    draftChain = run;
+    return run;
   };
 
   const loadServerState = async () => {
@@ -1307,6 +1349,7 @@
     if (cls.contains('scan-meta-kebab-btn') || cls.contains('scan-meta-menu-item')) return true;
     if (cls.contains('scan-detail-submit-btn') || cls.contains('scan-status-bar')) return true;
     if (cls.contains('scan-manual-btn')) return true;
+    if (el.closest('.scan-confirm')) return true;
     return !!el.closest('.scan-meta-menu-panel');
   };
 
@@ -1331,11 +1374,11 @@
     captureIdleTimer = setTimeout(() => flushManualCapture(), wedgeIdleMs());
   });
   manualInput?.addEventListener('blur', (e) => {
-    if (!inventoryArmed || readOnly) return;
+    if (!inventoryArmed || readOnly || actionConfirmOpen) return;
     if (shouldSkipCaptureRefocus(e.relatedTarget)) return;
     stopCaptureRefocus();
     captureRefocusTimer = setTimeout(() => {
-      if (!inventoryArmed || readOnly) return;
+      if (!inventoryArmed || readOnly || actionConfirmOpen) return;
       if (shouldSkipCaptureRefocus(document.activeElement)) return;
       scheduleManualCaptureFocus();
     }, 50);
@@ -1731,10 +1774,16 @@
           `Only ${withScan} of ${lines} lines have received qty.\n\nSubmit anyway?`;
       }
 
-      if (!window.confirm(msg)) {
+      if (submitForm.dataset.confirmed !== '1') {
         e.preventDefault();
+        void confirmAction(msg, 'Submit', 'scan-confirm-ok--submit').then((ok) => {
+          if (!ok) return;
+          submitForm.dataset.confirmed = '1';
+          submitForm.requestSubmit();
+        });
         return;
       }
+      submitForm.dataset.confirmed = '';
 
       scanCountsInput.value = JSON.stringify(scanCounts);
       submitInProgress = true;

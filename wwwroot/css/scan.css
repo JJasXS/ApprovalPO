@@ -833,8 +833,10 @@ body {
     border-bottom-width: 1.5px;
   }
 
-  .scan-lines-table--handheld tr.scan-line-received .scan-received-input {
-    border-bottom-color: #22c55e;
+  .scan-lines-table--handheld tr.scan-line-received .scan-received-input,
+  .scan-lines-table--handheld tr.scan-line-partial .scan-received-input,
+  .scan-lines-table--handheld tr.scan-line-over .scan-received-input {
+    border-bottom-color: transparent;
     background: transparent;
   }
 
@@ -864,19 +866,73 @@ body {
   color: #0f172a;
 }
 
-.scan-lines-table tr.scan-line-received .scan-received-input {
-  border-bottom-color: #22c55e;
-  background: transparent;
-}
-
-.scan-lines-table tr.scan-line-partial .scan-received-input {
-  border-bottom-color: #eab308;
-  background: transparent;
-}
-
+.scan-lines-table tr.scan-line-received .scan-received-input,
+.scan-lines-table tr.scan-line-partial .scan-received-input,
 .scan-lines-table tr.scan-line-over .scan-received-input {
-  border-bottom-color: #ef4444;
+  border-bottom-color: transparent;
   background: transparent;
+}
+
+
+.scan-confirm {
+  position: fixed;
+  inset: 0;
+  z-index: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.scan-confirm-card {
+  width: min(420px, 100%);
+  padding: 18px 18px 14px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.2);
+}
+
+.scan-confirm-msg {
+  margin: 0 0 16px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: #0f172a;
+  white-space: pre-line;
+}
+
+.scan-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.scan-confirm-actions button {
+  min-height: 44px;
+  padding: 8px 16px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.scan-confirm-cancel {
+  color: #334155;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+}
+
+.scan-confirm-ok {
+  color: #fff;
+  background: #dc2626;
+  border: 1px solid #dc2626;
+}
+
+.scan-confirm-ok--submit {
+  background: #0369a1;
+  border-color: #0369a1;
 }
 
 .scan-line-tick {
@@ -1560,6 +1616,18 @@ button.scan-status-bar:focus-visible {
 
 .scan-lines-table tbody tr:nth-child(even) td {
   background: #f8fcff;
+}
+
+.scan-lines-table tbody tr.scan-line-received td {
+  background: #bbf7d0;
+}
+
+.scan-lines-table tbody tr.scan-line-partial td {
+  background: #fef9c3;
+}
+
+.scan-lines-table tbody tr.scan-line-over td {
+  background: #fecaca;
 }
 
 .scan-lines-table td.num {
