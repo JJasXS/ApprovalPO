@@ -19,7 +19,6 @@ namespace ChainwayC5
             return BlockUnlessTrusted(request?.Url?.ToString());
         }
 
-        [Obsolete("Older WebView path. Kept so API 23 still stays on the trusted host.")]
         public override bool ShouldOverrideUrlLoading(WebView view, string url)
         {
             return BlockUnlessTrusted(url);

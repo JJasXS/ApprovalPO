@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Approval PO RFID</string>
-    <!-- Fill with Approval:PublicBaseUrl before building. Example: https://server:2096/ -->
-    <string name="site_origin"></string>
+    <string name="site_origin">https://eapproval.oneclickclouds.com/</string>
 </resources>
