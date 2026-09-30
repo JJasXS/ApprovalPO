@@ -61,12 +61,9 @@
                     aria-pressed="false"
                     aria-label="Pause or resume RFID listening"
                     @(scanSubmitted ? "disabled" : null)>
-                <span id="scanStatusMain" class="scan-status-bar-main">@(scanSubmitted ? "Submitted" : "RFID Listening")</span>
+                <span id="scanStatusMain" class="scan-status-bar-main">@(scanSubmitted ? "Submitted" : "Listening")</span>
+                <span class="scan-listen-icon" aria-hidden="true"></span>
             </button>
-            @if (!scanSubmitted)
-            {
-                <p id="scanListenHint" class="scan-listen-hint" hidden>Hold the trigger. Unique tags match as they are typed.</p>
-            }
             <div class="scan-detail-meta">
                 @if (!scanSubmitted)
                 {
@@ -99,22 +96,15 @@
                     <div class="scan-manual-row">
                         @if (scanSubmitted)
                         {
-                            <input type="text" id="scanManualCode" class="scan-manual-input" placeholder="Type item code" autocomplete="off" enterkeyhint="go" disabled />
-                            <button type="button" class="scan-manual-btn" id="scanManualBtn" disabled>Go</button>
+                            <input type="text" id="scanManualCode" class="scan-manual-input" placeholder="Scan tag" autocomplete="off" enterkeyhint="done" disabled />
+                            <button type="button" class="scan-manual-btn" id="scanManualBtn" disabled>OK</button>
                         }
                         else
                         {
-                            <input type="text" id="scanManualCode" class="scan-manual-input" placeholder="Type item code" autocomplete="off" enterkeyhint="go" />
-                            <button type="button" class="scan-manual-btn" id="scanManualBtn">Go</button>
+                            <input type="text" id="scanManualCode" class="scan-manual-input" placeholder="Scan tag" autocomplete="off" enterkeyhint="done" />
+                            <button type="button" class="scan-manual-btn" id="scanManualBtn">OK</button>
                         }
                     </div>
-                    @if (!scanSubmitted)
-                    {
-                        <p class="scan-rfid-tip">
-                            Multi-tag: set the gun to <strong>Inventory / Multi-tag</strong>, HID keyboard, suffix <strong>Enter</strong>.
-                            Hold the trigger — unique tags match as they are typed. Verify with <code>?scanDebug=1</code>.
-                        </p>
-                    }
                 </div>
                 <div class="scan-detail-field scan-detail-field--scan-only">
                     <div class="scan-detail-scan-row">
@@ -181,11 +171,11 @@
                     <table class="scan-lines-table scan-lines-table--handheld">
                         <thead>
                             <tr>
-                                <th>#</th>
-                                <th>Item code</th>
+                                <th>No.</th>
+                                <th>Code</th>
                                 <th class="scan-col-desc">Description</th>
                                 <th class="scan-col-project">Project</th>
-                                <th class="num">PO qty</th>
+                                <th class="num">Qty</th>
                                 <th class="num scan-th-received">Received</th>
                             </tr>
                         </thead>
@@ -258,21 +248,6 @@
                 </div>
             }
 
-            <details id="scanWedgeDebug" class="scan-wedge-debug">
-                <summary>Listener debug (add ?scanDebug=1 to auto-open)</summary>
-                <p class="scan-wedge-debug-help">
-                    Hold the trigger over several tags once. If <strong>Burst pending</strong> / last flush shows only 1 code, the gun is still single-read — fix gun Inventory mode (web app cannot invent tags). If N &gt; 1, batch match is working.
-                </p>
-                <div class="scan-wedge-debug-grid">
-                    <div><span class="scan-wedge-debug-label">Armed</span> <code id="scanDebugArmed">no</code></div>
-                    <div><span class="scan-wedge-debug-label">Focus</span> <code id="scanDebugFocus">—</code></div>
-                    <div><span class="scan-wedge-debug-label">Burst pending</span> <code id="scanDebugBurst">0</code></div>
-                    <div><span class="scan-wedge-debug-label">Last burst size</span> <code id="scanDebugBurstSize">—</code></div>
-                    <div class="scan-wedge-debug-wide"><span class="scan-wedge-debug-label">Live buffer</span> <code id="scanDebugBuffer">(empty)</code></div>
-                    <div class="scan-wedge-debug-wide"><span class="scan-wedge-debug-label">Last flush</span> <code id="scanDebugLastFlush">(none)</code></div>
-                </div>
-                <pre id="scanDebugLog" class="scan-wedge-debug-log" aria-live="polite"></pre>
-            </details>
         }
     </div>
 </main>

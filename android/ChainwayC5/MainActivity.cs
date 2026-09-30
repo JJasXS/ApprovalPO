@@ -2,9 +2,9 @@ using System;
 using Android.App;
 using Android.Content.PM;
 using Android.OS;
+using Android.Util;
 using Android.Views;
 using Android.Webkit;
-using Android.Widget;
 
 namespace ChainwayC5
 {
@@ -16,7 +16,6 @@ namespace ChainwayC5
     public class MainActivity : Activity
     {
         WebView _web;
-        TextView _status;
         Uri _origin;
         bool _triggerDown;
 
@@ -26,7 +25,6 @@ namespace ChainwayC5
         {
             base.OnCreate(savedInstanceState);
             SetContentView(Resource.Layout.Main);
-            _status = FindViewById<TextView>(Resource.Id.status);
             _web = FindViewById<WebView>(Resource.Id.web);
             Scanner = new UhfScanner();
             if (!SiteOrigin.TryParse(GetString(Resource.String.site_origin), out _origin))
@@ -84,9 +82,9 @@ namespace ChainwayC5
 
         public void SetStatus(string text)
         {
-            if (_status == null)
+            if (string.IsNullOrWhiteSpace(text))
                 return;
-            RunOnUiThread(() => _status.Text = text ?? "");
+            Log.Info("ChainwayC5", text);
         }
 
         public void StartForMode(string mode)

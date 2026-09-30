@@ -49,7 +49,7 @@
   let inventoryArmed = false;
   const manualPlaceholderDefault =
     (manualInput && manualInput.getAttribute('placeholder')) || 'Type item code';
-  const MANUAL_PLACEHOLDER_LISTENING = 'Scan tags here (multi OK)…';
+  const MANUAL_PLACEHOLDER_LISTENING = 'Scan tag';
   /** @type {Set<string>} */
   const unmatchedKeys = new Set();
   /** @type {string[]} */
@@ -203,10 +203,10 @@
       return;
     }
     if (inventoryArmed) {
-      setStatusBar('armed', 'RFID Listening — tap to pause', `${remainingLines()} remaining`, { sticky: true });
+      setStatusBar('armed', 'Listening', `${remainingLines()} remaining`, { sticky: true });
       return;
     }
-    setStatusBar('ready', 'Paused — tap to resume', `${remainingLines()} remaining`, { sticky: true });
+    setStatusBar('ready', 'Paused', `${remainingLines()} remaining`, { sticky: true });
   };
 
   const focusDebug = () => {
@@ -1804,7 +1804,27 @@
     });
   }
 
+  const applyCompactScanChrome = () => {
+    if (manualBtn) manualBtn.textContent = 'OK';
+    if (manualInput) manualInput.placeholder = 'Scan tag';
+    if (statusBar && !statusBar.querySelector('.scan-listen-icon')) {
+      const icon = document.createElement('span');
+      icon.className = 'scan-listen-icon';
+      icon.setAttribute('aria-hidden', 'true');
+      statusBar.appendChild(icon);
+    }
+    document.querySelector('.scan-rfid-tip')?.remove();
+    document.getElementById('scanListenHint')?.remove();
+    document.getElementById('scanWedgeDebug')?.remove();
+    const headerLabels = { '#': 'No.', 'Item code': 'Code', 'PO qty': 'Qty' };
+    document.querySelectorAll('.scan-lines-table thead th').forEach((th) => {
+      const next = headerLabels[th.textContent.trim()];
+      if (next) th.textContent = next;
+    });
+  };
+
   const init = async () => {
+    applyCompactScanChrome();
     await loadServerState();
     if (!readOnly) loadLocalSession();
     applyAllRowVisuals();

@@ -22,10 +22,7 @@ namespace ChainwayC5
         protected override void OnPostExecute(Java.Lang.Object result)
         {
             if ("OK".Equals(result?.ToString()))
-            {
-                _activity.SetStatus("Reader ready.");
                 return;
-            }
             _activity.SetStatus("Reader init failed.");
         }
     }
