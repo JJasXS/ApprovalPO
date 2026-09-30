@@ -305,22 +305,12 @@
     captureRefocusTimer = null;
   };
 
-  const focusManualCapture = (opts = {}) => {
-    if (!manualInput || readOnly || !inventoryArmed || manualInput.disabled) return;
-    // During live RFID ingest, never scroll — smooth scrollIntoView drops the next HID dump.
-    if (!opts.noScroll) {
-      try {
-        manualInput.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      } catch (_) {
-        try { manualInput.scrollIntoView(true); } catch (__) { /* ignore */ }
-      }
+  const focusManualCapture = () => {
+    if (!manualInput || !inventoryArmed) return;
+    // Highlight only. Focusing this box opens the Android keyboard.
+    if (document.activeElement === manualInput) {
+      try { manualInput.blur(); } catch (_) { /* ignore */ }
     }
-    try {
-      manualInput.focus({ preventScroll: true });
-    } catch (_) {
-      try { manualInput.focus(); } catch (__) { /* ignore */ }
-    }
-    // Do not select() — that races HID keystrokes and drops RFID characters.
   };
 
   const scheduleManualCaptureFocus = (opts = {}) => {
@@ -337,10 +327,12 @@
     if (armed) {
       manualInput.classList.add('scan-manual-input--listening');
       manualInput.setAttribute('placeholder', MANUAL_PLACEHOLDER_LISTENING);
+      manualInput.setAttribute('inputmode', 'none');
       return;
     }
     manualInput.classList.remove('scan-manual-input--listening');
     manualInput.setAttribute('placeholder', manualPlaceholderDefault);
+    manualInput.setAttribute('inputmode', 'text');
     manualInput.value = '';
   };
 
@@ -398,7 +390,7 @@
     refreshIdleStatusBar();
     if (inventoryArmed) {
       if (!opts.quiet) showToast('Listening — scan Item code', 'ok');
-      scheduleManualCaptureFocus();
+      focusManualCapture();
     } else {
       if (!opts.quiet) showToast('Paused', 'warn');
       clearTimeout(captureIdleTimer);
@@ -1373,17 +1365,6 @@
     if (!isBufferCompleteForIdleFlush(text)) return;
     captureIdleTimer = setTimeout(() => flushManualCapture(), wedgeIdleMs());
   });
-  manualInput?.addEventListener('blur', (e) => {
-    if (!inventoryArmed || readOnly || actionConfirmOpen) return;
-    if (shouldSkipCaptureRefocus(e.relatedTarget)) return;
-    stopCaptureRefocus();
-    captureRefocusTimer = setTimeout(() => {
-      if (!inventoryArmed || readOnly || actionConfirmOpen) return;
-      if (shouldSkipCaptureRefocus(document.activeElement)) return;
-      scheduleManualCaptureFocus();
-    }, 50);
-  });
-
   // RFID / barcode guns: HID keyboard wedge only (no RFID SDK in this app).
   // Gun model / inventory profile is firmware-side and not configured here.
   // Multi-tag: wedge batch-split — coalesce rapid Enter dumps, then match each EPC.
