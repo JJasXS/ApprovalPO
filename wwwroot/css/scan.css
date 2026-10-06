@@ -166,6 +166,15 @@ body {
 
 .gr-print-sheet { display: none; }
 
+.gr-print-sheet img,
+.gr-print-logo {
+  width: 72px;
+  max-width: 72px;
+  max-height: 40px;
+  height: auto;
+  object-fit: contain;
+}
+
 body.is-gr-printing .gr-print-sheet { display: block !important; }
 
 body.is-gr-printing .tenant-env-chip,
@@ -2002,6 +2011,7 @@ button.scan-status-bar:focus-visible {
 
   .gr-print-sheet {
     display: block !important;
+    width: 100%;
     color: #111;
     font-family: "Segoe UI", Arial, sans-serif;
   }
@@ -2016,7 +2026,10 @@ button.scan-status-bar:focus-visible {
 
   .gr-print-logo {
     width: 72px;
+    max-width: 72px;
+    max-height: 40px;
     height: auto;
+    object-fit: contain;
   }
 
   .gr-print-title-block { flex: 1; }

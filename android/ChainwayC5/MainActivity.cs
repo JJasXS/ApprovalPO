@@ -1,7 +1,9 @@
 using System;
 using Android.App;
+using Android.Content;
 using Android.Content.PM;
 using Android.OS;
+using Android.Print;
 using Android.Util;
 using Android.Views;
 using Android.Webkit;
@@ -134,7 +136,22 @@ namespace ChainwayC5
             settings.MixedContentMode = MixedContentHandling.NeverAllow;
             CookieManager.Instance.SetAcceptCookie(true);
             CookieManager.Instance.SetAcceptThirdPartyCookies(_web, true);
+            _web.AddJavascriptInterface(new PrintBridge(this), "ApprovalPrint");
             _web.SetWebViewClient(new TrustedWebClient(_origin, _ => SetStatus("Blocked an untrusted address.")));
+        }
+
+        public void PrintCurrentPage()
+        {
+            if (_web == null)
+                return;
+            var printManager = (PrintManager)GetSystemService(Context.PrintService);
+            if (printManager == null)
+            {
+                SetStatus("Printer is not available on this device.");
+                return;
+            }
+            const string jobName = "Goods received";
+            printManager.Print(jobName, _web.CreatePrintDocumentAdapter(jobName), null);
         }
 
         static bool IsTrigger(KeyEvent e)

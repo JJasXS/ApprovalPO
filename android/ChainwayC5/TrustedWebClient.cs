@@ -24,6 +24,14 @@ namespace ChainwayC5
             return BlockUnlessTrusted(url);
         }
 
+        public override void OnPageFinished(WebView view, string url)
+        {
+            base.OnPageFinished(view, url);
+            if (view == null || !SiteOrigin.Matches(_origin, url))
+                return;
+            view.EvaluateJavascript(PrintBridge.HookScript, null);
+        }
+
         bool BlockUnlessTrusted(string url)
         {
             if (SiteOrigin.Matches(_origin, url))
