@@ -240,39 +240,12 @@
     document.getElementById('grPrintBtn')?.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        printGoodsReceived();
-    });
-
-    function printGoodsReceived() {
-        const sheet = document.querySelector('.gr-print-sheet');
-        if (!sheet) return;
-        const popup = window.open('', '_blank');
-        if (!popup) {
-            printOnThisPage();
-            return;
-        }
-        const css = new URL('/css/scan.css', location.origin).href;
-        popup.document.open();
-        popup.document.write(
-            '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' +
-            document.title +
-            '</title><link rel="stylesheet" href="' + css + '">' +
-            '<style>body{margin:16px;background:#fff}.gr-print-sheet{display:block!important}</style>' +
-            '</head><body>' + sheet.outerHTML + '</body></html>'
-        );
-        popup.document.close();
-        setTimeout(() => {
-            popup.focus();
-            popup.print();
-        }, 300);
-    }
-
-    function printOnThisPage() {
+        if (!document.querySelector('.gr-print-sheet')) return;
         document.body.classList.add('is-gr-printing');
         window.addEventListener('afterprint', () => {
             document.body.classList.remove('is-gr-printing');
         }, { once: true });
-        requestAnimationFrame(() => window.print());
-    }
+        window.print();
+    });
 })();
 </script>
