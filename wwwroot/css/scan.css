@@ -147,6 +147,25 @@ body {
 
 .scan-header-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 
+.scan-print-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  color: #0369a1;
+  background: #fff;
+  border: 1.5px solid var(--scan-accent-mid);
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.scan-print-btn:hover { background: #f0f9ff; border-color: #7dd3fc; }
+.scan-print-btn:active { transform: scale(.97); }
+
+.gr-print-sheet { display: none; }
+
 .scan-qr-btn {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 9px 18px; font-size: 14px; font-weight: 600;
@@ -1948,6 +1967,155 @@ button.scan-status-bar:focus-visible {
 .qr-photo-btn:hover {
   background: #fff;
   border-color: #7dd3fc;
+}
+
+@media print {
+  @page { size: A4; margin: 14mm 12mm; }
+
+  body:has(.gr-print-sheet) {
+    background: #fff !important;
+    color: #111;
+    font-size: 11pt;
+  }
+
+  body:has(.gr-print-sheet) .scan-main,
+  body:has(.gr-print-sheet) .scan-main-inner {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  body:has(.gr-print-sheet) .tenant-env-chip,
+  body:has(.gr-print-sheet) .scan-header,
+  body:has(.gr-print-sheet) .scan-main-inner > :not(.gr-print-sheet) {
+    display: none !important;
+  }
+
+  .gr-print-sheet {
+    display: block !important;
+    color: #111;
+    font-family: "Segoe UI", Arial, sans-serif;
+  }
+
+  .gr-print-head {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #0f172a;
+  }
+
+  .gr-print-logo {
+    width: 72px;
+    height: auto;
+  }
+
+  .gr-print-title-block { flex: 1; }
+
+  .gr-print-kicker {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #334155;
+  }
+
+  .gr-print-title-block h1 {
+    margin: 2px 0 0;
+    font-size: 22px;
+    line-height: 1.1;
+    letter-spacing: 0.02em;
+  }
+
+  .gr-print-docmeta {
+    display: flex;
+    gap: 18px;
+    text-align: right;
+  }
+
+  .gr-print-docmeta span,
+  .gr-print-facts dt,
+  .gr-print-sign span {
+    display: block;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #64748b;
+  }
+
+  .gr-print-docmeta strong {
+    display: block;
+    margin-top: 2px;
+    font-size: 13px;
+  }
+
+  .gr-print-facts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 24px;
+    margin: 14px 0 18px;
+  }
+
+  .gr-print-facts-wide { grid-column: 1 / -1; }
+
+  .gr-print-facts dd {
+    margin: 2px 0 0;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .gr-print-lines {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+
+  .gr-print-lines th,
+  .gr-print-lines td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #cbd5e1;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .gr-print-lines thead th {
+    border-bottom: 1.5px solid #0f172a;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #334155;
+  }
+
+  .gr-print-lines .num,
+  .gr-print-lines th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .gr-print-lines tfoot td {
+    border-bottom: 0;
+    border-top: 1.5px solid #0f172a;
+    font-weight: 700;
+    padding-top: 8px;
+  }
+
+  .gr-print-empty {
+    padding: 16px 8px;
+    color: #64748b;
+  }
+
+  .gr-print-sign {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 28px;
+    margin-top: 48px;
+  }
+
+  .gr-print-sign i {
+    display: block;
+    height: 36px;
+    border-bottom: 1px solid #0f172a;
+  }
 }
 
 /* ─── Responsive ─────────────────────────────────────────── */

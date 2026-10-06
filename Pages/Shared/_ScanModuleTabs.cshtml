@@ -4,11 +4,11 @@
     var scanOn = active == "scan";
     var receivedOn = active == "received";
 }
-<nav class="scan-module-tabs" role="tablist" aria-label="Scan PO or Goods Received">
+<nav class="scan-module-tabs" role="tablist" aria-label="Scan purchase order or goods received">
     <a asp-page="/ScanPO"
        class="scan-module-tab@(scanOn ? " is-active" : "")"
        role="tab"
-       aria-selected="@(scanOn ? "true" : "false")">Scan PO</a>
+       aria-selected="@(scanOn ? "true" : "false")">Scan Purc. Order</a>
     <a asp-page="/ReceivedGoods"
        class="scan-module-tab@(receivedOn ? " is-active" : "")"
        role="tab"

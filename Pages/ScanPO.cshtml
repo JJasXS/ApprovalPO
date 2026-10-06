@@ -1,7 +1,7 @@
 @page "/ScanPO"
 @model ApprovalPO.Pages.ScanPOModel
 @{
-    ViewData["Title"] = "Scanning PO";
+    ViewData["Title"] = "Goods Received";
     ViewData["AppName"] = "Approval PO";
     var ordersJsonUrl = Url.Page("/ScanPO", null, new { handler = "OrdersJson" })!;
     var detailPageUrl = "/ScanPODetail";
@@ -25,7 +25,7 @@
                     <polyline points="15 18 9 12 15 6"/>
                 </svg>
             </a>
-            <h1 class="scan-header-title">Scanning PO</h1>
+            <h1 class="scan-header-title">Goods Received</h1>
         </div>
         <div class="scan-header-actions">
             <div class="scan-menu-wrap">
@@ -61,7 +61,7 @@
 
         <p id="scanHttpsBanner" class="scan-https-banner" hidden role="note">
             For live QR camera, use HTTPS:
-            <a id="scanHttpsBannerLink" href="#">open Scan PO on HTTPS</a>
+            <a id="scanHttpsBannerLink" href="#">open this page on HTTPS</a>
             (or take a photo of the QR on HTTP).
         </p>
 
@@ -72,12 +72,9 @@
 
         <div class="scan-table-wrap">
             <div class="scan-tabs-wrap scan-tabs-wrap--table">
-                <div class="scan-tabs" role="tablist" aria-label="Scan PO status">
+                <div class="scan-tabs" role="tablist" aria-label="Purchase orders to scan">
                     <button type="button" id="scanTabToScan" class="scan-tab-btn is-active" role="tab" aria-selected="true" data-scan-tab="toScan">
                         To scan (<span id="scanCountToScan">0</span>)
-                    </button>
-                    <button type="button" id="scanTabSubmitted" class="scan-tab-btn" role="tab" aria-selected="false" data-scan-tab="submitted">
-                        Submitted (<span id="scanCountSubmitted">0</span>)
                     </button>
                 </div>
             </div>
@@ -95,7 +92,7 @@
                 </tbody>
             </table>
             <div id="scanEmpty" class="scan-empty" hidden>
-                No purchase orders in this tab.
+                No purchase orders waiting to scan.
             </div>
         </div>
         <div class="scan-list-footer">

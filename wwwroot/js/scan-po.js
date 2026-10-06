@@ -1,4 +1,4 @@
-/* scan-po.js — PO list tabs (to-scan + submitted) */
+/* scan-po.js — purchase orders still waiting to scan */
 (function () {
   'use strict';
 
@@ -14,20 +14,13 @@
   let allOrders = [];
   let searchTerm = '';
   let visibleCount = 0;
-  /** @type {'toScan' | 'submitted'} */
-  let activeTab = 'toScan';
 
   const tbody = document.getElementById('scanTableBody');
   const emptyState = document.getElementById('scanEmpty');
   const resultCount = document.getElementById('scanResultCount');
   const searchInput = document.getElementById('scanSearch');
   const listSentinel = document.getElementById('scanListSentinel');
-  const tabToScan = document.getElementById('scanTabToScan');
-  const tabSubmitted = document.getElementById('scanTabSubmitted');
   const countToScan = document.getElementById('scanCountToScan');
-  const countSubmitted = document.getElementById('scanCountSubmitted');
-  const listCol1Header = document.getElementById('scanListCol1Header');
-  const listDateHeader = document.getElementById('scanListDateHeader');
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -39,101 +32,27 @@
   };
 
   const poDetailHref = (docKey) => `${detailPageUrl}?docKey=${encodeURIComponent(docKey)}`;
-  const wantsSubmitted = () => activeTab === 'submitted';
 
-  const matchesPoTab = (o) => Boolean(o.scanSubmitted) === wantsSubmitted();
-
-  const sortPoForTab = (list) => {
-    if (activeTab !== 'submitted') return list;
-    return list.slice().sort((a, b) => {
-      const ta = a.submittedAtUtc ? new Date(a.submittedAtUtc).getTime() : 0;
-      const tb = b.submittedAtUtc ? new Date(b.submittedAtUtc).getTime() : 0;
-      if (tb !== ta) return tb - ta;
-      return String(a.poNumber || '').localeCompare(String(b.poNumber || ''), undefined, {
-        sensitivity: 'base',
-      });
-    });
-  };
+  const waitingToScan = () => allOrders.filter((o) => !o.scanSubmitted);
 
   const getFiltered = () => {
     const term = searchTerm.toLowerCase().trim();
-    const tabbed = sortPoForTab(allOrders.filter(matchesPoTab));
+    const waiting = waitingToScan();
     return term
-      ? tabbed.filter((o) => (o.poNumber || '').toLowerCase().includes(term))
-      : tabbed;
+      ? waiting.filter((o) => (o.poNumber || '').toLowerCase().includes(term))
+      : waiting;
   };
 
   const updateTabCounts = () => {
-    const toScanN = allOrders.filter((o) => !o.scanSubmitted).length;
-    const submittedN = allOrders.filter((o) => o.scanSubmitted).length;
-    if (countToScan) countToScan.textContent = String(toScanN);
-    if (countSubmitted) countSubmitted.textContent = String(submittedN);
-  };
-
-  const normalizeTab = (tab) => {
-    const t = String(tab || '').toLowerCase();
-    if (t === 'submitted' || t === 'approved') return 'submitted';
-    return 'toScan';
-  };
-
-  const updateListChrome = () => {
-    const submitted = activeTab === 'submitted';
-
-    if (listCol1Header) {
-      listCol1Header.textContent = 'PO #';
-    }
-    if (listDateHeader) {
-      listDateHeader.textContent = submitted ? 'Submitted' : 'Date';
-    }
-    if (searchInput) {
-      searchInput.placeholder = 'Search PO #…';
-    }
-    if (emptyState) {
-      if (submitted) emptyState.textContent = 'No submitted POs yet.';
-      else emptyState.textContent = 'No POs waiting to scan.';
-    }
-  };
-
-  const setActiveTab = (tab) => {
-    activeTab = normalizeTab(tab);
-    const toScanOn = activeTab === 'toScan';
-    const submittedOn = activeTab === 'submitted';
-
-    if (tabToScan) {
-      tabToScan.classList.toggle('is-active', toScanOn);
-      tabToScan.setAttribute('aria-selected', toScanOn ? 'true' : 'false');
-    }
-    if (tabSubmitted) {
-      tabSubmitted.classList.toggle('is-active', submittedOn);
-      tabSubmitted.setAttribute('aria-selected', submittedOn ? 'true' : 'false');
-    }
-    updateListChrome();
-
-    setInitialVisible(getFiltered());
-  };
-
-  const submittedMetaHtml = (o) => {
-    if (activeTab !== 'submitted' || !o.scanSubmitted) return '';
-    const who = (o.submittedByName || '').trim();
-    if (!who) return '';
-    return `<span class="scan-row-meta">${esc(who)}</span>`;
-  };
-
-  const rowListDatePo = (o) => {
-    if (activeTab === 'submitted' && o.submittedAtUtc) return fmtDate(o.submittedAtUtc);
-    return fmtDate(o.orderDate);
+    if (countToScan) countToScan.textContent = String(waitingToScan().length);
   };
 
   const rowHtmlPo = (o) => {
     const href = poDetailHref(o.docKey);
-    const submittedTitle =
-      activeTab === 'submitted' && o.submittedAtUtc
-        ? ` title="Submitted ${fmtDate(o.submittedAtUtc)}"`
-        : '';
     return `
       <tr class="scan-row scan-row--link" data-href="${esc(href)}" role="link" tabindex="0">
-        <td class="scan-col-po">${esc(o.poNumber || '—')}${submittedMetaHtml(o)}</td>
-        <td class="scan-col-date"${submittedTitle}>${rowListDatePo(o)}</td>
+        <td class="scan-col-po">${esc(o.poNumber || '—')}</td>
+        <td class="scan-col-date">${fmtDate(o.orderDate)}</td>
       </tr>`;
   };
 
@@ -171,8 +90,7 @@
 
   const updateResultCount = (shown, total) => {
     if (!resultCount) return;
-    const label =
-      activeTab === 'submitted' ? 'submitted' : 'to scan';
+    const label = 'to scan';
     if (total === 0) {
       resultCount.textContent = `0 ${label}`;
       return;
@@ -268,15 +186,6 @@
     }, 200);
   });
 
-  const initTabFromUrl = () => {
-    const tab = new URLSearchParams(location.search).get('tab');
-    if (tab) setActiveTab(tab);
-    else updateListChrome();
-  };
-
-  if (tabToScan) tabToScan.addEventListener('click', () => setActiveTab('toScan'));
-  if (tabSubmitted) tabSubmitted.addEventListener('click', () => setActiveTab('submitted'));
-
   const loadOrders = async () => {
     try {
       const res = await fetch(ordersUrl);
@@ -329,6 +238,5 @@
     });
   }
 
-  initTabFromUrl();
   loadOrders();
 })();

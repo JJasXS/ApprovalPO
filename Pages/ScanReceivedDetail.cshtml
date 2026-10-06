@@ -25,6 +25,10 @@
             </div>
         </div>
         <div class="scan-header-actions">
+            @if (Model.Receipt is not null)
+            {
+                <button type="button" class="scan-print-btn" id="grPrintBtn">Print</button>
+            }
             <div class="scan-menu-wrap">
                 <button class="scan-menu-btn" id="scanMenuBtn" type="button" aria-expanded="false" aria-controls="scanMenuPanel" aria-label="Open menu">
                     <span></span><span></span><span></span>
@@ -117,6 +121,103 @@
                     </table>
                 </div>
             }
+
+            <section class="gr-print-sheet" aria-hidden="true">
+                <header class="gr-print-head">
+                    <img class="gr-print-logo" src="~/eapproval_logo.png" alt="" />
+                    <div class="gr-print-title-block">
+                        <p class="gr-print-kicker">Goods received note</p>
+                        <h1>@r.GrNumber</h1>
+                    </div>
+                    <div class="gr-print-docmeta">
+                        <div>
+                            <span>GR date</span>
+                            <strong>@r.GrDate.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</strong>
+                        </div>
+                        <div>
+                            <span>Amount</span>
+                            <strong>@r.Amount.ToString("N2")</strong>
+                        </div>
+                    </div>
+                </header>
+
+                <dl class="gr-print-facts">
+                    <div>
+                        <dt>Vendor</dt>
+                        <dd>@(string.IsNullOrWhiteSpace(r.Vendor) ? "—" : r.Vendor)</dd>
+                    </div>
+                    <div>
+                        <dt>Purchase order</dt>
+                        <dd>@(string.IsNullOrWhiteSpace(r.PoNumber) ? "—" : r.PoNumber)</dd>
+                    </div>
+                    <div class="gr-print-facts-wide">
+                        <dt>Description</dt>
+                        <dd>@(string.IsNullOrWhiteSpace(r.Description) ? "—" : r.Description)</dd>
+                    </div>
+                </dl>
+
+                <table class="gr-print-lines">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Item code</th>
+                            <th>Description</th>
+                            <th class="num">Qty</th>
+                            <th class="num">Received</th>
+                            <th class="num">Return</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model.Lines.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="6" class="gr-print-empty">No line items.</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            for (var i = 0; i < Model.Lines.Count; i++)
+                            {
+                                var line = Model.Lines[i];
+                                <tr>
+                                    <td>@(i + 1)</td>
+                                    <td>@line.ItemCode</td>
+                                    <td>@line.Description</td>
+                                    <td class="num">@line.Qty.ToString("N2")</td>
+                                    <td class="num">@line.ReceiveQty.ToString("N2")</td>
+                                    <td class="num">@line.ReturnQty.ToString("N2")</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                    @if (Model.Lines.Count > 0)
+                    {
+                        <tfoot>
+                            <tr>
+                                <td colspan="3">Total</td>
+                                <td class="num">@Model.Lines.Sum(l => l.Qty).ToString("N2")</td>
+                                <td class="num">@Model.Lines.Sum(l => l.ReceiveQty).ToString("N2")</td>
+                                <td class="num">@Model.Lines.Sum(l => l.ReturnQty).ToString("N2")</td>
+                            </tr>
+                        </tfoot>
+                    }
+                </table>
+
+                <footer class="gr-print-sign">
+                    <div>
+                        <span>Received by</span>
+                        <i></i>
+                    </div>
+                    <div>
+                        <span>Checked by</span>
+                        <i></i>
+                    </div>
+                    <div>
+                        <span>Date</span>
+                        <i></i>
+                    </div>
+                </footer>
+            </section>
         }
     </div>
 </main>
@@ -135,6 +236,10 @@
     document.addEventListener('click', () => {
         menuPanel.hidden = true;
         menuBtn.setAttribute('aria-expanded', 'false');
+    });
+    document.getElementById('grPrintBtn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.print();
     });
 })();
 </script>
