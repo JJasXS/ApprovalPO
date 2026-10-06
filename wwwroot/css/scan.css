@@ -127,14 +127,38 @@ body {
 .scan-header-actions .scan-module-link {
   margin-top: 0;
 }
+.scan-table--gr-list thead th {
+  padding: 9px 12px;
+}
+.scan-table--gr-list thead th:first-child,
+.scan-table--gr-list tbody td.scan-col-gr {
+  text-align: left;
+}
+.scan-table--gr-list tbody td {
+  padding: 8px 12px;
+  min-height: 0;
+}
 .scan-table--gr-list .scan-col-gr {
   font-weight: 600;
   white-space: normal;
-  line-height: 1.35;
+  line-height: 1.2;
+}
+.scan-table--gr-list .scan-gr-no {
+  display: block;
+  line-height: 1.2;
+}
+.scan-table--gr-list .scan-row-meta {
+  margin-top: 1px;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .scan-table--gr-list .scan-col-po-ref {
   color: var(--scan-muted);
-  font-size: 0.95em;
+  font-size: 13px;
 }
 .scan-module-link {
   display: inline-flex; align-items: center; gap: 5px; margin-top: 8px;
@@ -147,22 +171,29 @@ body {
 
 .scan-header-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 
-.scan-print-btn {
+.scan-detail-meta .scan-print-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
   display: inline-flex;
   align-items: center;
-  padding: 8px 14px;
-  font-size: 13px;
-  font-weight: 700;
-  font-family: inherit;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
   color: #0369a1;
-  background: #fff;
-  border: 1.5px solid var(--scan-accent-mid);
+  background: transparent;
+  border: 0;
   border-radius: 10px;
   cursor: pointer;
-  white-space: nowrap;
 }
-.scan-print-btn:hover { background: #f0f9ff; border-color: #7dd3fc; }
-.scan-print-btn:active { transform: scale(.97); }
+.scan-detail-meta .scan-print-btn svg {
+  width: 18px;
+  height: 18px;
+}
+.scan-detail-meta .scan-print-btn:hover { background: #f0f9ff; }
+.scan-detail-meta .scan-print-btn:active { transform: scale(.97); }
 
 .gr-print-sheet { display: none; }
 
@@ -1034,6 +1065,9 @@ body.is-gr-printing .scan-main-inner > :not(.gr-print-sheet) {
   outline-offset: 2px;
 }
 
+.scan-main--detail .scan-table-wrap:has(.scan-lines-table--gr) {
+  overflow-x: auto;
+}
 .scan-lines-table--gr .scan-gr-receive {
   color: #166534;
   font-weight: 600;

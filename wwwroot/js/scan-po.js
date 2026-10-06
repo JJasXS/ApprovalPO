@@ -20,7 +20,6 @@
   const resultCount = document.getElementById('scanResultCount');
   const searchInput = document.getElementById('scanSearch');
   const listSentinel = document.getElementById('scanListSentinel');
-  const countToScan = document.getElementById('scanCountToScan');
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -41,10 +40,6 @@
     return term
       ? waiting.filter((o) => (o.poNumber || '').toLowerCase().includes(term))
       : waiting;
-  };
-
-  const updateTabCounts = () => {
-    if (countToScan) countToScan.textContent = String(waitingToScan().length);
   };
 
   const rowHtmlPo = (o) => {
@@ -191,7 +186,6 @@
       const res = await fetch(ordersUrl);
       const data = await res.json();
       allOrders = Array.isArray(data) ? data : [];
-      updateTabCounts();
       setInitialVisible(getFiltered());
     } catch (e) {
       if (tbody) {

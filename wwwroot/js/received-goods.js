@@ -63,7 +63,7 @@
     const href = detailHref(r.docKey);
     return `
       <tr class="scan-row scan-row--link scan-row--gr" data-href="${esc(href)}" role="link" tabindex="0">
-        <td class="scan-col-gr">${esc(r.grNumber || '—')}${vendorMeta(r)}</td>
+        <td class="scan-col-gr"><span class="scan-gr-no">${esc(r.grNumber || '—')}</span>${vendorMeta(r)}</td>
         <td class="scan-col-po-ref">${esc(r.poNumber || '—')}</td>
         <td class="scan-col-date">${fmtDate(r.grDate)}</td>
       </tr>`;
