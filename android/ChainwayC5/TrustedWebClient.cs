@@ -7,13 +7,11 @@ namespace ChainwayC5
     {
         readonly Uri _origin;
         readonly Action<string> _onBlocked;
-        readonly Action _onPrint;
 
-        public TrustedWebClient(Uri origin, Action<string> onBlocked, Action onPrint)
+        public TrustedWebClient(Uri origin, Action<string> onBlocked)
         {
             _origin = origin;
             _onBlocked = onBlocked;
-            _onPrint = onPrint;
         }
 
         public override bool ShouldOverrideUrlLoading(WebView view, IWebResourceRequest request)
@@ -26,45 +24,23 @@ namespace ChainwayC5
             return BlockUnlessTrusted(url);
         }
 
-        public override void OnPageStarted(WebView view, string url, Android.Graphics.Bitmap favicon)
-        {
-            base.OnPageStarted(view, url, favicon);
-            InjectPrintHook(view, url);
-        }
-
-        public override void OnPageFinished(WebView view, string url)
-        {
-            base.OnPageFinished(view, url);
-            InjectPrintHook(view, url);
-        }
-
-        void InjectPrintHook(WebView view, string url)
-        {
-            if (view == null || !SiteOrigin.Matches(_origin, url))
-                return;
-            view.EvaluateJavascript(PrintBridge.HookScript, null);
-        }
-
         bool BlockUnlessTrusted(string url)
         {
-            if (IsPrinterAddress(url))
-            {
-                _onPrint?.Invoke();
-                return true;
-            }
-            if (SiteOrigin.Matches(_origin, url))
+            if (SiteOrigin.Matches(_origin, url) || IsPrintDocumentAddress(url))
                 return false;
             _onBlocked?.Invoke(url ?? "");
             return true;
         }
 
-        static bool IsPrinterAddress(string url)
+        static bool IsPrintDocumentAddress(string url)
         {
             if (string.IsNullOrWhiteSpace(url))
-                return true;
+                return false;
             var trimmed = url.Trim();
-            return trimmed.Equals("about:blank", StringComparison.OrdinalIgnoreCase)
-                || trimmed.StartsWith("about:blank", StringComparison.OrdinalIgnoreCase);
+            return trimmed.StartsWith("about:", StringComparison.OrdinalIgnoreCase)
+                || trimmed.StartsWith("blob:", StringComparison.OrdinalIgnoreCase)
+                || trimmed.StartsWith("data:", StringComparison.OrdinalIgnoreCase)
+                || trimmed.StartsWith("approvalprint:", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

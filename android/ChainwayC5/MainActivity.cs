@@ -7,6 +7,7 @@ using Android.Print;
 using Android.Util;
 using Android.Views;
 using Android.Webkit;
+using Android.Widget;
 
 namespace ChainwayC5
 {
@@ -20,6 +21,7 @@ namespace ChainwayC5
         WebView _web;
         Uri _origin;
         bool _triggerDown;
+        long _lastPrintAt;
 
         public UhfScanner Scanner { get; private set; }
 
@@ -134,30 +136,47 @@ namespace ChainwayC5
             settings.JavaScriptEnabled = true;
             settings.DomStorageEnabled = true;
             settings.MixedContentMode = MixedContentHandling.NeverAllow;
-            settings.JavaScriptCanOpenWindowsAutomatically = true;
-            settings.SetSupportMultipleWindows(true);
             CookieManager.Instance.SetAcceptCookie(true);
             CookieManager.Instance.SetAcceptThirdPartyCookies(_web, true);
             _web.AddJavascriptInterface(new PrintBridge(this), "ApprovalPrint");
-            _web.SetWebChromeClient(new PrintChromeClient(PrintCurrentPage));
-            _web.SetWebViewClient(new TrustedWebClient(
-                _origin,
-                _ => SetStatus("Blocked an untrusted address."),
-                PrintCurrentPage));
+            _web.SetWebViewClient(new TrustedWebClient(_origin, _ => SetStatus("Blocked an untrusted address.")));
         }
 
         public void PrintCurrentPage()
         {
             if (_web == null)
                 return;
-            var printManager = (PrintManager)GetSystemService(Context.PrintService);
-            if (printManager == null)
-            {
-                SetStatus("Printer is not available on this device.");
+            var now = SystemClock.ElapsedRealtime();
+            if (now - _lastPrintAt < 1500)
                 return;
+            _lastPrintAt = now;
+            try
+            {
+                var printManager = (PrintManager)GetSystemService(Context.PrintService);
+                if (printManager == null)
+                {
+                    ShowMessage("Printer is not available on this device.");
+                    return;
+                }
+                const string jobName = "Goods received";
+                var attributes = new PrintAttributes.Builder()
+                    .SetMediaSize(PrintAttributes.MediaSize.IsoA4)
+                    .SetMinMargins(PrintAttributes.Margins.NoMargins)
+                    .Build();
+                printManager.Print(jobName, _web.CreatePrintDocumentAdapter(jobName), attributes);
             }
-            const string jobName = "Goods received";
-            printManager.Print(jobName, _web.CreatePrintDocumentAdapter(jobName), null);
+            catch (Exception ex)
+            {
+                ShowMessage(ex.Message);
+            }
+        }
+
+        void ShowMessage(string text)
+        {
+            SetStatus(text);
+            if (string.IsNullOrWhiteSpace(text))
+                return;
+            Toast.MakeText(this, text, ToastLength.Long)?.Show();
         }
 
         static bool IsTrigger(KeyEvent e)
