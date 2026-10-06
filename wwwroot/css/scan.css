@@ -166,6 +166,14 @@ body {
 
 .gr-print-sheet { display: none; }
 
+body.is-gr-printing .gr-print-sheet { display: block !important; }
+
+body.is-gr-printing .tenant-env-chip,
+body.is-gr-printing .scan-header,
+body.is-gr-printing .scan-main-inner > :not(.gr-print-sheet) {
+  display: none !important;
+}
+
 .scan-qr-btn {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 9px 18px; font-size: 14px; font-weight: 600;
