@@ -20,17 +20,40 @@
                 <span class="dash-brand-name">ProAcc Approvals</span>
             </div>
             <div class="dash-header-actions">
-                <span class="dash-header-user">@userName</span>
-                <partial name="_LogoutForm" />
+                <button id="menuBtn" class="dash-menu-btn" type="button" aria-expanded="false" aria-controls="menuPanel" aria-label="Open menu">
+                    <span></span><span></span><span></span>
+                </button>
+                <div id="menuPanel" class="dash-menu-panel" aria-hidden="true">
+                    <div class="dash-menu-user">@userName</div>
+                    @await Component.InvokeAsync("ModuleNav", new { linkClass = "dash-menu-link" })
+                    <form method="post" asp-page="/Logout" class="dash-menu-signout">
+                        <button type="submit" class="dash-menu-link dash-menu-link--danger">Sign out</button>
+                    </form>
+                </div>
             </div>
         </div>
     </header>
 
     <main class="dash-main">
-        <div class="dash-welcome">
-            <h1 class="dash-welcome-title">What would you like to do?</h1>
-            <p class="dash-welcome-sub">Select a module to get started.</p>
+        <div class="dash-board">
+        <div class="dash-overview">
+            <p class="dash-overview-date">@DateTime.Now.ToString("dddd, d MMMM yyyy")</p>
+            <h1 class="dash-overview-title">Overview</h1>
         </div>
+
+        @if (Model.Figures.Count > 0)
+        {
+            <section class="dash-stats" aria-label="Totals">
+                @foreach (var fig in Model.Figures)
+                {
+                    <a class="dash-stat" href="@fig.Href">
+                        <span class="dash-stat-label">@fig.Label</span>
+                        <span class="dash-stat-count">@(fig.Count is int n ? n.ToString("N0") : "—")</span>
+                        <span class="dash-stat-amount">@(fig.Amount is decimal a ? a.ToString("N2") : "—")</span>
+                    </a>
+                }
+            </section>
+        }
 
         <div class="dash-cards">
 
@@ -47,7 +70,7 @@
                 </div>
                 <div class="dash-card-body">
                     <h2 class="dash-card-title">Purchase Approval</h2>
-                    <p class="dash-card-desc">Review and approve pending purchase orders from your team.</p>
+                    <p class="dash-card-desc">@DashboardModel.CardLine(Model.Figure("purchase"), "pending")</p>
                 </div>
                 <div class="dash-card-arrow">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -70,7 +93,7 @@
                 </div>
                 <div class="dash-card-body">
                     <h2 class="dash-card-title">Sales Approval</h2>
-                    <p class="dash-card-desc">Manage and approve sales orders and quotations.</p>
+                    <p class="dash-card-desc">@DashboardModel.CardLine(Model.Figure("sales"), "pending")</p>
                 </div>
                 <div class="dash-card-arrow">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -84,7 +107,7 @@
             <!-- Goods Received -->
             @if (Model.ShowScanPo || Model.ShowReceivedGoods)
             {
-            <a asp-page="/ScanPO" class="dash-card dash-card--active">
+            <a href="@Model.GoodsHref" class="dash-card dash-card--active">
                 <div class="dash-card-icon-wrap dash-card-icon-wrap--violet">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="3" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/>
@@ -93,7 +116,7 @@
                 </div>
                 <div class="dash-card-body">
                     <h2 class="dash-card-title">Goods Received</h2>
-                    <p class="dash-card-desc">Scan QR codes to look up purchase orders and view goods received.</p>
+                    <p class="dash-card-desc">@DashboardModel.CardLine(Model.Figure("goods"), "receipts")</p>
                 </div>
                 <div class="dash-card-arrow">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -139,6 +162,7 @@
                 </div>
             }
 
+        </div>
         </div>
     </main>
 </div>

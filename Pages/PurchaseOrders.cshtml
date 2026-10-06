@@ -56,9 +56,9 @@
                     <button id="menuBtn" class="menu-btn" type="button" aria-expanded="false" aria-controls="menuPanel" aria-label="Open menu">
                         <span></span><span></span><span></span>
                     </button>
-                    <div id="menuPanel" class="menu-panel" hidden>
+                    <div id="menuPanel" class="menu-panel" aria-hidden="true">
                         <div class="menu-user">@User.Identity?.Name</div>
-                        <a href="/Dashboard" class="menu-link">&#8592; Back to home</a>
+                        @await Component.InvokeAsync("ModuleNav", new { linkClass = "menu-link" })
                         <form method="post" asp-page="/Logout" class="menu-logout-form">
                             <button type="submit" class="menu-link menu-link--button">Sign out</button>
                         </form>

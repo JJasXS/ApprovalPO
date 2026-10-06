@@ -217,20 +217,5 @@
     });
   }
 
-  const menuBtn = document.getElementById('scanMenuBtn');
-  const menuPanel = document.getElementById('scanMenuPanel');
-  if (menuBtn && menuPanel) {
-    menuBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const open = !menuPanel.hidden;
-      menuPanel.hidden = open;
-      menuBtn.setAttribute('aria-expanded', String(!open));
-    });
-    document.addEventListener('click', () => {
-      menuPanel.hidden = true;
-      menuBtn.setAttribute('aria-expanded', 'false');
-    });
-  }
-
   loadOrders();
 })();

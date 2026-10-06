@@ -32,11 +32,10 @@
                 <button class="scan-menu-btn" id="scanMenuBtn" type="button" aria-expanded="false" aria-controls="scanMenuPanel" aria-label="Open menu">
                     <span></span><span></span><span></span>
                 </button>
-                <div id="scanMenuPanel" class="scan-menu-panel" hidden>
+                <div id="scanMenuPanel" class="scan-menu-panel" aria-hidden="true">
                     <div class="scan-menu-user">@userName</div>
-                    <a asp-page="/Dashboard" class="scan-menu-link">&#8592; Back to home</a>
-                    <a class="scan-menu-link" href="/downloads/ChainwayC5-RFID.apk" download>Download RFID Scanner</a>
-                    <form method="post" asp-page="/Logout" style="margin:0;padding:0">
+                    @await Component.InvokeAsync("ModuleNav", new { linkClass = "scan-menu-link" })
+                    <form method="post" asp-page="/Logout" class="scan-menu-signout">
                         <button type="submit" class="scan-menu-link scan-menu-link--danger">Sign out</button>
                     </form>
                 </div>

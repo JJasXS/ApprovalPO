@@ -97,9 +97,9 @@ public class ApprovalOptions
 
     /// <summary>
     /// How often to re-fetch AWS tenant-config (module true/false flags, roles, DB host, license, etc.).
-    /// Seconds; <c>0</c> disables. Clamped between 60 and 86400 when enabled; default 86400 (24 hours from service start).
+    /// Seconds; <c>0</c> disables. Clamped between 60 and 86400 when enabled; default 60 (every minute).
     /// </summary>
-    public int TenantConfigRefreshSeconds { get; set; } = 86400;
+    public int TenantConfigRefreshSeconds { get; set; } = 60;
 
     public int TenantConfigRefreshSecondsClamped
     {

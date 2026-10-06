@@ -21,7 +21,10 @@
             </a>
             <div>
                 <h1 class="scan-header-title">@(Model.Receipt?.GrNumber ?? "Received goods")</h1>
-                <p class="scan-header-subtitle">Goods receipt — line receive &amp; return quantities</p>
+                @if (Model.Receipt is not null)
+                {
+                    <p class="scan-header-subtitle scan-header-po">@(string.IsNullOrWhiteSpace(Model.Receipt.PoNumber) ? "—" : Model.Receipt.PoNumber)</p>
+                }
             </div>
         </div>
         <div class="scan-header-actions">
@@ -29,11 +32,10 @@
                 <button class="scan-menu-btn" id="scanMenuBtn" type="button" aria-expanded="false" aria-controls="scanMenuPanel" aria-label="Open menu">
                     <span></span><span></span><span></span>
                 </button>
-                <div id="scanMenuPanel" class="scan-menu-panel" hidden>
+                <div id="scanMenuPanel" class="scan-menu-panel" aria-hidden="true">
                     <div class="scan-menu-user">@userName</div>
-                    <a asp-page="/ReceivedGoods" class="scan-menu-link">&#8592; Back to list</a>
-                    <a asp-page="/Dashboard" class="scan-menu-link">Back to home</a>
-                    <form method="post" asp-page="/Logout" style="margin:0;padding:0">
+                    @await Component.InvokeAsync("ModuleNav", new { linkClass = "scan-menu-link" })
+                    <form method="post" asp-page="/Logout" class="scan-menu-signout">
                         <button type="submit" class="scan-menu-link scan-menu-link--danger">Sign out</button>
                     </form>
                 </div>
@@ -62,16 +64,8 @@
                     </svg>
                 </button>
                 <div class="scan-detail-field">
-                    <label>GR #</label>
-                    <span>@r.GrNumber</span>
-                </div>
-                <div class="scan-detail-field">
-                    <label>GR date</label>
-                    <span>@r.GrDate.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</span>
-                </div>
-                <div class="scan-detail-field">
-                    <label>PO #</label>
-                    <span>@(string.IsNullOrWhiteSpace(r.PoNumber) ? "—" : r.PoNumber)</span>
+                    <label>Date</label>
+                    <span>@r.GrDate.ToString("dd-MM-yyyy", System.Globalization.CultureInfo.InvariantCulture)</span>
                 </div>
                 <div class="scan-detail-field">
                     <label>Amount</label>
@@ -103,9 +97,9 @@
                                 <th>#</th>
                                 <th>Item code</th>
                                 <th>Description</th>
-                                <th class="num">GR qty</th>
-                                <th class="num">Received qty</th>
-                                <th class="num">Return qty</th>
+                                <th class="num">GR</th>
+                                <th class="num">Received</th>
+                                <th class="num">Return</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -227,19 +221,6 @@
 
 <script>
 (function () {
-    const menuBtn = document.getElementById('scanMenuBtn');
-    const menuPanel = document.getElementById('scanMenuPanel');
-    if (!menuBtn || !menuPanel) return;
-    menuBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const open = !menuPanel.hidden;
-        menuPanel.hidden = open;
-        menuBtn.setAttribute('aria-expanded', String(!open));
-    });
-    document.addEventListener('click', () => {
-        menuPanel.hidden = true;
-        menuBtn.setAttribute('aria-expanded', 'false');
-    });
     document.getElementById('grPrintBtn')?.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();

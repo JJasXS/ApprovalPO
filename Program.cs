@@ -157,6 +157,7 @@ builder.Services.AddHttpClient<ApprovalPO.Services.Ocr.IOpenAiVisionService, App
 });
 builder.Services.AddScoped<IApprovalAuthority, ApprovalAuthority>();
 builder.Services.AddScoped<IModuleAccessService, ModuleAccessService>();
+builder.Services.AddScoped<DashboardOverviewService>();
 
 builder.Services.Configure<Microsoft.AspNetCore.Antiforgery.AntiforgeryOptions>(options =>
 {

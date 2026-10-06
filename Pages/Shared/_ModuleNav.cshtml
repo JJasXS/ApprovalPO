@@ -1,0 +1,21 @@
+@inject ApprovalPO.Services.Auth.IModuleAccessService Modules
+@model string
+@{
+    var flags = await Modules.GetDashboardModulesAsync(User);
+    var current = (Model ?? "").Trim().ToLowerInvariant();
+    var showGoods = flags.ScanPo || flags.ReceivedGoods;
+}
+<nav class="app-module-nav" aria-label="Modules">
+    @if (flags.PurchaseApproval)
+    {
+        <a href="/PurchaseOrders" class="app-module-link@(current == "purchase" ? " is-current" : "")">Purchase Approval</a>
+    }
+    @if (flags.SalesApproval)
+    {
+        <a href="/SalesOrders" class="app-module-link@(current == "sales" ? " is-current" : "")">Sales Approval</a>
+    }
+    @if (showGoods)
+    {
+        <a href="/ScanPO" class="app-module-link@(current == "goods" ? " is-current" : "")">Goods Received</a>
+    }
+</nav>

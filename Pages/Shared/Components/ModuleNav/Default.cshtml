@@ -1,0 +1,21 @@
+@model ApprovalPO.ViewComponents.ModuleNavLinks
+@{
+    var path = Context.Request.Path.Value ?? "";
+    var purchaseOn = path.StartsWith("/PurchaseOrders", StringComparison.OrdinalIgnoreCase);
+    var salesOn = path.StartsWith("/SalesOrders", StringComparison.OrdinalIgnoreCase);
+    var goodsOn = path.StartsWith("/ScanPO", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWith("/ReceivedGoods", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWith("/ScanReceived", StringComparison.OrdinalIgnoreCase);
+}
+@if (Model.ShowPurchase)
+{
+    <a href="/PurchaseOrders" class="@Model.LinkClass" aria-current="@(purchaseOn ? "page" : null)">Purchase Approval</a>
+}
+@if (Model.ShowSales)
+{
+    <a href="/SalesOrders" class="@Model.LinkClass" aria-current="@(salesOn ? "page" : null)">Sales Approval</a>
+}
+@if (Model.ShowGoods)
+{
+    <a href="@Model.GoodsHref" class="@Model.LinkClass" aria-current="@(goodsOn ? "page" : null)">Goods Received</a>
+}

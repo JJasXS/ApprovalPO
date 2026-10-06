@@ -306,6 +306,90 @@ body {
   z-index: 160;
 }
 
+#menuPanel.menu-panel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(280px, 84vw);
+  height: auto;
+  margin: 0;
+  padding: 20px 12px 16px;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  color: var(--po-text);
+  border: 0;
+  border-radius: 0 16px 16px 0;
+  box-shadow: 8px 0 28px rgba(15, 23, 42, 0.12);
+  z-index: 400;
+  transform: translateX(-105%);
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  overflow: auto;
+}
+
+#menuPanel.menu-panel.is-open {
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+#menuPanel.menu-panel {
+  pointer-events: none;
+}
+
+.scan-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 390;
+  border: 0;
+  padding: 0;
+  background: rgba(15, 23, 42, 0.12);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s ease;
+}
+
+.scan-menu-backdrop.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+body.scan-menu-open {
+  overflow: hidden;
+}
+
+#menuPanel .menu-user {
+  margin: 0 -12px 12px;
+  padding: 4px 22px 14px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+#menuPanel .menu-link,
+#menuPanel .menu-link--button {
+  margin: 2px 0;
+  padding: 11px 12px;
+  font-size: 15px;
+  font-weight: 500;
+  border-radius: 10px;
+}
+
+#menuPanel .menu-link[aria-current="page"] {
+  background: #f0f9ff;
+  color: #0369a1;
+  font-weight: 600;
+}
+
+#menuPanel .menu-logout-form {
+  margin-top: auto;
+  margin-left: -12px;
+  margin-right: -12px;
+  padding: 8px 12px 0;
+  border-top: 1px solid #e2e8f0;
+}
+
 .menu-user {
   padding: var(--po-space-3);
   border-bottom: 1px solid var(--po-border);

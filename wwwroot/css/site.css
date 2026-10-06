@@ -81,3 +81,26 @@ a {
   font-weight: 600;
   letter-spacing: 0.02em;
 }
+
+.app-module-nav {
+  display: flex;
+  flex-direction: column;
+}
+
+.app-module-link {
+  display: block;
+  padding: 14px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #334155;
+  text-decoration: none;
+}
+
+.app-module-link:hover {
+  background: #f8fafc;
+}
+
+.app-module-link.is-current {
+  color: #0369a1;
+  background: #f0f9ff;
+}

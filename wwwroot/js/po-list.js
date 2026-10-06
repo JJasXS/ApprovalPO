@@ -50,8 +50,6 @@
   const bulkSelectAll = document.getElementById('bulkSelectAll');
   const filterDateFrom = document.getElementById('filterDateFrom');
   const filterClearBtn = document.getElementById('filterClearBtn');
-  const menuBtn = document.getElementById('menuBtn');
-  const menuPanel = document.getElementById('menuPanel');
   const poHeadToggleBtn = document.getElementById('poHeadToggleBtn');
   const modalPrevBtn = document.getElementById('modalPrevBtn');
   const modalNextBtn = document.getElementById('modalNextBtn');
@@ -428,12 +426,8 @@
     setPanelOpen(btn, panel, false);
   };
 
-  menuBtn?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (!menuPanel) return;
-    const next = menuPanel.hasAttribute('hidden');
-    setPanelOpen(menuBtn, menuPanel, next);
-    if (next) setPanelOpen(statusKebabBtn, statusKebabPanel, false);
+  document.addEventListener('app-drawer-open', () => {
+    setPanelOpen(statusKebabBtn, statusKebabPanel, false);
   });
 
   statusKebabBtn?.addEventListener('click', (e) => {
@@ -441,7 +435,7 @@
     if (!statusKebabPanel) return;
     const next = statusKebabPanel.hasAttribute('hidden');
     setPanelOpen(statusKebabBtn, statusKebabPanel, next);
-    if (next) setPanelOpen(menuBtn, menuPanel, false);
+    if (next && window.AppMenu) window.AppMenu.close();
   });
 
   statusKebabPanel?.addEventListener('click', (e) => {
@@ -452,7 +446,6 @@
   });
 
   document.addEventListener('click', (e) => {
-    closePanelIfOutside(e, menuBtn, menuPanel);
     closePanelIfOutside(e, statusKebabBtn, statusKebabPanel);
   });
 

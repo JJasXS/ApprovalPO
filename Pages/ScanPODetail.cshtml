@@ -28,11 +28,10 @@
                 <button class="scan-menu-btn" id="scanMenuBtn" type="button" aria-expanded="false" aria-controls="scanMenuPanel" aria-label="Open menu">
                     <span></span><span></span><span></span>
                 </button>
-                <div id="scanMenuPanel" class="scan-menu-panel" hidden>
+                <div id="scanMenuPanel" class="scan-menu-panel" aria-hidden="true">
                     <div class="scan-menu-user">@userName</div>
-                    <a asp-page="/ScanPO" class="scan-menu-link">&#8592; Back to PO list</a>
-                    <a asp-page="/Dashboard" class="scan-menu-link">Back to home</a>
-                    <form method="post" asp-page="/Logout" style="margin:0;padding:0">
+                    @await Component.InvokeAsync("ModuleNav", new { linkClass = "scan-menu-link" })
+                    <form method="post" asp-page="/Logout" class="scan-menu-signout">
                         <button type="submit" class="scan-menu-link scan-menu-link--danger">Sign out</button>
                     </form>
                 </div>
@@ -330,26 +329,14 @@
         var actionsPanel = document.getElementById('scanActionsMenuPanel');
 
         function closeHeaderMenu() {
-            if (panel) panel.hidden = true;
-            if (btn) btn.setAttribute('aria-expanded', 'false');
+            if (window.ScanMenu) window.ScanMenu.close();
         }
         function closeActionsMenu() {
             if (actionsPanel) actionsPanel.hidden = true;
             if (actionsBtn) actionsBtn.setAttribute('aria-expanded', 'false');
         }
 
-        if (btn && panel) {
-            btn.addEventListener('click', function (e) {
-                e.stopPropagation();
-                var open = !panel.hidden;
-                panel.hidden = open;
-                btn.setAttribute('aria-expanded', String(!open));
-                closeActionsMenu();
-            });
-            panel.addEventListener('click', function (e) {
-                e.stopPropagation();
-            });
-        }
+        document.addEventListener('app-drawer-open', closeActionsMenu);
 
         if (actionsBtn && actionsPanel) {
             actionsBtn.addEventListener('click', function (e) {

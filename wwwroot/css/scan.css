@@ -124,19 +124,31 @@ body {
   line-height: 1.35;
   max-width: 36rem;
 }
+.scan-header-po {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
 .scan-header-actions .scan-module-link {
   margin-top: 0;
 }
 .scan-table--gr-list thead th {
-  padding: 9px 12px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: #475569;
 }
 .scan-table--gr-list thead th:first-child,
 .scan-table--gr-list tbody td.scan-col-gr {
   text-align: left;
 }
-.scan-table--gr-list tbody td {
-  padding: 8px 12px;
+.scan-table.scan-table--list.scan-table--gr-list tbody td {
+  padding: 9px 12px;
   min-height: 0;
+  line-height: 1.2;
+  white-space: normal;
 }
 .scan-table--gr-list .scan-col-gr {
   font-weight: 600;
@@ -148,13 +160,14 @@ body {
   line-height: 1.2;
 }
 .scan-table--gr-list .scan-row-meta {
-  margin-top: 1px;
-  font-size: 11.5px;
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
   font-weight: 500;
-  line-height: 1.25;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.15;
+  color: #94a3b8;
+  white-space: normal;
+  overflow: visible;
 }
 .scan-table--gr-list .scan-col-po-ref {
   color: var(--scan-muted);
@@ -238,22 +251,67 @@ body.is-gr-printing .scan-main-inner > :not(.gr-print-sheet) {
 .scan-menu-btn[aria-expanded="true"] { background: #f1f5f9; }
 .scan-menu-btn span { display: block; width: 14px; height: 1.5px; background: #64748b; border-radius: 2px; }
 .scan-menu-btn:hover span { background: var(--scan-accent); }
-.scan-menu-panel {
-  position: absolute; top: calc(100% + 8px); right: 0; min-width: 180px;
-  background: #fff; border: 1px solid var(--scan-border); border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(15,23,42,.10); overflow: hidden; z-index: 200;
+.scan-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 390;
+  border: 0;
+  padding: 0;
+  background: rgba(15, 23, 42, 0.12);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s ease;
 }
+.scan-menu-backdrop.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+body.scan-menu-open { overflow: hidden; }
+.scan-menu-panel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(280px, 82vw);
+  margin: 0;
+  padding: 20px 12px 16px;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 0;
+  border-radius: 0 16px 16px 0;
+  box-shadow: 8px 0 28px rgba(15, 23, 42, 0.12);
+  overflow: auto;
+  z-index: 400;
+  transform: translateX(-105%);
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.scan-menu-panel { pointer-events: none; }
+.scan-menu-panel.is-open { transform: translateX(0); pointer-events: auto; }
 .scan-menu-user {
-  padding: 12px 16px 10px; font-size: 12px; font-weight: 600; color: #64748b;
-  border-bottom: 1px solid #f1f5f9; white-space: nowrap; overflow: hidden;
-  text-overflow: ellipsis; max-width: 200px;
+  margin: 0 -12px 12px; padding: 4px 22px 14px; font-size: 15px; font-weight: 600; color: #0f172a;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .scan-menu-link {
-  display: block; padding: 10px 16px; font-size: 14px; color: #334155;
+  display: block; margin: 2px 0; padding: 11px 12px; font-size: 15px; color: #334155;
   text-decoration: none; transition: background .12s; background: none;
-  border: none; width: 100%; text-align: left; cursor: pointer; line-height: 1.4;
+  border: none; width: auto; text-align: left; cursor: pointer; line-height: 1.35;
+  border-radius: 10px; font-weight: 500;
 }
 .scan-menu-link:hover  { background: #f8fafc; color: var(--scan-text); }
+.scan-menu-signout {
+  margin-top: auto;
+  margin-left: -12px;
+  margin-right: -12px;
+  padding: 8px 12px 0;
+  border-top: 1px solid #e2e8f0;
+}
+.scan-menu-link[aria-current="page"] {
+  background: #f0f9ff;
+  color: #0369a1;
+  font-weight: 600;
+}
 .scan-menu-link--danger { color: #dc2626; }
 .scan-menu-link--danger:hover { background: #fef2f2; color: #b91c1c; }
 
@@ -706,9 +764,20 @@ body.is-gr-printing .scan-main-inner > :not(.gr-print-sheet) {
 
 /* Description (col 1) and Scan (col 2) share the meta grid with PO # / Today's date */
 .scan-detail-field--desc span {
-  display: block;
-  line-height: 1.45;
-  word-break: break-word;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  margin: 0;
+  padding: 8px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: #fff;
+  border-top: 1px solid var(--scan-border);
+  box-shadow: 0 -6px 18px rgba(15, 23, 42, 0.06);
+}
+
+.scan-main.scan-main--detail {
+  padding-bottom: calc(78px + env(safe-area-inset-bottom, 0px));
 }
 
 .scan-detail-field--scan-only {
@@ -863,6 +932,16 @@ body.is-gr-printing .scan-main-inner > :not(.gr-print-sheet) {
 .scan-lines-table td.scan-line-order-qty {
   width: 3rem;
   max-width: 3.25rem;
+.scan-lines-table.scan-lines-table--gr thead th.num,
+.scan-lines-table.scan-lines-table--gr td.num {
+  width: 1%;
+  min-width: 0;
+  max-width: none;
+  padding: 8px 8px;
+  text-align: center;
+  white-space: nowrap;
+}
+
   padding-left: 4px;
   padding-right: 6px;
   white-space: nowrap;
@@ -1153,6 +1232,32 @@ body.is-gr-printing .scan-main-inner > :not(.gr-print-sheet) {
   padding-left: 8px;
 }
 .scan-detail-scan-row .scan-detail-submit-btn.is-busy {
+.scan-detail-field--scan-only .scan-detail-scan-row {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.scan-detail-field--scan-only .scan-detail-scan-btn,
+.scan-detail-field--scan-only .scan-detail-submit-form {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.scan-detail-field--scan-only .scan-detail-scan-btn,
+.scan-detail-field--scan-only .scan-detail-submit-btn {
+  width: 100%;
+  height: 44px;
+  min-height: 44px;
+}
+
+.scan-detail-field--scan-only .scan-meta-remaining {
+  order: -1;
+  flex: 1 0 100%;
+  margin: 0;
+  padding: 0;
+  text-align: right;
+}
+
   background: #f1f5f9;
   border-color: #cbd5e1;
   color: #64748b;
@@ -1223,6 +1328,14 @@ body.is-gr-printing .scan-main-inner > :not(.gr-print-sheet) {
   display: block;
   font-size: 11px;
   font-weight: 600;
+.scan-detail-meta .scan-detail-field label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: #64748b;
+}
+
   color: var(--scan-muted);
   letter-spacing: .05em;
   text-transform: uppercase;

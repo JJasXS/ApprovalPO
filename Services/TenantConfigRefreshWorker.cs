@@ -14,6 +14,7 @@ public sealed class TenantConfigRefreshWorker : BackgroundService
     private readonly IConfiguration _configuration;
     private readonly IOptionsMonitor<ApprovalOptions> _approval;
     private readonly ILogger<TenantConfigRefreshWorker> _logger;
+    private int _refreshCount;
 
     public TenantConfigRefreshWorker(
         TenantDbConnectionResolver tenants,
