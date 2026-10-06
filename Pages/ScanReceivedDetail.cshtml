@@ -241,6 +241,10 @@
         e.preventDefault();
         e.stopPropagation();
         if (!document.querySelector('.gr-print-sheet')) return;
+        if (window.ApprovalPrint && typeof window.ApprovalPrint.printPage === 'function') {
+            window.ApprovalPrint.printPage();
+            return;
+        }
         document.body.classList.add('is-gr-printing');
         window.addEventListener('afterprint', () => {
             document.body.classList.remove('is-gr-printing');

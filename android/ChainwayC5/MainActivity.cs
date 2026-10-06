@@ -134,10 +134,16 @@ namespace ChainwayC5
             settings.JavaScriptEnabled = true;
             settings.DomStorageEnabled = true;
             settings.MixedContentMode = MixedContentHandling.NeverAllow;
+            settings.JavaScriptCanOpenWindowsAutomatically = true;
+            settings.SetSupportMultipleWindows(true);
             CookieManager.Instance.SetAcceptCookie(true);
             CookieManager.Instance.SetAcceptThirdPartyCookies(_web, true);
             _web.AddJavascriptInterface(new PrintBridge(this), "ApprovalPrint");
-            _web.SetWebViewClient(new TrustedWebClient(_origin, _ => SetStatus("Blocked an untrusted address.")));
+            _web.SetWebChromeClient(new PrintChromeClient(PrintCurrentPage));
+            _web.SetWebViewClient(new TrustedWebClient(
+                _origin,
+                _ => SetStatus("Blocked an untrusted address."),
+                PrintCurrentPage));
         }
 
         public void PrintCurrentPage()
