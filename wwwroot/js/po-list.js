@@ -335,7 +335,6 @@
       <td class="actions" data-label="">
         <div class="actions-row-block"><div class="actions-inner">
           <button type="button" class="po-btn po-btn--review btn-review" data-action="review">Review</button>
-          <button type="button" class="po-btn po-btn--reject btn-reject" data-action="reject">Reject</button>
           <button type="button" class="po-btn po-btn--approve btn-approve" data-action="approve">Approve</button>
         </div></div></td></tr>`;
   };
@@ -654,11 +653,8 @@
     `;
 
     const pending = status === 'Pending';
-    const approved = status === 'Approved';
     const rejected = status === 'Rejected';
     const canApproveAction = (pending || rejected) && canWorkflowApprove(tr);
-    const inRange = amountInApprovalRange(parseAmount(tr));
-    const canReject = (pending || approved) && inRange;
 
     modalApproveBtn.disabled = !canApproveAction;
     modalApproveBtn.style.display = pending || rejected ? '' : 'none';
@@ -666,10 +662,8 @@
     modalApproveBtn.setAttribute('aria-disabled', modalApproveBtn.disabled ? 'true' : 'false');
 
     if (modalRejectBtnEl) {
-      modalRejectBtnEl.textContent = approved ? 'Cancel approval' : 'Reject';
-      modalRejectBtnEl.disabled = !canReject;
-      modalRejectBtnEl.style.display = pending || approved ? '' : 'none';
-      modalRejectBtnEl.title = inRange ? '' : rangeDeniedMessage();
+      modalRejectBtnEl.style.display = 'none';
+      modalRejectBtnEl.disabled = true;
     }
 
     updateModalNav();
@@ -959,8 +953,8 @@
 
   const rejectRow = (tr) => {
     const st = rowListStatus(tr);
-    if (st !== 'Pending' && st !== 'Approved') {
-      showToast('Reject is only available for pending or approved orders.');
+    if (st !== 'Pending') {
+      showToast('Reject is only available for pending orders.');
       return;
     }
     if (!amountInApprovalRange(parseAmount(tr))) {
@@ -992,7 +986,6 @@
     const canApprove = canWorkflowApprove(tr);
     const approveBtn = tr.querySelector('.btn-approve');
     const rejectBtn = tr.querySelector('.btn-reject');
-    const inRange = amountInApprovalRange(parseAmount(tr));
     if (approveBtn) {
       const showApprove = status === 'Pending' || status === 'Rejected';
       approveBtn.style.display = showApprove ? '' : 'none';
@@ -1004,10 +997,8 @@
       else approveBtn.setAttribute('aria-label', 'Approve');
     }
     if (rejectBtn) {
-      const showReject = status === 'Pending' || status === 'Approved';
-      rejectBtn.style.display = showReject ? '' : 'none';
-      rejectBtn.disabled = !showReject || !inRange;
-      rejectBtn.title = inRange ? '' : rangeDeniedMessage();
+      rejectBtn.style.display = 'none';
+      rejectBtn.disabled = true;
     }
   };
 
