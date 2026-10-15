@@ -6,6 +6,10 @@ public static class ScanPoValidationHelper
 {
     public static string LineScanKey(int lineNo) => $"L:{lineNo}";
 
+    /// <summary>Lines whose purchase-approval Sct checkbox is ticked (<c>PH_PODTL.TRANSFERABLE</c> true).</summary>
+    public static IReadOnlyList<PurchaseRequestLineRow> ApprovedForReceive(IReadOnlyList<PurchaseRequestLineRow> lines) =>
+        lines.Where(l => l.Transferable == true).ToList();
+
     public static bool ItemCodesMatch(string? scanned, string? poLineCode)
     {
         var s = (scanned ?? "").Trim();

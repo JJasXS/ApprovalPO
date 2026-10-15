@@ -71,8 +71,7 @@ public class ScanPODetailModel : PageModel
         IsScanSubmitted = state.IsSubmitted;
         ViewData["ScanSubmitted"] = IsScanSubmitted;
 
-        Lines = ScanPoProjectHelper.EnrichDerivedProjects(
-            await _orders.GetPurchaseRequestLinesAsync(DocKey, cancellationToken).ConfigureAwait(false));
+        Lines = await LoadApprovedReceiveLinesAsync(DocKey, cancellationToken).ConfigureAwait(false);
         return Page();
     }
 
@@ -99,8 +98,7 @@ public class ScanPODetailModel : PageModel
                 });
             }
 
-            poLines = ScanPoProjectHelper.EnrichDerivedProjects(
-                await _orders.GetPurchaseRequestLinesAsync(docKey, cancellationToken).ConfigureAwait(false));
+            poLines = await LoadApprovedReceiveLinesAsync(docKey, cancellationToken).ConfigureAwait(false);
             hints = poLines
                 .Select(l => (l.ItemCode ?? "").Trim())
                 .Where(c => c.Length > 0)
@@ -197,7 +195,7 @@ public class ScanPODetailModel : PageModel
             return RedirectToPage("/ScanPODetail", new { docKey });
         }
 
-        var poLines = await _orders.GetPurchaseRequestLinesAsync(docKey, cancellationToken).ConfigureAwait(false);
+        var poLines = await LoadApprovedReceiveLinesAsync(docKey, cancellationToken).ConfigureAwait(false);
         var transferLines = TransferLinesFromScanCounts(counts, poLines);
         if (transferLines.Count == 0)
         {
@@ -369,7 +367,7 @@ public class ScanPODetailModel : PageModel
         {
             try
             {
-                var lines = await _orders.GetPurchaseRequestLinesAsync(docKey, cancellationToken).ConfigureAwait(false);
+                var lines = await LoadApprovedReceiveLinesAsync(docKey, cancellationToken).ConfigureAwait(false);
                 var expected = string.Join(" || ", lines.Select(l =>
                     $"code='{(l.ItemCode ?? "").Trim()}' desc='{(l.Description ?? "").Trim()}' qty={(l.Sqty != 0 ? l.Sqty : l.Qty)}"));
                 var scanned = string.Join(" || ", (result.Fields?.Items ?? new List<OcrLineItem>()).Select(i =>
@@ -414,7 +412,7 @@ public class ScanPODetailModel : PageModel
         var transferLines = TryParseTransferLines(transferLinesJson);
         if (transferLines.Count == 0 && !usedOcrTransferPayload)
         {
-            var poLines = await _orders.GetPurchaseRequestLinesAsync(docKey, cancellationToken).ConfigureAwait(false);
+            var poLines = await LoadApprovedReceiveLinesAsync(docKey, cancellationToken).ConfigureAwait(false);
             transferLines = TransferLinesFromScanCounts(TryParseScanCounts(scanCountsJson), poLines);
         }
 
@@ -491,6 +489,15 @@ public class ScanPODetailModel : PageModel
         public static GrTransferOutcome Failed(string? error) => new(GrTransferOutcomeKind.Failed, null, error);
     }
 
+    private async Task<IReadOnlyList<PurchaseRequestLineRow>> LoadApprovedReceiveLinesAsync(
+        int docKey,
+        CancellationToken cancellationToken)
+    {
+        var lines = await _orders.GetPurchaseRequestLinesAsync(docKey, cancellationToken).ConfigureAwait(false);
+        var enriched = ScanPoProjectHelper.EnrichDerivedProjects(lines);
+        return ScanPoValidationHelper.ApprovedForReceive(enriched);
+    }
+
     private async Task<string?> BuildOcrAnalyzeHintAsync(int docKey, string? poNumber, CancellationToken cancellationToken)
     {
         var po = (poNumber ?? "").Trim();
@@ -500,7 +507,7 @@ public class ScanPODetailModel : PageModel
 
         if (docKey > 0)
         {
-            var lines = await _orders.GetPurchaseRequestLinesAsync(docKey, cancellationToken).ConfigureAwait(false);
+            var lines = await LoadApprovedReceiveLinesAsync(docKey, cancellationToken).ConfigureAwait(false);
             var codes = lines
                 .Select(l => (l.ItemCode ?? "").Trim())
                 .Where(c => c.Length > 0)
@@ -518,9 +525,9 @@ public class ScanPODetailModel : PageModel
         IReadOnlyList<Services.Orders.GrTransferLineRequest> lines,
         CancellationToken cancellationToken)
     {
-        var poLines = await _orders.GetPurchaseRequestLinesAsync(docKey, cancellationToken).ConfigureAwait(false);
+        var poLines = await LoadApprovedReceiveLinesAsync(docKey, cancellationToken).ConfigureAwait(false);
         if (poLines.Count == 0)
-            return lines;
+            return Array.Empty<GrTransferLineRequest>();
 
         var byCode = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var row in poLines)
