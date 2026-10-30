@@ -2,6 +2,8 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net.Http;
 using System.Text.Json;
+using Amazon.SecretsManager;
+using Amazon.SecretsManager.Model;
 using ApprovalPO.Models;
 using FirebirdSql.Data.FirebirdClient;
 using Microsoft.AspNetCore.WebUtilities;
@@ -11,6 +13,8 @@ namespace ApprovalPO.Helpers;
 /// <summary>
 /// Resolves Firebird connection strings from the AWS tenant-config API (DynamoDB JSON or plain JSON) and caches per tenant code.
 /// Also parses optional <c>email</c> + <c>proaccEmail</c> SMTP overrides from the same payload (aligned with ProAccScanner).
+/// Prefers <c>database.dbUser</c> + <c>database.dbPasswordSecretRef</c>; falls back to
+/// <c>TenantBootstrap:FirebirdUser</c> / <c>FirebirdPassword</c>.
 /// The API is called with query <c>tenantCode</c> (same as the browser/Postman URL for this API).
 /// </summary>
 public sealed class TenantDbConnectionResolver
@@ -23,12 +27,17 @@ public sealed class TenantDbConnectionResolver
 
     private readonly IConfiguration _configuration;
     private readonly IHttpClientFactory _httpFactory;
+    private readonly IAmazonSecretsManager? _secrets;
     private readonly ConcurrentDictionary<string, TenantResolvedPayload> _cache = new(StringComparer.OrdinalIgnoreCase);
 
-    public TenantDbConnectionResolver(IConfiguration configuration, IHttpClientFactory httpFactory)
+    public TenantDbConnectionResolver(
+        IConfiguration configuration,
+        IHttpClientFactory httpFactory,
+        IAmazonSecretsManager? secrets = null)
     {
         _configuration = configuration;
         _httpFactory = httpFactory;
+        _secrets = secrets;
     }
 
     public Task<string> RefreshTenantConfigAsync(string tenantCode, CancellationToken cancellationToken = default) =>
@@ -51,15 +60,11 @@ public sealed class TenantDbConnectionResolver
 
         var baseUrl = (_configuration["TenantBootstrap:AwsApiBaseUrl"] ?? "").Trim();
         var apiKey = (_configuration["TenantBootstrap:AwsApiKey"] ?? "").Trim();
-        var fbUser = (_configuration["TenantBootstrap:FirebirdUser"] ?? "").Trim();
-        var fbPass = (_configuration["TenantBootstrap:FirebirdPassword"] ?? "").Trim();
+        var fbUserFallback = (_configuration["TenantBootstrap:FirebirdUser"] ?? "").Trim();
+        var fbPassFallback = (_configuration["TenantBootstrap:FirebirdPassword"] ?? "").Trim();
 
         if (string.IsNullOrWhiteSpace(baseUrl))
             throw new InvalidOperationException("TenantBootstrap:AwsApiBaseUrl is required.");
-        if (string.IsNullOrWhiteSpace(fbUser))
-            throw new InvalidOperationException("TenantBootstrap:FirebirdUser is required.");
-        if (string.IsNullOrWhiteSpace(fbPass))
-            throw new InvalidOperationException("TenantBootstrap:FirebirdPassword is required.");
 
         var requestUri = QueryHelpers.AddQueryString(baseUrl, TenantQueryParameter, tenantCode);
 
@@ -98,6 +103,15 @@ public sealed class TenantDbConnectionResolver
 
             if (string.IsNullOrWhiteSpace(dbPath) || string.IsNullOrWhiteSpace(dbHost) || string.IsNullOrWhiteSpace(dbCharset) || dbPort <= 0 || dbDialect <= 0)
                 throw new InvalidOperationException("Tenant JSON missing required database fields.");
+
+            var (fbUser, fbPass) = await ResolveFirebirdCredentialsAsync(
+                db, fbUserFallback, fbPassFallback, cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(fbUser))
+                throw new InvalidOperationException(
+                    "Firebird user missing: set database.dbUser in tenant config or TenantBootstrap:FirebirdUser.");
+            if (string.IsNullOrWhiteSpace(fbPass))
+                throw new InvalidOperationException(
+                    "Firebird password missing: set database.dbPasswordSecretRef (or dbPassword) in tenant config, or TenantBootstrap:FirebirdPassword.");
 
             var csb = new FbConnectionStringBuilder
             {
@@ -748,6 +762,91 @@ public sealed class TenantDbConnectionResolver
             return inner;
 
         return el;
+    }
+
+    private async Task<(string User, string Password)> ResolveFirebirdCredentialsAsync(
+        JsonElement db,
+        string userFallback,
+        string passwordFallback,
+        CancellationToken cancellationToken)
+    {
+        var user = userFallback;
+        if (TryGetScalar(db, "dbUser", out var dbUser) && !string.IsNullOrWhiteSpace(dbUser))
+            user = dbUser.Trim();
+
+        var password = passwordFallback;
+        if (TryGetScalar(db, "dbPassword", out var inlinePwd) && !string.IsNullOrWhiteSpace(inlinePwd))
+            password = inlinePwd.Trim();
+
+        string? secretRef = null;
+        foreach (var name in new[] { "dbPasswordSecretRef", "databasePasswordSecretRef", "firebirdPasswordSecretRef" })
+        {
+            if (TryGetScalar(db, name, out var refVal) && !string.IsNullOrWhiteSpace(refVal))
+            {
+                secretRef = refVal.Trim();
+                break;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(secretRef))
+        {
+            if (_secrets is null)
+            {
+                if (string.IsNullOrWhiteSpace(password))
+                    throw new InvalidOperationException(
+                        $"database.dbPasswordSecretRef '{secretRef}' requires IAmazonSecretsManager, and no FirebirdPassword fallback is set.");
+            }
+            else
+            {
+                try
+                {
+                    var resp = await _secrets
+                        .GetSecretValueAsync(
+                            new GetSecretValueRequest { SecretId = secretRef },
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                    var fromSecret = InterpretFirebirdPasswordSecret(resp.SecretString);
+                    if (!string.IsNullOrWhiteSpace(fromSecret))
+                        password = fromSecret.Trim();
+                }
+                catch (Exception ex) when (!string.IsNullOrWhiteSpace(password))
+                {
+                    Console.WriteLine(
+                        $"[Firebird] Secrets Manager failed for '{secretRef}': {ex.Message}. Using TenantBootstrap:FirebirdPassword fallback.");
+                }
+            }
+        }
+
+        return (user, password);
+    }
+
+    private static string? InterpretFirebirdPasswordSecret(string? secretString)
+    {
+        if (string.IsNullOrWhiteSpace(secretString))
+            return null;
+        var s = secretString.Trim();
+        if (!s.StartsWith('{'))
+            return s;
+        try
+        {
+            using var doc = JsonDocument.Parse(s);
+            var root = doc.RootElement;
+            foreach (var key in new[] { "dbPassword", "firebirdPassword", "password", "DB_PASSWORD", "secret", "value" })
+            {
+                if (!TryGetJsonPropertyIgnoreCase(root, key, out var el))
+                    continue;
+                if (el.ValueKind == JsonValueKind.String)
+                    return el.GetString();
+                if (el.ValueKind == JsonValueKind.Number)
+                    return el.GetRawText();
+            }
+        }
+        catch
+        {
+            return s;
+        }
+
+        return s;
     }
 
     private static bool TryReadDatabaseFields(
