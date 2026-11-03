@@ -13,7 +13,8 @@ It was built so tenant Firebird connection details can be loaded at runtime from
 ## Key Features
 
 - Email OTP sign-in against SQL Accounting `SY_USER` records
-- Role-based access (Admin / Maintenance from `SY_USER.UDF_APPROLE`, with PO/SO approve limited to `UDF_APPFROM`–`UDF_APPTO`)
+- Director gate: `SY_USER.UDF_ISDIRECTOR` required for Purchase Order Approval (Dashboard, PO/SO, Scan, Received Goods). Non-directors see a no-access page; Maintenance Scanner stays available for Admin/Maintenance roles
+- Role-based access (Admin / Maintenance from `SY_USER.UDF_APPROLE`; directors approve any amount without `UDF_APPFROM`–`UDF_APPTO` limits)
 - Purchase order review, approve, reject, and bulk approve
 - Sales order approval with the same pending/approved/cancelled/rejected tabs
 - Scan PO into goods received (camera barcode flow)

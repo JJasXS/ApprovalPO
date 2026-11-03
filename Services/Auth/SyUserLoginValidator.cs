@@ -23,11 +23,14 @@ public sealed class SyUserEmailLookupResult
     public decimal? AppLevel { get; init; }
     public decimal? AppFrom { get; init; }
     public decimal? AppTo { get; init; }
+    public bool IsDirector { get; init; }
 
     /// <summary>Technical detail for logs / Development API responses only.</summary>
     public string? Diagnostic { get; init; }
 
-    public static SyUserEmailLookupResult Skipped() => new() { Status = SyUserEmailLookupStatus.Skipped };
+    /// <summary>Dev/config bypass: treat as director so the app remains usable.</summary>
+    public static SyUserEmailLookupResult Skipped() =>
+        new() { Status = SyUserEmailLookupStatus.Skipped, IsDirector = true };
 
     public static SyUserEmailLookupResult Ok(
         string? displayName,
@@ -35,6 +38,7 @@ public sealed class SyUserEmailLookupResult
         decimal? appLevel = null,
         decimal? appFrom = null,
         decimal? appTo = null,
+        bool isDirector = false,
         string? diagnostic = null) =>
         new()
         {
@@ -44,6 +48,7 @@ public sealed class SyUserEmailLookupResult
             AppLevel = appLevel,
             AppFrom = appFrom,
             AppTo = appTo,
+            IsDirector = isDirector,
             Diagnostic = string.IsNullOrWhiteSpace(diagnostic) ? null : diagnostic,
         };
 
@@ -147,13 +152,14 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
     {
         var includeIsActive = true;
         var includeApprovalUdfs = true;
+        var includeIsDirector = true;
         string? udfDiagnostic = null;
         var ensuredUdfColumns = false;
-        for (var attempt = 0; attempt < 4; attempt++)
+        for (var attempt = 0; attempt < 6; attempt++)
         {
             try
             {
-                var sql = BuildLookupSql(includeIsActive, includeApprovalUdfs);
+                var sql = BuildLookupSql(includeIsActive, includeApprovalUdfs, includeIsDirector);
                 await using var cmd = new FbCommand(sql, conn);
                 cmd.Parameters.AddWithValue("@Email", email);
 
@@ -161,43 +167,34 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
                 if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                     return SyUserEmailLookupResult.NotFound();
 
-                return MapLookupRow(reader, includeIsActive, includeApprovalUdfs, udfDiagnostic);
+                return MapLookupRow(reader, includeIsActive, includeApprovalUdfs, includeIsDirector, udfDiagnostic);
             }
             catch (Exception ex) when (includeIsActive && IsLikelyMissingColumn(ex, "ISACTIVE"))
             {
                 _logger.LogInformation(ex, "SY_USER without ISACTIVE retry for email lookup.");
                 includeIsActive = false;
             }
+            catch (Exception ex) when (includeIsDirector && IsLikelyMissingColumn(ex, "UDF_ISDIRECTOR"))
+            {
+                _logger.LogWarning(ex, "SY_USER without UDF_ISDIRECTOR — treating all users as non-director.");
+                includeIsDirector = false;
+            }
             catch (Exception ex) when (includeApprovalUdfs && IsLikelyMissingApprovalUdf(ex))
             {
-                // Tenant DB may not have the approval UDF columns deployed yet.
-                // Attempt to bootstrap them once, then retry with UDF columns enabled.
-                if (!ensuredUdfColumns)
+                var retryWithColumns = await TryHandleMissingApprovalUdfAsync(
+                    conn, ex, ensuredUdfColumns, cancellationToken).ConfigureAwait(false);
+                ensuredUdfColumns = true;
+                if (!retryWithColumns)
                 {
-                    ensuredUdfColumns = true;
-                    try
-                    {
-                        await SyUserSchemaBootstrap.EnsureApprovalUdfColumnsAsync(conn, _logger, cancellationToken)
-                            .ConfigureAwait(false);
-                    }
-                    catch
-                    {
-                        _logger.LogWarning(ex, "SY_USER approval UDF bootstrap failed — retrying without them.");
-                        includeApprovalUdfs = false;
-                        udfDiagnostic = ex.Message;
-                    }
-                }
-                else
-                {
-                    _logger.LogWarning(ex, "SY_USER approval UDF columns still missing — retrying without them.");
                     includeApprovalUdfs = false;
                     udfDiagnostic = ex.Message;
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "SY_USER query failed for {Email} (includeIsActive={IA}, includeApprovalUdfs={IU}): {Msg}",
-                    email, includeIsActive, includeApprovalUdfs, ex.Message);
+                _logger.LogError(ex,
+                    "SY_USER query failed for {Email} (includeIsActive={IA}, includeApprovalUdfs={IU}, includeIsDirector={ID}): {Msg}",
+                    email, includeIsActive, includeApprovalUdfs, includeIsDirector, ex.Message);
                 return SyUserEmailLookupResult.DatabaseUnavailable(AppendLocalhostHint(ex.Message, "SY_USER query failed."));
             }
         }
@@ -205,13 +202,40 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
         return SyUserEmailLookupResult.DatabaseUnavailable("SY_USER lookup could not be completed.");
     }
 
-    private static string BuildLookupSql(bool includeIsActive, bool includeApprovalUdfs)
+    private async Task<bool> TryHandleMissingApprovalUdfAsync(
+        FbConnection conn,
+        Exception ex,
+        bool alreadyEnsured,
+        CancellationToken cancellationToken)
+    {
+        if (alreadyEnsured)
+        {
+            _logger.LogWarning(ex, "SY_USER approval UDF columns still missing — retrying without them.");
+            return false;
+        }
+
+        try
+        {
+            await SyUserSchemaBootstrap.EnsureApprovalUdfColumnsAsync(conn, _logger, cancellationToken)
+                .ConfigureAwait(false);
+            return true;
+        }
+        catch
+        {
+            _logger.LogWarning(ex, "SY_USER approval UDF bootstrap failed — retrying without them.");
+            return false;
+        }
+    }
+
+    private static string BuildLookupSql(bool includeIsActive, bool includeApprovalUdfs, bool includeIsDirector)
     {
         var extra = "";
         if (includeIsActive)
             extra += ", ISACTIVE";
         if (includeApprovalUdfs)
             extra += ", UDF_APPROLE, CAST(UDF_APPLEVEL AS NUMERIC(15,2)) AS UDF_APPLEVEL, CAST(UDF_APPFROM AS NUMERIC(15,2)) AS UDF_APPFROM, CAST(UDF_APPTO AS NUMERIC(15,2)) AS UDF_APPTO";
+        if (includeIsDirector)
+            extra += ", UDF_ISDIRECTOR";
 
         return $"""
             SELECT FIRST 1
@@ -225,6 +249,7 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
         System.Data.Common.DbDataReader reader,
         bool includeIsActive,
         bool includeApprovalUdfs,
+        bool includeIsDirector,
         string? udfDiagnostic)
     {
         var displayName = (FirebirdDataReaderHelper.GetString(reader, "DISP_NAME") ?? "").Trim();
@@ -235,7 +260,7 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
             var activeValue = activeOrdinal < 0 || reader.IsDBNull(activeOrdinal)
                 ? null
                 : reader.GetValue(activeOrdinal);
-            if (!ParseIsActive(activeValue))
+            if (!ParseFlag(activeValue))
                 return SyUserEmailLookupResult.Inactive();
         }
 
@@ -251,12 +276,23 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
             appTo = FirebirdDataReaderHelper.GetDecimalNullable(reader, "UDF_APPTO");
         }
 
+        var isDirector = false;
+        if (includeIsDirector)
+        {
+            var dirOrdinal = FirebirdDataReaderHelper.TryGetOrdinal(reader, "UDF_ISDIRECTOR");
+            var dirValue = dirOrdinal < 0 || reader.IsDBNull(dirOrdinal)
+                ? null
+                : reader.GetValue(dirOrdinal);
+            isDirector = ParseFlag(dirValue);
+        }
+
         return SyUserEmailLookupResult.Ok(
             string.IsNullOrEmpty(displayName) ? null : displayName,
             appRole,
             appLevel,
             appFrom,
             appTo,
+            isDirector,
             diagnostic: udfDiagnostic);
     }
 
@@ -312,11 +348,12 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
     }
 
     /// <summary>Same interpretation as ProAccScanner <c>LoginModel.GetUserExistsAndActive</c>.</summary>
-    private static bool ParseIsActive(object? value)
+    private static bool ParseFlag(object? value)
     {
         var s = value?.ToString()?.Trim() ?? "";
         return s == "1"
                || s.Equals("Y", StringComparison.OrdinalIgnoreCase)
+               || s.Equals("T", StringComparison.OrdinalIgnoreCase)
                || s.Equals("TRUE", StringComparison.OrdinalIgnoreCase);
     }
 }

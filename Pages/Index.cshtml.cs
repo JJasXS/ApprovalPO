@@ -1,3 +1,4 @@
+using ApprovalPO.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -9,8 +10,12 @@ public class IndexModel : PageModel
 {
     public IActionResult OnGet()
     {
-        if (User.Identity?.IsAuthenticated == true)
-            return RedirectToPage("/Dashboard");
-        return RedirectToPage("/Login");
+        if (User.Identity?.IsAuthenticated != true)
+            return RedirectToPage("/Login");
+
+        if (!User.IsInRole(ApprovalRoles.Director))
+            return RedirectToPage("/NoAccess");
+
+        return RedirectToPage("/Dashboard");
     }
 }

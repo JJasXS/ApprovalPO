@@ -1,9 +1,11 @@
 using System.Security.Claims;
+using ApprovalPO.Authorization;
 using ApprovalPO.Helpers;
 using ApprovalPO.Models;
 using ApprovalPO.Services.Auth;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ApprovalPO.Controllers;
@@ -14,6 +16,7 @@ namespace ApprovalPO.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/guide_capture")]
+[Authorize(Policy = PolicyNames.DirectorAccess)]
 public sealed class GuideCaptureController : ControllerBase
 {
     private readonly ISyUserLoginValidator _syUser;
@@ -36,6 +39,7 @@ public sealed class GuideCaptureController : ControllerBase
     private static bool IsEnabled()
         => string.Equals(Environment.GetEnvironmentVariable("APPROVAL_GUIDE_CAPTURE"), "1", StringComparison.Ordinal);
 
+    [AllowAnonymous]
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] GuideLoginRequest? body, CancellationToken cancellationToken)
     {
@@ -93,6 +97,11 @@ public sealed class GuideCaptureController : ControllerBase
         if (!claims.Any(c => c.Type == ClaimTypes.Role
                              && string.Equals(c.Value, ApprovalRoles.Admin, StringComparison.OrdinalIgnoreCase)))
             claims.Add(new Claim(ClaimTypes.Role, ApprovalRoles.Admin));
+
+        // Guide capture must reach DirectorAccess pages for screenshots.
+        if (!claims.Any(c => c.Type == ClaimTypes.Role
+                             && string.Equals(c.Value, ApprovalRoles.Director, StringComparison.OrdinalIgnoreCase)))
+            claims.Add(new Claim(ClaimTypes.Role, ApprovalRoles.Director));
 
         await HttpContext.SignInAsync(
             CookieAuthenticationDefaults.AuthenticationScheme,

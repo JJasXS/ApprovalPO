@@ -9,6 +9,9 @@ namespace ApprovalPO.Services.Auth;
 /// </summary>
 public static class SyUserApprovalMapper
 {
+    /// <summary>Upper amount bound written onto director cookies so client range checks stay open.</summary>
+    public const decimal DirectorUnlimitedTo = 999_999_999_999m;
+
     public static IReadOnlyList<string> MapRoles(string? appRole)
     {
         var key = (appRole ?? "").Trim();
@@ -30,7 +33,20 @@ public static class SyUserApprovalMapper
                 claims.Add(new Claim(ClaimTypes.Role, role));
         }
 
+        if (sy.IsDirector)
+            claims.Add(new Claim(ClaimTypes.Role, ApprovalRoles.Director));
+
         AddOptional(claims, ApprovalClaimTypes.AppRole, sy.AppRole);
+        AddOptional(claims, ApprovalClaimTypes.IsDirector, sy.IsDirector ? "1" : null);
+
+        if (sy.IsDirector)
+        {
+            AddOptionalDecimal(claims, ApprovalClaimTypes.AppLevel, 3m);
+            AddOptionalDecimal(claims, ApprovalClaimTypes.AppFrom, 0m);
+            AddOptionalDecimal(claims, ApprovalClaimTypes.AppTo, DirectorUnlimitedTo);
+            return;
+        }
+
         AddOptionalDecimal(claims, ApprovalClaimTypes.AppLevel, sy.AppLevel);
         AddOptionalDecimal(claims, ApprovalClaimTypes.AppFrom, sy.AppFrom);
         AddOptionalDecimal(claims, ApprovalClaimTypes.AppTo, sy.AppTo);
@@ -45,6 +61,10 @@ public static class SyUserApprovalMapper
             return value;
         return null;
     }
+
+    public static bool IsDirector(ClaimsPrincipal user) =>
+        user.IsInRole(ApprovalRoles.Director)
+        || string.Equals(user.FindFirst(ApprovalClaimTypes.IsDirector)?.Value, "1", StringComparison.Ordinal);
 
     public static bool CanApproveFromClaims(ClaimsPrincipal user) =>
         ReadDecimalClaim(user, ApprovalClaimTypes.AppFrom) is not null

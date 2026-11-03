@@ -7,6 +7,9 @@ namespace ApprovalPO.Authorization;
 /// </summary>
 public static class PolicyNames
 {
-    /// <summary>Admin OR Maintenance role required (the Maintenance Scanner module).</summary>
+    /// <summary>Admin OR Maintenance OR Director role required (the Maintenance Scanner module).</summary>
     public const string MaintenanceAccess = "MaintenanceAccess";
+
+    /// <summary>Director (UDF_ISDIRECTOR) required for Purchase Order Approval pages.</summary>
+    public const string DirectorAccess = "DirectorAccess";
 }

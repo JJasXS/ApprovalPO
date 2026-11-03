@@ -1,0 +1,79 @@
+@page
+@model ApprovalPO.Pages.NoAccessModel
+@{
+    ViewData["Title"] = "No access";
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/dashboard.css" asp-append-version="true" />
+    <style>
+        .no-access-shell {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 32px 20px;
+            background: var(--app-page-bg, #f8fafc);
+            font-family: var(--app-font, system-ui, sans-serif);
+            text-align: center;
+        }
+        .no-access-card {
+            max-width: 420px;
+            width: 100%;
+        }
+        .no-access-title {
+            margin: 0 0 12px;
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: #0f172a;
+        }
+        .no-access-body {
+            margin: 0 0 28px;
+            color: #475569;
+            line-height: 1.5;
+        }
+        .no-access-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            align-items: center;
+        }
+        .no-access-link {
+            display: inline-block;
+            padding: 10px 18px;
+            border-radius: 8px;
+            background: #2563eb;
+            color: #fff;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .no-access-link:hover { background: #1d4ed8; }
+        .no-access-shell .dash-signout-btn {
+            background: transparent;
+            border: 1px solid #cbd5e1;
+            color: #334155;
+            padding: 10px 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+    </style>
+}
+
+<div class="no-access-shell">
+    <div class="no-access-card">
+        <h1 class="no-access-title">No access to this system</h1>
+        <p class="no-access-body">
+            You do not have access to the Purchase Order Approval system.
+            Only directors can use this system.
+        </p>
+        <div class="no-access-actions">
+            @if (Model.ShowMaintenanceScanner)
+            {
+                <a class="no-access-link" href="/MaintenanceScanner">Open Maintenance Scanner</a>
+            }
+            <partial name="Shared/_LogoutForm" />
+        </div>
+    </div>
+</div>

@@ -227,12 +227,7 @@ public class LoginModel : PageModel
             principal,
             new AuthenticationProperties { IsPersistent = false }).ConfigureAwait(false);
 
-        var redirect = !string.IsNullOrEmpty(ReturnUrl)
-            ? ReturnUrl!
-            : Url.Page("/Dashboard") ?? "/Dashboard";
-
-        if (IsLikelyPurchaseOrdersPage(redirect))
-            redirect = AppendQueryParam(redirect, "promptNotify", "1");
+        var redirect = ResolvePostLoginRedirect(sy.IsDirector, ReturnUrl);
 
         return new JsonResult(new
         {
@@ -240,6 +235,21 @@ public class LoginModel : PageModel
             message = "Signed in.",
             redirectUrl = redirect
         }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+    }
+
+    private string ResolvePostLoginRedirect(bool isDirector, string? returnUrl)
+    {
+        if (!isDirector)
+            return Url.Page("/NoAccess") ?? "/NoAccess";
+
+        var redirect = !string.IsNullOrEmpty(returnUrl)
+            ? returnUrl!
+            : Url.Page("/Dashboard") ?? "/Dashboard";
+
+        if (IsLikelyPurchaseOrdersPage(redirect))
+            redirect = AppendQueryParam(redirect, "promptNotify", "1");
+
+        return redirect;
     }
 
     private async Task<SubscriptionBanner.Context> LoadSubscriptionAsync(CancellationToken cancellationToken)

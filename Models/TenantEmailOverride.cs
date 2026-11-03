@@ -56,6 +56,7 @@ public static class ApprovalRoles
 {
     public const string Admin = "Admin";
     public const string Maintenance = "Maintenance";
+    public const string Director = "Director";
 }
 
 /// <summary>

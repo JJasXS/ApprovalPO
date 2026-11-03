@@ -38,6 +38,9 @@ public sealed class ApprovalAuthority : IApprovalAuthority
         if (ctx.Deny is not null)
             return ctx.Deny;
 
+        if (ctx.IsDirector)
+            return ApprovalAuthorityDecision.Allow();
+
         return ApprovalAmountGate.Evaluate(ctx.AppRole, ctx.AppFrom, ctx.AppTo, amount);
     }
 
@@ -50,6 +53,9 @@ public sealed class ApprovalAuthority : IApprovalAuthority
         var ctx = await ResolveUserContextAsync(user, cancellationToken).ConfigureAwait(false);
         if (ctx.Deny is not null)
             return ctx.Deny;
+
+        if (ctx.IsDirector)
+            return DirectorFinalApproval(amount);
 
         var userLevel = ApprovalLevelWorkflow.ResolveUserLevel(ctx.AppLevel, ctx.AppRole);
         if (userLevel <= 0)
@@ -84,6 +90,15 @@ public sealed class ApprovalAuthority : IApprovalAuthority
         return ApprovalAuthorityDecision.AllowWorkflow(newCompleted, required, isFinal, message);
     }
 
+    private static ApprovalAuthorityDecision DirectorFinalApproval(decimal amount)
+    {
+        var required = ApprovalLevelWorkflow.RequiredLevels(amount);
+        if (required <= 0)
+            required = 3;
+        var message = ApprovalLevelWorkflow.BuildProgressMessage(required, required, 0, true);
+        return ApprovalAuthorityDecision.AllowWorkflow(required, required, true, message);
+    }
+
     private async Task<UserApprovalContext> ResolveUserContextAsync(
         ClaimsPrincipal user,
         CancellationToken cancellationToken)
@@ -110,15 +125,16 @@ public sealed class ApprovalAuthority : IApprovalAuthority
         decimal? AppLevel,
         decimal? AppFrom,
         decimal? AppTo,
+        bool IsDirector,
         ApprovalAuthorityDecision? Deny)
     {
         public static UserApprovalContext Denied(string message) =>
-            new("", null, null, null, null, ApprovalAuthorityDecision.Deny(message));
+            new("", null, null, null, null, false, ApprovalAuthorityDecision.Deny(message));
 
         public static UserApprovalContext FromSkipped(string email, SyUserEmailLookupResult sy) =>
-            new(email, sy.AppRole, sy.AppLevel, sy.AppFrom, sy.AppTo, null);
+            new(email, sy.AppRole, sy.AppLevel, sy.AppFrom, sy.AppTo, sy.IsDirector, null);
 
         public static UserApprovalContext FromOk(string email, SyUserEmailLookupResult sy) =>
-            new(email, sy.AppRole, sy.AppLevel, sy.AppFrom, sy.AppTo, null);
+            new(email, sy.AppRole, sy.AppLevel, sy.AppFrom, sy.AppTo, sy.IsDirector, null);
     }
 }

@@ -193,6 +193,16 @@ var razorPages = builder.Services.AddRazorPages(options =>
     // Module access is enforced dynamically from tenant dashboard-module flags
     // (adminDashboardModules / maintenanceDashboardModules) in middleware.
     options.Conventions.AuthorizePage("/MaintenanceScanner/Index", PolicyNames.MaintenanceAccess);
+
+    // Purchase Order Approval system requires UDF_ISDIRECTOR.
+    options.Conventions.AuthorizePage("/Dashboard", PolicyNames.DirectorAccess);
+    options.Conventions.AuthorizePage("/PurchaseOrders", PolicyNames.DirectorAccess);
+    options.Conventions.AuthorizePage("/SalesOrders", PolicyNames.DirectorAccess);
+    options.Conventions.AuthorizePage("/ScanPO", PolicyNames.DirectorAccess);
+    options.Conventions.AuthorizePage("/ScanPODetail", PolicyNames.DirectorAccess);
+    options.Conventions.AuthorizePage("/ReceivedGoods", PolicyNames.DirectorAccess);
+    options.Conventions.AuthorizePage("/ScanReceivedDetail", PolicyNames.DirectorAccess);
+    options.Conventions.AuthorizePage("/DetectRfid", PolicyNames.DirectorAccess);
 });
 if (builder.Environment.IsDevelopment())
     razorPages.AddRazorRuntimeCompilation();
@@ -211,7 +221,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         var sessionHours = builder.Configuration.GetValue<int?>("Approval:SessionHours") ?? 2;
         options.LoginPath = "/Login";
         options.LogoutPath = "/Logout";
-        options.AccessDeniedPath = "/Login";
+        options.AccessDeniedPath = "/NoAccess";
         options.ExpireTimeSpan = TimeSpan.FromHours(Math.Clamp(sessionHours, 1, 24));
         options.SlidingExpiration = true;
         options.Cookie.HttpOnly = true;
@@ -225,9 +235,13 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 
 builder.Services.AddAuthorization(options =>
 {
-    // Admin OR Maintenance can use the Maintenance Scanner.
+    // Admin, Maintenance, or Director can use the Maintenance Scanner.
     options.AddPolicy(PolicyNames.MaintenanceAccess, p =>
-        p.RequireAuthenticatedUser().RequireRole(ApprovalRoles.Admin, ApprovalRoles.Maintenance));
+        p.RequireAuthenticatedUser().RequireRole(
+            ApprovalRoles.Admin, ApprovalRoles.Maintenance, ApprovalRoles.Director));
+
+    options.AddPolicy(PolicyNames.DirectorAccess, p =>
+        p.RequireAuthenticatedUser().RequireRole(ApprovalRoles.Director));
 });
 
 var app = builder.Build();

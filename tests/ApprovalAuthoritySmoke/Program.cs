@@ -322,6 +322,63 @@ AssertGate("jason-range-in", "HOD", 0m, 20000m, 20000m, true);
         Fail("DIRECTOR first 500k", $"allowed={d.Allowed} final={d.IsFinalApproval} {d.CompletedLevels}/{d.RequiredLevels}");
 }
 
+Section("15. UDF_ISDIRECTOR bypasses amount range and levels");
+{
+    var claims = new List<Claim>();
+    SyUserApprovalMapper.AddProfileClaims(claims, SyUserEmailLookupResult.Ok(
+        "Dir", "MANAGER", 1m, 0m, 10000m, isDirector: true));
+    var roles = claims.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).ToArray();
+    var level = claims.FirstOrDefault(c => c.Type == ApprovalClaimTypes.AppLevel)?.Value;
+    var from = claims.FirstOrDefault(c => c.Type == ApprovalClaimTypes.AppFrom)?.Value;
+    var to = claims.FirstOrDefault(c => c.Type == ApprovalClaimTypes.AppTo)?.Value;
+    if (roles.Contains(ApprovalRoles.Director)
+        && roles.Contains(ApprovalRoles.Admin)
+        && level == "3"
+        && from == "0"
+        && to == SyUserApprovalMapper.DirectorUnlimitedTo.ToString(culture))
+        Pass("director claims: Director role + AppLevel 3 + unlimited range");
+    else
+        Fail("director claims", $"roles=[{string.Join(",", roles)}] level={level} from={from} to={to}");
+}
+
+{
+    var auth = new ApprovalAuthority(new RecordingSyUser
+    {
+        Result = SyUserEmailLookupResult.Ok("Dir", "MANAGER", 1m, 0m, 10000m, isDirector: true)
+    });
+    var user = PrincipalWithEmail("dir@acme.com");
+    var list = auth.AuthorizeListStatusChangeAsync(user, 500000m).GetAwaiter().GetResult();
+    if (list.Allowed)
+        Pass("director list-status allows amount outside personal UDF range");
+    else
+        Fail("director list-status outside range", $"msg={list.ErrorMessage}");
+
+    var partial = auth.AuthorizePartialApproveAsync(user, 500000m, new PoApprovalSlots()).GetAwaiter().GetResult();
+    if (partial.Allowed && partial.IsFinalApproval && partial.CompletedLevels == 3 && partial.RequiredLevels == 3)
+        Pass("director partial approve RM 500k is final (3/3) ignoring level/range");
+    else
+        Fail("director partial 500k", $"allowed={partial.Allowed} final={partial.IsFinalApproval} {partial.CompletedLevels}/{partial.RequiredLevels} msg={partial.ErrorMessage}");
+
+    var overCap = auth.AuthorizePartialApproveAsync(user, 2_000_000m, new PoApprovalSlots()).GetAwaiter().GetResult();
+    if (overCap.Allowed && overCap.IsFinalApproval && overCap.RequiredLevels == 3)
+        Pass("director partial approve above RM 1M is final (required forced to 3)");
+    else
+        Fail("director above 1M", $"allowed={overCap.Allowed} final={overCap.IsFinalApproval} req={overCap.RequiredLevels} msg={overCap.ErrorMessage}");
+}
+
+{
+    var auth = new ApprovalAuthority(new RecordingSyUser
+    {
+        Result = SyUserEmailLookupResult.Ok("Mgr", "MANAGER", 1m, 0m, 10000m, isDirector: false)
+    });
+    var user = PrincipalWithEmail("mgr@acme.com");
+    var d = auth.AuthorizeListStatusChangeAsync(user, 50000m).GetAwaiter().GetResult();
+    if (!d.Allowed)
+        Pass("non-director still denied outside UDF_APPFROM–UDF_APPTO");
+    else
+        Fail("non-director should stay range-limited", $"allowed={d.Allowed}");
+}
+
 PrintMatrix(amounts, syUserRows);
 
 Console.WriteLine();

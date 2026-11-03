@@ -1,11 +1,15 @@
-// Standalone .NET 8 smoke tests for the leftover Dynamo userRoles JSON parser.
-// Login no longer uses these lists; roles come from SY_USER.UDF_APPROLE.
+// Standalone .NET 8 smoke tests for the leftover Dynamo userRoles JSON parser
+// plus SY_USER director claim mapping.
+// Login no longer uses these lists; roles come from SY_USER.UDF_APPROLE / UDF_ISDIRECTOR.
 // Run with:
 //     dotnet run --project tests\RolesParserSmoke
 //
 // Exits with code 0 on success, 1 on any assertion failure.
+using System.Globalization;
+using System.Security.Claims;
 using System.Text.Json;
 using ApprovalPO.Models;
+using ApprovalPO.Services.Auth;
 
 var totalFailures = 0;
 
@@ -141,6 +145,61 @@ else
     {
         Console.ForegroundColor = ConsoleColor.Red;
         Console.WriteLine("  FAIL  empty block parsing");
+        Console.ResetColor();
+        totalFailures++;
+    }
+}
+
+// ---------------------------------------------------------------
+// 3) SyUserApprovalMapper director claims
+// ---------------------------------------------------------------
+Section("SyUserApprovalMapper.AddProfileClaims (UDF_ISDIRECTOR)");
+{
+    void AssertClaims(string label, SyUserEmailLookupResult sy, params string[] expectedRoles)
+    {
+        var claims = new List<Claim>();
+        SyUserApprovalMapper.AddProfileClaims(claims, sy);
+        var roles = claims.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).OrderBy(x => x).ToArray();
+        var want = expectedRoles.OrderBy(x => x).ToArray();
+        var got = string.Join(",", roles);
+        var expected = string.Join(",", want);
+        var ok = string.Equals(got, expected, StringComparison.Ordinal);
+        Console.ForegroundColor = ok ? ConsoleColor.Green : ConsoleColor.Red;
+        Console.WriteLine($"  {(ok ? "PASS" : "FAIL")}  {label,-50} got=[{got}]  expected=[{expected}]");
+        Console.ResetColor();
+        if (!ok) totalFailures++;
+    }
+
+    AssertClaims("non-director MANAGER -> Admin only",
+        SyUserEmailLookupResult.Ok("A", "MANAGER", 1m, 0m, 10000m),
+        ApprovalRoles.Admin);
+
+    AssertClaims("director MANAGER -> Admin+Director",
+        SyUserEmailLookupResult.Ok("A", "MANAGER", 1m, 0m, 10000m, isDirector: true),
+        ApprovalRoles.Admin, ApprovalRoles.Director);
+
+    AssertClaims("director Maintenance -> Maintenance+Director",
+        SyUserEmailLookupResult.Ok("A", "Maintenance", isDirector: true),
+        ApprovalRoles.Maintenance, ApprovalRoles.Director);
+
+    var dirClaims = new List<Claim>();
+    SyUserApprovalMapper.AddProfileClaims(dirClaims, SyUserEmailLookupResult.Ok(
+        "Dir", "HOD", 2m, 0m, 50000m, isDirector: true));
+    var level = dirClaims.FirstOrDefault(c => c.Type == ApprovalClaimTypes.AppLevel)?.Value;
+    var from = dirClaims.FirstOrDefault(c => c.Type == ApprovalClaimTypes.AppFrom)?.Value;
+    var to = dirClaims.FirstOrDefault(c => c.Type == ApprovalClaimTypes.AppTo)?.Value;
+    var culture = CultureInfo.InvariantCulture;
+    var unlimited = SyUserApprovalMapper.DirectorUnlimitedTo.ToString(culture);
+    if (level == "3" && from == "0" && to == unlimited)
+    {
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.WriteLine("  PASS  director overwrites AppLevel=3 AppFrom=0 AppTo=unlimited");
+        Console.ResetColor();
+    }
+    else
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine($"  FAIL  director range claims  level={level} from={from} to={to}");
         Console.ResetColor();
         totalFailures++;
     }
