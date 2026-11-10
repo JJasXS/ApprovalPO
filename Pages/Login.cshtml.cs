@@ -237,7 +237,7 @@ public class LoginModel : PageModel
             principal,
             new AuthenticationProperties { IsPersistent = false }).ConfigureAwait(false);
 
-        var redirect = ResolvePostLoginRedirect(sy.IsDirector, ReturnUrl);
+        var redirect = ResolvePostLoginRedirect(sy, ReturnUrl);
 
         return new JsonResult(new
         {
@@ -247,9 +247,9 @@ public class LoginModel : PageModel
         }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
     }
 
-    private string ResolvePostLoginRedirect(bool isDirector, string? returnUrl)
+    private string ResolvePostLoginRedirect(SyUserEmailLookupResult sy, string? returnUrl)
     {
-        if (!isDirector)
+        if (!SyUserApprovalMapper.CanAccessApprovalSystem(sy))
             return Url.Page("/NoAccess") ?? "/NoAccess";
 
         var redirect = !string.IsNullOrEmpty(returnUrl)

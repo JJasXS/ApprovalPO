@@ -47,6 +47,8 @@ internal sealed class ModuleAccessService : IModuleAccessService
             "salesApproval" => modules.SalesApproval ?? true,
             "scanPo" => modules.ScanPo ?? true,
             "receivedGoods" => modules.ReceivedGoods ?? true,
+            "scanSo" => modules.ScanSo ?? true,
+            "deliveryOrders" => modules.DeliveryOrders ?? true,
             "maintenanceScanner" => modules.MaintenanceScanner ?? true,
             _ => true
         };
@@ -75,6 +77,8 @@ internal sealed class ModuleAccessService : IModuleAccessService
             SalesApproval = modules.SalesApproval ?? true,
             ScanPo = modules.ScanPo ?? true,
             ReceivedGoods = modules.ReceivedGoods ?? true,
+            ScanSo = modules.ScanSo ?? true,
+            DeliveryOrders = modules.DeliveryOrders ?? true,
             MaintenanceScanner = modules.MaintenanceScanner ?? true
         };
     }
@@ -103,6 +107,18 @@ internal sealed class ModuleAccessService : IModuleAccessService
             || p.Equals("/ScanReceivedDetail", StringComparison.OrdinalIgnoreCase))
         {
             module = "receivedGoods";
+            return true;
+        }
+        if (p.Equals("/ScanSO", StringComparison.OrdinalIgnoreCase)
+            || p.Equals("/ScanSODetail", StringComparison.OrdinalIgnoreCase))
+        {
+            module = "scanSo";
+            return true;
+        }
+        if (p.Equals("/DeliveryOrders", StringComparison.OrdinalIgnoreCase)
+            || p.Equals("/ScanDeliveredDetail", StringComparison.OrdinalIgnoreCase))
+        {
+            module = "deliveryOrders";
             return true;
         }
         if (p.Equals("/MaintenanceScanner", StringComparison.OrdinalIgnoreCase)

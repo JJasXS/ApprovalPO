@@ -5,4 +5,6 @@ public static class SqlAccountingDocTypes
 {
     public const string PurchaseOrder = "PO";
     public const string GoodsReceived = "GR";
+    public const string SalesOrder = "SO";
+    public const string DeliveryOrder = "DO";
 }

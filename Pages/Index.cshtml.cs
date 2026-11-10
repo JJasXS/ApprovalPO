@@ -1,4 +1,5 @@
 using ApprovalPO.Models;
+using ApprovalPO.Services.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -13,7 +14,7 @@ public class IndexModel : PageModel
         if (User.Identity?.IsAuthenticated != true)
             return RedirectToPage("/Login");
 
-        if (!User.IsInRole(ApprovalRoles.Director))
+        if (!SyUserApprovalMapper.CanAccessApprovalSystem(User))
             return RedirectToPage("/NoAccess");
 
         return RedirectToPage("/Dashboard");

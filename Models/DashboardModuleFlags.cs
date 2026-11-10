@@ -7,8 +7,10 @@ public sealed class DashboardModuleFlags
     public bool SalesApproval { get; init; } = true;
     public bool ScanPo { get; init; } = true;
     public bool ReceivedGoods { get; init; } = true;
+    public bool ScanSo { get; init; } = true;
+    public bool DeliveryOrders { get; init; } = true;
     public bool MaintenanceScanner { get; init; } = true;
 
     public bool HasAny =>
-        PurchaseApproval || SalesApproval || ScanPo || ReceivedGoods || MaintenanceScanner;
+        PurchaseApproval || SalesApproval || ScanPo || ReceivedGoods || ScanSo || DeliveryOrders || MaintenanceScanner;
 }

@@ -154,12 +154,16 @@ builder.Services.AddScoped<IPurchaseOrderCatalog, PurchaseOrderCatalogService>()
 builder.Services.AddScoped<ApprovalPO.Services.Orders.IPurchaseOrderScanQuery, ApprovalPO.Services.Orders.PurchaseOrderScanQueryService>();
 builder.Services.AddScoped<ISalesOrderCatalog, SalesOrderCatalogService>();
 builder.Services.AddScoped<IGoodsReceiptCatalog, GoodsReceiptCatalogService>();
+builder.Services.AddScoped<IDeliveryOrderCatalog, DeliveryOrderCatalogService>();
+builder.Services.AddScoped<ISalesOrderDeliveryQuery, SalesOrderDeliveryQueryService>();
 builder.Services.AddHttpClient<ApprovalPO.Services.SqlApi.ISqlAccountingApi, ApprovalPO.Services.SqlApi.SqlAccountingApiClient>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(60);
 });
+builder.Services.AddScoped<ApprovalPO.Services.Orders.DocumentTransferFirebirdService>();
 builder.Services.AddScoped<ApprovalPO.Services.Orders.PoToGoodsReceiptFirebirdTransferService>();
 builder.Services.AddScoped<ApprovalPO.Services.Orders.IGoodsReceivedTransfer, ApprovalPO.Services.Orders.GoodsReceivedTransferService>();
+builder.Services.AddScoped<ApprovalPO.Services.Orders.IDeliveryOrderTransfer, ApprovalPO.Services.Orders.SoToDeliveryOrderFirebirdTransferService>();
 builder.Services.AddScoped<ApprovalPO.Services.MaintenanceScanner.IMaintenanceScannerService, ApprovalPO.Services.MaintenanceScanner.MaintenanceScannerService>();
 builder.Services.AddScoped<ApprovalPO.Services.Ocr.IOcrCaptureService, ApprovalPO.Services.Ocr.OcrCaptureService>();
 builder.Services.AddScoped<ApprovalPO.Services.Ocr.IOcrEmailSender, ApprovalPO.Services.Ocr.OcrEmailSender>();
@@ -209,7 +213,7 @@ var razorPages = builder.Services.AddRazorPages(options =>
     // (adminDashboardModules / maintenanceDashboardModules) in middleware.
     options.Conventions.AuthorizePage("/MaintenanceScanner/Index", PolicyNames.MaintenanceAccess);
 
-    // Purchase Order Approval system requires UDF_ISDIRECTOR.
+    // Purchase Order Approval: Admin (UDF_APPROLE) or Director (UDF_ISDIRECTOR).
     options.Conventions.AuthorizePage("/Dashboard", PolicyNames.DirectorAccess);
     options.Conventions.AuthorizePage("/PurchaseOrders", PolicyNames.DirectorAccess);
     options.Conventions.AuthorizePage("/SalesOrders", PolicyNames.DirectorAccess);
@@ -217,6 +221,10 @@ var razorPages = builder.Services.AddRazorPages(options =>
     options.Conventions.AuthorizePage("/ScanPODetail", PolicyNames.DirectorAccess);
     options.Conventions.AuthorizePage("/ReceivedGoods", PolicyNames.DirectorAccess);
     options.Conventions.AuthorizePage("/ScanReceivedDetail", PolicyNames.DirectorAccess);
+    options.Conventions.AuthorizePage("/ScanSO", PolicyNames.DirectorAccess);
+    options.Conventions.AuthorizePage("/ScanSODetail", PolicyNames.DirectorAccess);
+    options.Conventions.AuthorizePage("/DeliveryOrders", PolicyNames.DirectorAccess);
+    options.Conventions.AuthorizePage("/ScanDeliveredDetail", PolicyNames.DirectorAccess);
     options.Conventions.AuthorizePage("/DetectRfid", PolicyNames.DirectorAccess);
 });
 if (builder.Environment.IsDevelopment())
@@ -256,7 +264,7 @@ builder.Services.AddAuthorization(options =>
             ApprovalRoles.Admin, ApprovalRoles.Maintenance, ApprovalRoles.Director));
 
     options.AddPolicy(PolicyNames.DirectorAccess, p =>
-        p.RequireAuthenticatedUser().RequireRole(ApprovalRoles.Director));
+        p.RequireAuthenticatedUser().RequireRole(ApprovalRoles.Admin, ApprovalRoles.Director));
 });
 
 var app = builder.Build();

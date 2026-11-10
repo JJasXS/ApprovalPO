@@ -5,15 +5,21 @@ namespace ApprovalPO.Services.Scan;
 
 public interface IScanPoSubmitStore
 {
-    Task<IReadOnlyList<ScanPoSubmitSummary>> GetSubmitSummariesAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ScanPoSubmitSummary>> GetSubmitSummariesAsync(
+        string docKind = ScanDocKinds.PurchaseOrder,
+        CancellationToken cancellationToken = default);
 
-    Task<ScanPoSubmissionState> GetStateAsync(int docKey, CancellationToken cancellationToken = default);
+    Task<ScanPoSubmissionState> GetStateAsync(
+        int docKey,
+        string docKind = ScanDocKinds.PurchaseOrder,
+        CancellationToken cancellationToken = default);
 
     Task SaveDraftAsync(
         int docKey,
         string poNumber,
         IReadOnlyDictionary<string, int> scanCounts,
         ScanPoAuditActor actor,
+        string docKind = ScanDocKinds.PurchaseOrder,
         CancellationToken cancellationToken = default);
 
     Task MarkSubmittedAsync(
@@ -21,18 +27,21 @@ public interface IScanPoSubmitStore
         string poNumber,
         IReadOnlyDictionary<string, int> scanCounts,
         ScanPoAuditActor actor,
+        string docKind = ScanDocKinds.PurchaseOrder,
         CancellationToken cancellationToken = default);
 
     Task ClearSubmissionAsync(
         int docKey,
         string poNumber,
         ScanPoAuditActor actor,
+        string docKind = ScanDocKinds.PurchaseOrder,
         CancellationToken cancellationToken = default);
 
     Task ClearDraftAsync(
         int docKey,
         string poNumber,
         ScanPoAuditActor actor,
+        string docKind = ScanDocKinds.PurchaseOrder,
         CancellationToken cancellationToken = default);
 }
 
@@ -61,11 +70,14 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
         _path = Path.Combine(dir, $"scan-po-submits-{safeTenant}.json");
     }
 
-    public async Task<IReadOnlyList<ScanPoSubmitSummary>> GetSubmitSummariesAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<ScanPoSubmitSummary>> GetSubmitSummariesAsync(
+        string docKind = ScanDocKinds.PurchaseOrder,
+        CancellationToken cancellationToken = default)
     {
+        var kind = NormalizeKind(docKind);
         var file = await ReadFileAsync(cancellationToken).ConfigureAwait(false);
         return file.Submissions
-            .Where(s => s.DocKey > 0)
+            .Where(s => s.DocKey > 0 && KindEquals(s.DocKind, kind))
             .OrderByDescending(s => s.SubmittedAtUtc)
             .Select(s => new ScanPoSubmitSummary
             {
@@ -78,15 +90,19 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
             .ToList();
     }
 
-    public async Task<ScanPoSubmissionState> GetStateAsync(int docKey, CancellationToken cancellationToken = default)
+    public async Task<ScanPoSubmissionState> GetStateAsync(
+        int docKey,
+        string docKind = ScanDocKinds.PurchaseOrder,
+        CancellationToken cancellationToken = default)
     {
         if (docKey <= 0)
             return new ScanPoSubmissionState { DocKey = docKey };
 
+        var kind = NormalizeKind(docKind);
         var file = await ReadFileAsync(cancellationToken).ConfigureAwait(false);
-        var auditForDoc = AuditForDoc(file, docKey);
+        var auditForDoc = AuditForDoc(file, docKey, kind);
 
-        var sub = file.Submissions.FirstOrDefault(s => s.DocKey == docKey);
+        var sub = file.Submissions.FirstOrDefault(s => s.DocKey == docKey && KindEquals(s.DocKind, kind));
         if (sub is not null)
         {
             return new ScanPoSubmissionState
@@ -102,7 +118,7 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
             };
         }
 
-        var draft = file.Drafts.FirstOrDefault(d => d.DocKey == docKey);
+        var draft = file.Drafts.FirstOrDefault(d => d.DocKey == docKey && KindEquals(d.DocKind, kind));
         if (draft is not null)
         {
             return new ScanPoSubmissionState
@@ -130,11 +146,13 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
         string poNumber,
         IReadOnlyDictionary<string, int> scanCounts,
         ScanPoAuditActor actor,
+        string docKind = ScanDocKinds.PurchaseOrder,
         CancellationToken cancellationToken = default)
     {
         if (docKey <= 0)
             return;
 
+        var kind = NormalizeKind(docKind);
         var counts = NormalizeCounts(scanCounts);
         var po = poNumber?.Trim() ?? "";
 
@@ -142,13 +160,14 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
         try
         {
             var file = await ReadFileUnlockedAsync(cancellationToken).ConfigureAwait(false);
-            if (file.Submissions.Any(s => s.DocKey == docKey))
+            if (file.Submissions.Any(s => s.DocKey == docKey && KindEquals(s.DocKind, kind)))
                 return;
 
-            file.Drafts.RemoveAll(d => d.DocKey == docKey);
+            file.Drafts.RemoveAll(d => d.DocKey == docKey && KindEquals(d.DocKind, kind));
             file.Drafts.Add(new ScanPoDraftRecord
             {
                 DocKey = docKey,
+                DocKind = kind,
                 PoNumber = po,
                 UpdatedAtUtc = DateTime.UtcNow,
                 ScanCounts = counts,
@@ -156,7 +175,7 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
                 UpdatedByName = actor.DisplayName
             });
 
-            AppendAudit(file, docKey, po, "draft_saved", actor, TotalScans(counts));
+            AppendAudit(file, docKey, kind, po, "draft_saved", actor, TotalScans(counts));
             await WriteFileUnlockedAsync(file, cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -170,11 +189,13 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
         string poNumber,
         IReadOnlyDictionary<string, int> scanCounts,
         ScanPoAuditActor actor,
+        string docKind = ScanDocKinds.PurchaseOrder,
         CancellationToken cancellationToken = default)
     {
         if (docKey <= 0)
             return;
 
+        var kind = NormalizeKind(docKind);
         var counts = NormalizeCounts(scanCounts);
         var po = poNumber?.Trim() ?? "";
 
@@ -182,11 +203,12 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
         try
         {
             var file = await ReadFileUnlockedAsync(cancellationToken).ConfigureAwait(false);
-            file.Drafts.RemoveAll(d => d.DocKey == docKey);
-            file.Submissions.RemoveAll(s => s.DocKey == docKey);
+            file.Drafts.RemoveAll(d => d.DocKey == docKey && KindEquals(d.DocKind, kind));
+            file.Submissions.RemoveAll(s => s.DocKey == docKey && KindEquals(s.DocKind, kind));
             file.Submissions.Add(new ScanPoSubmitRecord
             {
                 DocKey = docKey,
+                DocKind = kind,
                 PoNumber = po,
                 SubmittedAtUtc = DateTime.UtcNow,
                 ScanCounts = counts,
@@ -194,7 +216,7 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
                 SubmittedByName = actor.DisplayName
             });
 
-            AppendAudit(file, docKey, po, "submitted", actor, TotalScans(counts));
+            AppendAudit(file, docKey, kind, po, "submitted", actor, TotalScans(counts));
             await WriteFileUnlockedAsync(file, cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -207,23 +229,25 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
         int docKey,
         string poNumber,
         ScanPoAuditActor actor,
+        string docKind = ScanDocKinds.PurchaseOrder,
         CancellationToken cancellationToken = default)
     {
         if (docKey <= 0)
             return;
 
+        var kind = NormalizeKind(docKind);
         var po = poNumber?.Trim() ?? "";
 
         await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var file = await ReadFileUnlockedAsync(cancellationToken).ConfigureAwait(false);
-            var sub = file.Submissions.FirstOrDefault(s => s.DocKey == docKey);
+            var sub = file.Submissions.FirstOrDefault(s => s.DocKey == docKey && KindEquals(s.DocKind, kind));
             if (string.IsNullOrEmpty(po) && sub is not null)
                 po = sub.PoNumber;
 
-            file.Submissions.RemoveAll(s => s.DocKey == docKey);
-            AppendAudit(file, docKey, po, "reopened", actor, sub is null ? null : TotalScans(sub.ScanCounts));
+            file.Submissions.RemoveAll(s => s.DocKey == docKey && KindEquals(s.DocKind, kind));
+            AppendAudit(file, docKey, kind, po, "reopened", actor, sub is null ? null : TotalScans(sub.ScanCounts));
             await WriteFileUnlockedAsync(file, cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -236,26 +260,28 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
         int docKey,
         string poNumber,
         ScanPoAuditActor actor,
+        string docKind = ScanDocKinds.PurchaseOrder,
         CancellationToken cancellationToken = default)
     {
         if (docKey <= 0)
             return;
 
+        var kind = NormalizeKind(docKind);
         var po = poNumber?.Trim() ?? "";
 
         await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var file = await ReadFileUnlockedAsync(cancellationToken).ConfigureAwait(false);
-            var draft = file.Drafts.FirstOrDefault(d => d.DocKey == docKey);
+            var draft = file.Drafts.FirstOrDefault(d => d.DocKey == docKey && KindEquals(d.DocKind, kind));
             if (string.IsNullOrEmpty(po) && draft is not null)
                 po = draft.PoNumber;
 
-            if (file.Submissions.Any(s => s.DocKey == docKey))
+            if (file.Submissions.Any(s => s.DocKey == docKey && KindEquals(s.DocKind, kind)))
                 return;
 
-            file.Drafts.RemoveAll(d => d.DocKey == docKey);
-            AppendAudit(file, docKey, po, "scan_reset", actor, draft is null ? null : TotalScans(draft.ScanCounts));
+            file.Drafts.RemoveAll(d => d.DocKey == docKey && KindEquals(d.DocKind, kind));
+            AppendAudit(file, docKey, kind, po, "scan_reset", actor, draft is null ? null : TotalScans(draft.ScanCounts));
             await WriteFileUnlockedAsync(file, cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -264,9 +290,23 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
         }
     }
 
-    private static List<ScanPoAuditEntry> AuditForDoc(ScanPoSubmitFile file, int docKey) =>
+    private static string NormalizeKind(string? docKind)
+    {
+        var k = (docKind ?? "").Trim().ToUpperInvariant();
+        return string.IsNullOrEmpty(k) ? ScanDocKinds.PurchaseOrder : k;
+    }
+
+    private static bool KindEquals(string? stored, string kind)
+    {
+        var s = (stored ?? "").Trim();
+        if (s.Length == 0)
+            s = ScanDocKinds.PurchaseOrder;
+        return s.Equals(kind, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static List<ScanPoAuditEntry> AuditForDoc(ScanPoSubmitFile file, int docKey, string kind) =>
         file.AuditTrail
-            .Where(e => e.DocKey == docKey)
+            .Where(e => e.DocKey == docKey && KindEquals(e.DocKind, kind))
             .OrderByDescending(e => e.AtUtc)
             .Take(50)
             .ToList();
@@ -274,6 +314,7 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
     private static void AppendAudit(
         ScanPoSubmitFile file,
         int docKey,
+        string docKind,
         string poNumber,
         string action,
         ScanPoAuditActor actor,
@@ -282,6 +323,7 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
         file.AuditTrail.Add(new ScanPoAuditEntry
         {
             DocKey = docKey,
+            DocKind = docKind,
             PoNumber = poNumber,
             Action = action,
             AtUtc = DateTime.UtcNow,
@@ -361,6 +403,7 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
     private sealed class ScanPoSubmitRecord
     {
         public int DocKey { get; set; }
+        public string DocKind { get; set; } = ScanDocKinds.PurchaseOrder;
         public string PoNumber { get; set; } = "";
         public DateTime SubmittedAtUtc { get; set; }
         public Dictionary<string, int> ScanCounts { get; set; } = new();
@@ -371,6 +414,7 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
     private sealed class ScanPoDraftRecord
     {
         public int DocKey { get; set; }
+        public string DocKind { get; set; } = ScanDocKinds.PurchaseOrder;
         public string PoNumber { get; set; } = "";
         public DateTime UpdatedAtUtc { get; set; }
         public Dictionary<string, int> ScanCounts { get; set; } = new();

@@ -16,12 +16,15 @@ public sealed class ModuleNavViewComponent : ViewComponent
     {
         var flags = await _modules.GetDashboardModulesAsync(HttpContext.User).ConfigureAwait(false);
         var goodsHref = flags.ScanPo ? "/ScanPO" : "/ReceivedGoods";
+        var deliveryHref = flags.ScanSo ? "/ScanSO" : "/DeliveryOrders";
         var model = new ModuleNavLinks(
             linkClass,
             flags.PurchaseApproval,
             flags.SalesApproval,
             flags.ScanPo || flags.ReceivedGoods,
-            goodsHref);
+            goodsHref,
+            flags.ScanSo || flags.DeliveryOrders,
+            deliveryHref);
         return View(model);
     }
 }
@@ -31,4 +34,6 @@ public sealed record ModuleNavLinks(
     bool ShowPurchase,
     bool ShowSales,
     bool ShowGoods,
-    string GoodsHref);
+    string GoodsHref,
+    bool ShowDelivery,
+    string DeliveryHref);

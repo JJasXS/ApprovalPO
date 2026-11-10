@@ -4,6 +4,7 @@
     var flags = await Modules.GetDashboardModulesAsync(User);
     var current = (Model ?? "").Trim().ToLowerInvariant();
     var showGoods = flags.ScanPo || flags.ReceivedGoods;
+    var showDelivery = flags.ScanSo || flags.DeliveryOrders;
 }
 <nav class="app-module-nav" aria-label="Modules">
     @if (flags.PurchaseApproval)
@@ -17,5 +18,9 @@
     @if (showGoods)
     {
         <a href="/ScanPO" class="app-module-link@(current == "goods" ? " is-current" : "")">Goods Received</a>
+    }
+    @if (showDelivery)
+    {
+        <a href="/ScanSO" class="app-module-link@(current == "delivery" ? " is-current" : "")">Delivery Orders</a>
     }
 </nav>

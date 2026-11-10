@@ -1,0 +1,133 @@
+@page "/ScanSODetail"
+@model ApprovalPO.Pages.ScanSODetailModel
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@{
+    var csrf = Antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+    ViewData["Title"] = Model.Order?.SoNumber ?? "SO detail";
+    ViewData["AppName"] = "Approval PO";
+    var userName = User.Identity?.Name ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "User";
+    var confirmUrl = Url.Page("/ScanSODetail", null, new { handler = "ConfirmDelivery" })!;
+}
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="~/css/scan.css" asp-append-version="true" />
+
+<div id="scanSoDetailConfig" hidden
+     data-doc-key="@Model.DocKey"
+     data-confirm-url="@confirmUrl"
+     data-csrf="@csrf"></div>
+
+<header class="scan-header">
+    <div class="scan-header-inner">
+        <div class="scan-header-titles">
+            <a asp-page="/ScanSO" class="scan-back-link" title="Back to list">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"/>
+                </svg>
+            </a>
+            <h1 class="scan-header-title">@(Model.Order?.SoNumber ?? "Sales order")</h1>
+        </div>
+        <div class="scan-header-actions">
+            <div class="scan-menu-wrap">
+                <button class="scan-menu-btn" id="scanMenuBtn" type="button" aria-expanded="false" aria-controls="scanMenuPanel" aria-label="Open menu">
+                    <span></span><span></span><span></span>
+                </button>
+                <div id="scanMenuPanel" class="scan-menu-panel" aria-hidden="true">
+                    <div class="scan-menu-user">@userName</div>
+                    @await Component.InvokeAsync("ModuleNav", new { linkClass = "scan-menu-link" })
+                    <form method="post" asp-page="/Logout" class="scan-menu-signout">
+                        <button type="submit" class="scan-menu-link scan-menu-link--danger">Sign out</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<main class="scan-main scan-main--detail">
+    <div class="scan-main-inner">
+        @if (Model.Order is null)
+        {
+            <div class="scan-empty">
+                <p>Sales order not found or not approved.</p>
+                <a asp-page="/ScanSO" class="scan-detail-back-btn">Back to list</a>
+            </div>
+        }
+        else
+        {
+            var o = Model.Order;
+            <div class="scan-detail-meta">
+                <div class="scan-detail-field">
+                    <label>Customer</label>
+                    <span>@(string.IsNullOrWhiteSpace(o.Customer) ? "—" : o.Customer)</span>
+                </div>
+                <div class="scan-detail-field">
+                    <label>Date</label>
+                    <span>@o.OrderDate.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</span>
+                </div>
+                <div class="scan-detail-field">
+                    <label>Delivered</label>
+                    <span>@o.DeliveredPercent% (@o.DeliveredQty.ToString("0.####") / @o.OrderedQty.ToString("0.####"))</span>
+                </div>
+            </div>
+
+            <div class="scan-table-wrap">
+                <table class="scan-table scan-lines-table" id="soDeliveryLines">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>Ordered</th>
+                            <th>Delivered</th>
+                            <th>Left</th>
+                            <th>Deliver now</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var line in Model.Lines)
+                    {
+                        <tr data-line-no="@line.LineNo"
+                            data-item-code="@line.ItemCode"
+                            data-outstanding="@line.OutstandingQty.ToString(System.Globalization.CultureInfo.InvariantCulture)">
+                            <td>
+                                <div class="scan-line-code">@line.ItemCode</div>
+                                <div class="scan-line-desc">@line.Description</div>
+                            </td>
+                            <td>@line.OrderedQty.ToString("0.####")</td>
+                            <td>@line.DeliveredQty.ToString("0.####")</td>
+                            <td>@line.OutstandingQty.ToString("0.####")</td>
+                            <td>
+                                @if (line.OutstandingQty > 0)
+                                {
+                                    <input type="number"
+                                           class="scan-deliver-qty"
+                                           min="0"
+                                           max="@line.OutstandingQty.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                           step="any"
+                                           value=""
+                                           inputmode="decimal"
+                                           aria-label="Deliver qty for @line.ItemCode" />
+                                }
+                                else
+                                {
+                                    <span class="scan-muted">—</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="scan-detail-actions">
+                <button type="button" id="soFillOutstandingBtn" class="scan-secondary-btn">Fill outstanding</button>
+                <button type="button" id="soConfirmDeliveryBtn" class="scan-primary-btn">Confirm delivery</button>
+            </div>
+            <p id="soDeliveryMsg" class="scan-flash" hidden role="status"></p>
+        }
+    </div>
+</main>
+
+<script src="~/js/scan-menu.js" asp-append-version="true"></script>
+<script src="~/js/scan-so-detail.js" asp-append-version="true"></script>

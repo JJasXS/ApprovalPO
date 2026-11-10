@@ -16,13 +16,17 @@ public class DashboardModel : PageModel
     public bool ShowSalesApproval { get; private set; } = true;
     public bool ShowScanPo { get; private set; } = true;
     public bool ShowReceivedGoods { get; private set; } = true;
+    public bool ShowScanSo { get; private set; } = true;
+    public bool ShowDeliveryOrders { get; private set; } = true;
     public bool ShowMaintenanceScanner { get; private set; } = true;
     public IReadOnlyList<DashboardFigure> Figures { get; private set; } = Array.Empty<DashboardFigure>();
 
     public bool HasAnyModule =>
-        ShowPurchaseApproval || ShowSalesApproval || ShowScanPo || ShowReceivedGoods || ShowMaintenanceScanner;
+        ShowPurchaseApproval || ShowSalesApproval || ShowScanPo || ShowReceivedGoods
+        || ShowScanSo || ShowDeliveryOrders || ShowMaintenanceScanner;
 
     public string GoodsHref => ShowScanPo ? "/ScanPO" : "/ReceivedGoods";
+    public string DeliveryHref => ShowScanSo ? "/ScanSO" : "/DeliveryOrders";
 
     public DashboardFigure? Figure(string key) =>
         Figures.FirstOrDefault(f => f.Key == key);
@@ -42,6 +46,8 @@ public class DashboardModel : PageModel
         ShowSalesApproval = modules.SalesApproval;
         ShowScanPo = modules.ScanPo;
         ShowReceivedGoods = modules.ReceivedGoods;
+        ShowScanSo = modules.ScanSo;
+        ShowDeliveryOrders = modules.DeliveryOrders;
         ShowMaintenanceScanner = modules.MaintenanceScanner;
         Figures = overview.Figures;
     }

@@ -126,6 +126,30 @@
             </a>
             }
 
+            <!-- Delivery Orders (SO → DO) -->
+            @if (Model.ShowScanSo || Model.ShowDeliveryOrders)
+            {
+            <a href="@Model.DeliveryHref" class="dash-card dash-card--active">
+                <div class="dash-card-icon-wrap dash-card-icon-wrap--green">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="1" y="3" width="15" height="13" rx="1"/>
+                        <path d="M16 8h4l3 3v5h-7V8z"/>
+                        <circle cx="5.5" cy="18.5" r="2.5"/>
+                        <circle cx="18.5" cy="18.5" r="2.5"/>
+                    </svg>
+                </div>
+                <div class="dash-card-body">
+                    <h2 class="dash-card-title">Delivery Orders</h2>
+                    <p class="dash-card-desc">Deliver approved sales orders and track progress.</p>
+                </div>
+                <div class="dash-card-arrow">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+                    </svg>
+                </div>
+            </a>
+            }
+
             <!-- Maintenance Scanner -->
             @if (Model.ShowMaintenanceScanner)
             {

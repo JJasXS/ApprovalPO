@@ -10,6 +10,6 @@ public static class PolicyNames
     /// <summary>Admin OR Maintenance OR Director role required (the Maintenance Scanner module).</summary>
     public const string MaintenanceAccess = "MaintenanceAccess";
 
-    /// <summary>Director (UDF_ISDIRECTOR) required for Purchase Order Approval pages.</summary>
+    /// <summary>Admin (UDF_APPROLE) or Director (UDF_ISDIRECTOR) for Purchase Order Approval pages.</summary>
     public const string DirectorAccess = "DirectorAccess";
 }

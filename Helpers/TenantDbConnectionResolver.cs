@@ -555,6 +555,8 @@ public sealed class TenantDbConnectionResolver
                         SalesApproval = parsed?.SalesApproval,
                         ScanPo = parsed?.ScanPo,
                         ReceivedGoods = parsed?.ReceivedGoods,
+                        ScanSo = parsed?.ScanSo,
+                        DeliveryOrders = parsed?.DeliveryOrders,
                         MaintenanceScanner = enable,
                     };
                 }
@@ -701,6 +703,8 @@ public sealed class TenantDbConnectionResolver
             SalesApproval = ReadBool("salesApproval", "approvalSO", "approvalSo"),
             ScanPo = ReadBool("scanPO", "scanPo"),
             ReceivedGoods = ReadBool("receivedGoods", "receivedGood"),
+            ScanSo = ReadBool("scanSO", "scanSo"),
+            DeliveryOrders = ReadBool("deliveryOrders", "deliveryOrder"),
             MaintenanceScanner = ReadBool("maintenanceScanner", "stockScanner", "scanner"),
         };
 
@@ -708,6 +712,8 @@ public sealed class TenantDbConnectionResolver
                && modules.SalesApproval is null
                && modules.ScanPo is null
                && modules.ReceivedGoods is null
+               && modules.ScanSo is null
+               && modules.DeliveryOrders is null
                && modules.MaintenanceScanner is null
             ? null
             : modules;

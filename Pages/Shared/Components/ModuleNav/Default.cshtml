@@ -6,6 +6,9 @@
     var goodsOn = path.StartsWith("/ScanPO", StringComparison.OrdinalIgnoreCase)
         || path.StartsWith("/ReceivedGoods", StringComparison.OrdinalIgnoreCase)
         || path.StartsWith("/ScanReceived", StringComparison.OrdinalIgnoreCase);
+    var deliveryOn = path.StartsWith("/ScanSO", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWith("/DeliveryOrders", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWith("/ScanDelivered", StringComparison.OrdinalIgnoreCase);
 }
 @if (Model.ShowPurchase)
 {
@@ -18,4 +21,8 @@
 @if (Model.ShowGoods)
 {
     <a href="@Model.GoodsHref" class="@Model.LinkClass" aria-current="@(goodsOn ? "page" : null)">Goods Received</a>
+}
+@if (Model.ShowDelivery)
+{
+    <a href="@Model.DeliveryHref" class="@Model.LinkClass" aria-current="@(deliveryOn ? "page" : null)">Delivery Orders</a>
 }

@@ -45,6 +45,8 @@ public sealed class TenantDashboardModules
     public bool? SalesApproval { get; init; }
     public bool? ScanPo { get; init; }
     public bool? ReceivedGoods { get; init; }
+    public bool? ScanSo { get; init; }
+    public bool? DeliveryOrders { get; init; }
     /// <summary>Stock-item maintenance scanning (ported from ProAccScanner). Falls back to tenant <c>features.enableScanner</c> when this is null.</summary>
     public bool? MaintenanceScanner { get; init; }
 }

@@ -50,7 +50,7 @@ public class ScanPOModel : PageModel
     private async Task<IReadOnlyList<ScanPoOrderListItem>> LoadScanListItemsAsync(CancellationToken cancellationToken)
     {
         var orders = await _scanQuery.ListApprovedAsync(cancellationToken).ConfigureAwait(false);
-        var submitSummaries = await _scanSubmits.GetSubmitSummariesAsync(cancellationToken).ConfigureAwait(false);
+        var submitSummaries = await _scanSubmits.GetSubmitSummariesAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
         var submitByDoc = submitSummaries.ToDictionary(s => s.DocKey);
 
         return orders

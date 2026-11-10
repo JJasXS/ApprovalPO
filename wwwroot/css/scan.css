@@ -2293,3 +2293,80 @@ button.scan-status-bar:focus-visible {
   .scan-qr-btn span { display: none; }
   .scan-qr-btn { padding: 9px 12px; }
 }
+
+/* SO delivery progress */
+.scan-seg {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+.scan-seg-btn {
+  flex: 1;
+  min-height: 36px;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.scan-seg-btn.is-active {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #fff;
+}
+.scan-progress {
+  position: relative;
+  min-width: 88px;
+  height: 22px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+.scan-progress-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, #14b8a6, #0d9488);
+}
+.scan-progress-label {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 11px;
+  font-weight: 700;
+  color: #0f172a;
+}
+.scan-deliver-qty {
+  width: 88px;
+  min-height: 34px;
+  padding: 4px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font: inherit;
+}
+.scan-primary-btn,
+.scan-secondary-btn {
+  min-height: 42px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.scan-primary-btn {
+  color: #fff;
+  background: #0f766e;
+  border: 1px solid #0f766e;
+}
+.scan-secondary-btn {
+  color: #0f766e;
+  background: #ecfdf5;
+  border: 1px solid #99f6e4;
+}
+.scan-muted { color: #94a3b8; }

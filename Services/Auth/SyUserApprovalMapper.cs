@@ -66,6 +66,14 @@ public static class SyUserApprovalMapper
         user.IsInRole(ApprovalRoles.Director)
         || string.Equals(user.FindFirst(ApprovalClaimTypes.IsDirector)?.Value, "1", StringComparison.Ordinal);
 
+    /// <summary>Admin or Director may enter the Purchase Order Approval UI.</summary>
+    public static bool CanAccessApprovalSystem(ClaimsPrincipal user) =>
+        user.IsInRole(ApprovalRoles.Admin) || IsDirector(user);
+
+    /// <summary>True when SY_USER maps to Admin (non-Maintenance UDF_APPROLE) or is a director.</summary>
+    public static bool CanAccessApprovalSystem(SyUserEmailLookupResult sy) =>
+        sy.IsDirector || MapRoles(sy.AppRole).Contains(ApprovalRoles.Admin, StringComparer.Ordinal);
+
     public static bool CanApproveFromClaims(ClaimsPrincipal user) =>
         ReadDecimalClaim(user, ApprovalClaimTypes.AppFrom) is not null
         && ReadDecimalClaim(user, ApprovalClaimTypes.AppTo) is not null;

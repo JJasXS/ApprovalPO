@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using ApprovalPO.Helpers;
 using ApprovalPO.Models;
 using ApprovalPO.Services;
@@ -67,7 +67,7 @@ public class ScanPODetailModel : PageModel
         if (Order is null)
             return Page();
 
-        var state = await _scanSubmits.GetStateAsync(DocKey, cancellationToken).ConfigureAwait(false);
+        var state = await _scanSubmits.GetStateAsync(DocKey, cancellationToken: cancellationToken).ConfigureAwait(false);
         IsScanSubmitted = state.IsSubmitted;
         ViewData["ScanSubmitted"] = IsScanSubmitted;
 
@@ -160,7 +160,7 @@ public class ScanPODetailModel : PageModel
         if (docKey <= 0)
             return new JsonResult(new ScanPoSubmissionState(), ApprovalJson.CamelCase);
 
-        var state = await _scanSubmits.GetStateAsync(docKey, cancellationToken).ConfigureAwait(false);
+        var state = await _scanSubmits.GetStateAsync(docKey, cancellationToken: cancellationToken).ConfigureAwait(false);
         return new JsonResult(state, ApprovalJson.CamelCase);
     }
 
@@ -175,7 +175,7 @@ public class ScanPODetailModel : PageModel
 
         var counts = TryParseScanCounts(scanCountsJson);
         var actor = ScanPoAuditHelper.FromUser(User);
-        await _scanSubmits.SaveDraftAsync(docKey, order.PoNumber, counts, actor, cancellationToken).ConfigureAwait(false);
+        await _scanSubmits.SaveDraftAsync(docKey, order.PoNumber, counts, actor, cancellationToken: cancellationToken).ConfigureAwait(false);
         return new JsonResult(new { ok = true }, ApprovalJson.CamelCase);
     }
 
@@ -228,7 +228,7 @@ public class ScanPODetailModel : PageModel
             return RedirectToPage("/ScanPODetail", new { docKey });
         }
 
-        await _scanSubmits.MarkSubmittedAsync(docKey, order.PoNumber, counts, actor, cancellationToken).ConfigureAwait(false);
+        await _scanSubmits.MarkSubmittedAsync(docKey, order.PoNumber, counts, actor, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var by = string.IsNullOrWhiteSpace(actor.DisplayName) ? actor.Email : actor.DisplayName;
         TempData["ScanSubmitMessage"] = outcome.Kind == GrTransferOutcomeKind.Created
@@ -246,7 +246,7 @@ public class ScanPODetailModel : PageModel
         var poNumber = order?.PoNumber ?? "";
 
         var actor = ScanPoAuditHelper.FromUser(User);
-        await _scanSubmits.ClearSubmissionAsync(docKey, poNumber, actor, cancellationToken).ConfigureAwait(false);
+        await _scanSubmits.ClearSubmissionAsync(docKey, poNumber, actor, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var by = string.IsNullOrWhiteSpace(actor.DisplayName) ? actor.Email : actor.DisplayName;
         TempData["ScanSubmitMessage"] = string.IsNullOrWhiteSpace(by)
@@ -264,12 +264,12 @@ public class ScanPODetailModel : PageModel
         if (order is null)
             return new JsonResult(new { ok = false, error = "PO not found." }, ApprovalJson.CamelCase);
 
-        var state = await _scanSubmits.GetStateAsync(docKey, cancellationToken).ConfigureAwait(false);
+        var state = await _scanSubmits.GetStateAsync(docKey, cancellationToken: cancellationToken).ConfigureAwait(false);
         if (state.IsSubmitted)
             return new JsonResult(new { ok = false, error = "PO is submitted. Reopen to scan again." }, ApprovalJson.CamelCase);
 
         var actor = ScanPoAuditHelper.FromUser(User);
-        await _scanSubmits.ClearDraftAsync(docKey, order.PoNumber, actor, cancellationToken).ConfigureAwait(false);
+        await _scanSubmits.ClearDraftAsync(docKey, order.PoNumber, actor, cancellationToken: cancellationToken).ConfigureAwait(false);
         return new JsonResult(new { ok = true }, ApprovalJson.CamelCase);
     }
 
@@ -459,7 +459,7 @@ public class ScanPODetailModel : PageModel
             return new JsonResult(new { ok = false, mode = "gr", error = outcome.Error ?? "Transfer was rejected by SQL." }, ApprovalJson.CamelCase);
 
         // Created in SQL, or recorded locally (no SQL API on this company): mark the scan submitted locally.
-        await _scanSubmits.MarkSubmittedAsync(docKey, order.PoNumber, counts, actor, cancellationToken).ConfigureAwait(false);
+        await _scanSubmits.MarkSubmittedAsync(docKey, order.PoNumber, counts, actor, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (outcome.Kind == GrTransferOutcomeKind.Created)
         {

@@ -123,7 +123,7 @@ public static class FirebirdTableWriter
 
     private static readonly string[] GlobalDtlKeyTables =
     [
-        "PH_GRDTL", "PH_PODTL", "PH_PQDTL", "SL_SODTL", "SL_IVDTL", "PH_CNDTL", "PH_DNDTL",
+        "PH_GRDTL", "PH_PODTL", "PH_PQDTL", "SL_SODTL", "SL_DODTL", "SL_IVDTL", "PH_CNDTL", "PH_DNDTL",
         "SL_QTDTL", "PH_IVDTL", "PH_PDDTL", "ST_ITEM_TPLDTL"
     ];
 

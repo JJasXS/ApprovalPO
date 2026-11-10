@@ -1,0 +1,16 @@
+@model string
+@{
+    var active = (Model ?? "scan").Trim().ToLowerInvariant();
+    var scanOn = active == "scan";
+    var deliveredOn = active == "delivered";
+}
+<nav class="scan-module-tabs" role="tablist" aria-label="Scan sales order or delivery orders">
+    <a asp-page="/ScanSO"
+       class="scan-module-tab@(scanOn ? " is-active" : "")"
+       role="tab"
+       aria-selected="@(scanOn ? "true" : "false")">Scan Sales Order</a>
+    <a asp-page="/DeliveryOrders"
+       class="scan-module-tab@(deliveredOn ? " is-active" : "")"
+       role="tab"
+       aria-selected="@(deliveredOn ? "true" : "false")">Delivery Orders</a>
+</nav>
