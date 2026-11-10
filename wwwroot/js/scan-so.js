@@ -44,13 +44,23 @@
     });
   };
 
+  const fmtQty = (n) => {
+    const v = Number(n);
+    if (!Number.isFinite(v)) return '0';
+    return String(Math.round(v * 10000) / 10000);
+  };
+
   const progressHtml = (o) => {
     const pct = Math.max(0, Math.min(100, Number(o.deliveredPercent) || 0));
+    const delivered = fmtQty(o.deliveredQty);
+    const ordered = fmtQty(o.orderedQty);
+    const ratio = `${delivered}/${ordered}`;
+    // Fully delivered tab: Progress shows Complete (with x/x so full qty is clear).
     const label = o.deliveryLabel === 'Delivered'
-      ? 'Delivered'
+      ? `Complete · ${ratio}`
       : o.deliveryLabel === 'Partial'
-        ? `${pct}%`
-        : 'Not delivered';
+        ? `${pct}% · ${ratio}`
+        : `0/${ordered}`;
     return `<div class="scan-progress"><div class="scan-progress-bar" style="width:${pct}%"></div><span class="scan-progress-label">${esc(label)}</span></div>`;
   };
 

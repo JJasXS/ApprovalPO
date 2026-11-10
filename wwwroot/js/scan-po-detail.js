@@ -178,7 +178,14 @@
   };
 
   const updateRemainingMeta = () => {
-    if (statusMeta) statusMeta.textContent = `${remainingLines()} remaining`;
+    if (!statusMeta) return;
+    const deliveredRatio = (statusMeta.dataset.deliveredRatio || '').trim();
+    if (deliveredRatio) {
+      // SO detail: always keep Delivered x/x visible.
+      statusMeta.textContent = `${deliveredRatio} · ${remainingLines()} left`;
+      return;
+    }
+    statusMeta.textContent = `${remainingLines()} remaining`;
   };
 
   const setStatusBar = (state, mainText, metaText, opts = {}) => {

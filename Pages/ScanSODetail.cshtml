@@ -90,6 +90,10 @@
                     <label>Customer</label>
                     <span>@(string.IsNullOrWhiteSpace(o.Customer) ? "—" : o.Customer)</span>
                 </div>
+                <div class="scan-detail-field">
+                    <label>Delivered</label>
+                    <span>@o.DeliveredQty.ToString("0.####")/@o.OrderedQty.ToString("0.####")@(o.OutstandingQty <= 0 && o.OrderedQty > 0 ? " · Complete" : "")</span>
+                </div>
                 <div class="scan-detail-field scan-detail-field--manual">
                     <label>Item code</label>
                     <div class="scan-manual-row">
@@ -132,7 +136,13 @@
                                 <button type="submit" class="scan-detail-submit-btn" id="scanDetailSubmitBtn">Submit</button>
                             </form>
                         }
-                        <span id="scanStatusMeta" class="scan-meta-remaining">@(scanSubmitted ? "0" : Model.Lines.Count(l => l.OutstandingQty > 0).ToString()) remaining</span>
+                        @{
+                            var deliveredRatioLabel =
+                                $"Delivered {o.DeliveredQty.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)}/{o.OrderedQty.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)}";
+                        }
+                        <span id="scanStatusMeta"
+                              class="scan-meta-remaining"
+                              data-delivered-ratio="@deliveredRatioLabel">@deliveredRatioLabel</span>
                     </div>
                 </div>
             </div>
@@ -182,7 +192,7 @@
                                 <th class="scan-col-desc">Description</th>
                                 <th class="scan-col-project">Project</th>
                                 <th class="num">Left</th>
-                                <th class="num scan-th-received">Deliver</th>
+                                <th class="num scan-th-received">Delivered</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -191,12 +201,16 @@
                             {
                                 n++;
                                 var leftQty = line.OutstandingQty;
+                                var orderedTxt = line.OrderedQty.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture);
+                                var deliveredTxt = line.DeliveredQty.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture);
+                                var ratioTxt = $"{deliveredTxt}/{orderedTxt}";
                                 var fullCode = line.ItemCode ?? "";
                                 var shortCode = fullCode.Length > 10 ? "…" + fullCode[^10..] : fullCode;
                                 <tr data-line-no="@line.LineNo"
                                     data-item-code="@fullCode"
                                     data-project="@line.Project"
-                                    data-order-qty="@leftQty.ToString(System.Globalization.CultureInfo.InvariantCulture)">
+                                    data-order-qty="@leftQty.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                    class="@(leftQty <= 0 && line.OrderedQty > 0 ? "scan-line-received" : null)">
                                     <td class="scan-line-num">@n</td>
                                     <td class="scan-line-code" title="@fullCode">
                                         <span class="scan-line-code-short">@shortCode</span>
@@ -204,15 +218,12 @@
                                     </td>
                                     <td class="scan-col-desc">@line.Description</td>
                                     <td class="scan-line-project scan-col-project">@(string.IsNullOrWhiteSpace(line.Project) || line.Project == "----" ? "—" : line.Project)</td>
-                                    <td class="num scan-line-order-qty">@leftQty.ToString("N2")</td>
+                                    <td class="num scan-line-order-qty">@leftQty.ToString("0.####")</td>
                                     <td class="num scan-line-status">
-                                        @if (scanSubmitted || leftQty <= 0)
+                                        <span class="scan-delivered-ratio" title="Delivered / Ordered">@ratioTxt</span>
+                                        @if (!scanSubmitted && leftQty > 0)
                                         {
-                                            <span class="scan-received-readonly" data-received-display>@(leftQty <= 0 ? "—" : "")</span>
-                                        }
-                                        else
-                                        {
-                                            <input type="number" class="scan-received-input" min="0" max="@leftQty.ToString(System.Globalization.CultureInfo.InvariantCulture)" step="0.01" inputmode="decimal" placeholder="0" aria-label="Quantity to deliver for @fullCode" />
+                                            <input type="number" class="scan-received-input" min="0" max="@leftQty.ToString(System.Globalization.CultureInfo.InvariantCulture)" step="0.01" inputmode="decimal" placeholder="now" aria-label="Quantity to deliver now for @fullCode" />
                                         }
                                     </td>
                                 </tr>

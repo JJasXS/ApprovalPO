@@ -1044,6 +1044,30 @@ body.scan-menu-open { overflow: hidden; }
   color: #0f172a;
 }
 
+.scan-delivered-ratio {
+  display: block;
+  min-width: 2.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+  white-space: nowrap;
+  margin-bottom: 4px;
+}
+
+.scan-line-status .scan-received-input {
+  width: 100%;
+  max-width: 4.5rem;
+  margin-left: auto;
+}
+
+.scan-line-delivered-hint {
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
 .scan-lines-table tr.scan-line-received .scan-received-input,
 .scan-lines-table tr.scan-line-partial .scan-received-input,
 .scan-lines-table tr.scan-line-over .scan-received-input {
@@ -1232,6 +1256,10 @@ body.scan-menu-open { overflow: hidden; }
   padding-left: 8px;
 }
 .scan-detail-scan-row .scan-detail-submit-btn.is-busy {
+  pointer-events: none;
+  opacity: 0.85;
+}
+
 .scan-detail-field--scan-only .scan-detail-scan-row {
   flex-wrap: wrap;
   gap: 8px;
