@@ -1,24 +1,32 @@
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.Extensions.Hosting.WindowsServices;
 
 namespace ApprovalPO.Hosting;
 
 /// <summary>
-/// Non-Development: bind HTTP on configured ports and HTTPS when a certificate is present
-/// (PEM pair or PFX next to the published app). Development keeps using launchSettings URLs.
+/// Bind HTTP on configured public ports and HTTPS when a certificate is present
+/// (PEM pair or PFX next to the published app).
+/// Skipped for interactive Development (<c>dotnet run</c> / VS) so launchSettings URLs stay.
+/// Still applied when <c>APP_ENV=dev</c> under the Windows Service (or
+/// <c>APPROVALPO_USE_PUBLIC_PORTS=true</c>) so Cloudflare keeps hitting 2095/2096.
 /// Use <c>Approval:BindLoopbackOnly</c> true for localhost-only (127.0.0.1 / ::1); false for LAN (0.0.0.0).
 /// </summary>
 internal static class ProductionKestrelEndpoints
 {
     public static void Apply(WebApplicationBuilder builder)
     {
-        if (builder.Environment.IsDevelopment())
+        if (!ShouldBindPublicPorts(builder))
             return;
 
         var httpPort = ApprovalKestrelPorts.Http(builder.Configuration);
         var httpsPort = ApprovalKestrelPorts.Https(builder.Configuration);
         var loopbackOnly = builder.Configuration.GetValue("Approval:BindLoopbackOnly", false);
         var where = loopbackOnly ? "localhost (loopback only)" : "all interfaces (LAN)";
+
+        // Avoid default http://localhost:5000 when Development + Windows Service.
+        builder.WebHost.UseSetting(WebHostDefaults.ServerUrlsKey, string.Empty);
+        builder.WebHost.PreferHostingUrls(false);
 
         builder.WebHost.ConfigureKestrel((_, opts) =>
         {
@@ -35,6 +43,21 @@ internal static class ProductionKestrelEndpoints
             ListenHttps(opts, httpsPort, loopbackOnly, cert);
             Console.WriteLine($"[Kestrel] HTTP on {where}, port {httpPort}; HTTPS on {where}, port {httpsPort}.");
         });
+    }
+
+    /// <summary>Public ports for Production, Windows Service (even with APP_ENV=dev), or explicit override.</summary>
+    private static bool ShouldBindPublicPorts(WebApplicationBuilder builder)
+    {
+        if (!builder.Environment.IsDevelopment())
+            return true;
+
+        if (string.Equals(
+                Environment.GetEnvironmentVariable("APPROVALPO_USE_PUBLIC_PORTS"),
+                "true",
+                StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return WindowsServiceHelpers.IsWindowsService();
     }
 
     private static void ListenHttp(KestrelServerOptions opts, int port, bool loopbackOnly)
