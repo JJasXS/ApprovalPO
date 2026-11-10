@@ -1862,6 +1862,12 @@ button.scan-status-bar:focus-visible {
   background: #fecaca;
 }
 
+.scan-lines-table tbody tr.scan-line-over .scan-received-input,
+.scan-lines-table tbody tr.scan-line-over .scan-received-readonly {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
 .scan-lines-table td.num {
   text-align: right;
   font-variant-numeric: tabular-nums;

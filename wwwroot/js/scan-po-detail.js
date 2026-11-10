@@ -1042,15 +1042,29 @@
     return true;
   };
 
+  const applyQtyRowClasses = (row, qty, max) => {
+    const n = Number(qty);
+    const po = Number(max);
+    const over = Number.isFinite(n) && po > 0 && n > po;
+    const positive = Number.isFinite(n) && n > 0;
+    row.classList.toggle('scan-line-over', over);
+    row.classList.toggle('scan-line-received', !over && positive);
+    row.classList.toggle('scan-line-partial', !over && positive && po > 0 && n < po);
+  };
+
   const syncRowVisuals = (row) => {
-    const qty = receivedQty(row);
     const po = orderQty(row);
     const input = row.querySelector('.scan-received-input');
     const readonly = row.querySelector('.scan-received-readonly');
+    let qty = receivedQty(row);
 
-    row.classList.toggle('scan-line-received', qty > 0);
-    row.classList.toggle('scan-line-partial', qty > 0 && po > 0 && qty < po);
-    row.classList.toggle('scan-line-over', po > 0 && qty > po);
+    // While typing, use the raw field value so over-Left can show red before clamp.
+    if (input && document.activeElement === input) {
+      const raw = Number(String(input.value || '').trim());
+      if (Number.isFinite(raw)) qty = raw;
+    }
+
+    applyQtyRowClasses(row, qty, po);
 
     if (input && document.activeElement !== input) {
       input.value = qty > 0 ? String(qty) : '';
@@ -1833,14 +1847,24 @@
       if (!input || readOnly) return;
       const row = input.closest('tr[data-item-code]');
       if (!row) return;
-      const qty = normalizeReceived(row, input.value);
-      row.classList.toggle('scan-line-partial', qty > 0 && orderQty(row) > 0 && qty < orderQty(row));
-      row.classList.toggle('scan-line-received', qty > 0);
+      const max = orderQty(row);
+      const typed = Number(String(input.value || '').trim());
+      const over = Number.isFinite(typed) && max > 0 && typed > max;
+      applyQtyRowClasses(row, Number.isFinite(typed) ? typed : 0, max);
       clearTimeout(receivedInputTimer);
       receivedInputTimer = setTimeout(() => {
         const raw = input.value.trim();
-        if (!raw) clearReceived(row, { quiet: true });
-        else setReceivedQty(row, raw, { skipHistory: true });
+        if (!raw) {
+          clearReceived(row, { quiet: true });
+          return;
+        }
+        const n = Number(raw);
+        // Keep red over-Left state while the typed value is still too high.
+        if (Number.isFinite(n) && max > 0 && n > max) {
+          applyQtyRowClasses(row, n, max);
+          return;
+        }
+        setReceivedQty(row, raw, { skipHistory: true });
       }, 400);
     });
   }
