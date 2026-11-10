@@ -443,8 +443,10 @@
                     otpInputs[i].value = d[i];
                     otpInputs[i].classList.add('is-filled');
                 }
+                tryAutoVerify();
+            } else {
+                otpInputs[0]?.focus();
             }
-            otpInputs[0]?.focus();
         } catch {
             if (fromResend) {
                 msgOtp('Network error.');

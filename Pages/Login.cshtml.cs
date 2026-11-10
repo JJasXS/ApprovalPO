@@ -125,20 +125,30 @@ public class LoginModel : PageModel
             _logger.LogInformation("{OtpDebugLine}", line);
         }
 
-        var (sent, err) = await _emailSender.SendOtpAsync(LoginId, otpPlain, cancellationToken).ConfigureAwait(false);
-        if (!sent)
+        // Dev (APP_ENV=dev): skip Gmail; browser auto-fills OTP from devOtp.
+        // Prod (APP_ENV=prod): email only — no OTP in the response.
+        var sent = false;
+        string? err = null;
+        if (_env.IsDevelopment())
         {
-            var allowWithoutEmail = AllowOtpWithoutEmailDelivery();
-            if (!allowWithoutEmail)
+            _logger.LogInformation("Dev mode: OTP for {LoginId} returned to browser (SMTP skipped).", LoginId);
+        }
+        else
+        {
+            (sent, err) = await _emailSender.SendOtpAsync(LoginId, otpPlain, cancellationToken).ConfigureAwait(false);
+            if (!sent)
             {
-                _logger.LogWarning("OTP email not sent for {LoginId}: {Error}", LoginId, err);
-                return new JsonResult(new { success = false, message = err ?? "Could not send email. Try again later." });
-            }
+                if (!AllowOtpWithoutEmailDelivery())
+                {
+                    _logger.LogWarning("OTP email not sent for {LoginId}: {Error}", LoginId, err);
+                    return new JsonResult(new { success = false, message = err ?? "Could not send email. Try again later." });
+                }
 
-            _logger.LogInformation(
-                "OTP email not sent for {LoginId} (login continues; fix SMTP when ready): {Error}",
-                LoginId,
-                err);
+                _logger.LogInformation(
+                    "OTP email not sent for {LoginId} (emergency bypass on): {Error}",
+                    LoginId,
+                    err);
+            }
         }
 
         var resendCooldown = _approval.OtpResendCooldownSeconds > 0 ? _approval.OtpResendCooldownSeconds : 30;
@@ -155,9 +165,9 @@ public class LoginModel : PageModel
         if (_env.IsDevelopment())
         {
             payload["devOtp"] = otpPlain;
-            payload["message"] = (sent ? "OTP sent. " : "") + $"Development: OTP is {otpPlain}";
+            payload["message"] = "Development: OTP auto-filled (email skipped).";
         }
-        else if (!sent && !_env.IsDevelopment())
+        else if (!sent && AllowOtpWithoutEmailDelivery())
         {
             payload["devOtp"] = otpPlain;
             payload["message"] =

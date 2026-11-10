@@ -104,6 +104,20 @@ public sealed class TenantDbConnectionResolver
             if (string.IsNullOrWhiteSpace(dbPath) || string.IsNullOrWhiteSpace(dbHost) || string.IsNullOrWhiteSpace(dbCharset) || dbPort <= 0 || dbDialect <= 0)
                 throw new InvalidOperationException("Tenant JSON missing required database fields.");
 
+            // Optional local override (dev/LAN): FIREBIRD_DB_PATH / TenantBootstrap:FirebirdDatabasePath
+            // wins over AWS tenant-config database.dbPath so this host can point at another .FDB.
+            var pathOverride = (_configuration["TenantBootstrap:FirebirdDatabasePath"]
+                ?? Environment.GetEnvironmentVariable("FIREBIRD_DB_PATH")
+                ?? Environment.GetEnvironmentVariable("DB_PATH"))?.Trim();
+            if (!string.IsNullOrWhiteSpace(pathOverride))
+                dbPath = pathOverride;
+
+            var hostOverride = (_configuration["TenantBootstrap:FirebirdHost"]
+                ?? Environment.GetEnvironmentVariable("FIREBIRD_DB_HOST")
+                ?? Environment.GetEnvironmentVariable("DB_HOST"))?.Trim();
+            if (!string.IsNullOrWhiteSpace(hostOverride))
+                dbHost = hostOverride;
+
             var (fbUser, fbPass) = await ResolveFirebirdCredentialsAsync(
                 db, fbUserFallback, fbPassFallback, cancellationToken).ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(fbUser))

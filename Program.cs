@@ -13,7 +13,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.StaticFiles;
 using System.Security.Cryptography.X509Certificates;
 
-// Optional .env: TENANT_CODE, FIREBIRD_PASSWORD (see .env.example). Other defaults in appsettings.json.
+// Optional .env: TENANT_CODE, FIREBIRD_PASSWORD, APP_ENV (see .env.example). Other defaults in appsettings.json.
 // Prefer project folder .env before publish/bin — dotnet exec runs from repo root but BaseDirectory is bin\.
 foreach (var envPath in new[]
          {
@@ -27,6 +27,9 @@ foreach (var envPath in new[]
         break;
     }
 }
+
+// APP_ENV=dev|prod in .env → ASPNETCORE_ENVIRONMENT (must run before CreateBuilder).
+ApplyAppEnvFromDotEnv();
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseWindowsService();
@@ -44,6 +47,18 @@ var fbPassFromEnv = (Environment.GetEnvironmentVariable("FIREBIRD_PASSWORD")
     ?? Environment.GetEnvironmentVariable("TenantBootstrap__FirebirdPassword"))?.Trim();
 if (!string.IsNullOrEmpty(fbPassFromEnv))
     bootstrapFromEnv["TenantBootstrap:FirebirdPassword"] = fbPassFromEnv;
+
+var fbPathFromEnv = (Environment.GetEnvironmentVariable("FIREBIRD_DB_PATH")
+    ?? Environment.GetEnvironmentVariable("DB_PATH")
+    ?? Environment.GetEnvironmentVariable("TenantBootstrap__FirebirdDatabasePath"))?.Trim();
+if (!string.IsNullOrEmpty(fbPathFromEnv))
+    bootstrapFromEnv["TenantBootstrap:FirebirdDatabasePath"] = fbPathFromEnv;
+
+var fbHostFromEnv = (Environment.GetEnvironmentVariable("FIREBIRD_DB_HOST")
+    ?? Environment.GetEnvironmentVariable("DB_HOST")
+    ?? Environment.GetEnvironmentVariable("TenantBootstrap__FirebirdHost"))?.Trim();
+if (!string.IsNullOrEmpty(fbHostFromEnv))
+    bootstrapFromEnv["TenantBootstrap:FirebirdHost"] = fbHostFromEnv;
 
 var apiUrlFromEnv = (Environment.GetEnvironmentVariable("TENANT_BOOTSTRAP_API_URL")
     ?? Environment.GetEnvironmentVariable("TenantBootstrap__AwsApiBaseUrl"))?.Trim();
@@ -382,3 +397,28 @@ async Task WarmupTenantConnectionStringAsync()
 // Fire warmup after the server is already listening — does not block startup.
 app.Lifetime.ApplicationStarted.Register(() => _ = Task.Run(WarmupTenantConnectionStringAsync));
 app.Run();
+
+/// <summary>
+/// Maps <c>APP_ENV=dev|prod</c> (or development|production) from .env onto
+/// <c>ASPNETCORE_ENVIRONMENT</c> before <see cref="WebApplication.CreateBuilder"/>.
+/// Direct <c>ASPNETCORE_ENVIRONMENT</c> in .env still wins when <c>APP_ENV</c> is unset.
+/// </summary>
+static void ApplyAppEnvFromDotEnv()
+{
+    var appEnv = (Environment.GetEnvironmentVariable("APP_ENV")
+                  ?? Environment.GetEnvironmentVariable("APP_MODE")
+                  ?? "").Trim();
+    if (string.IsNullOrEmpty(appEnv))
+        return;
+
+    var normalized = appEnv.ToLowerInvariant() switch
+    {
+        "dev" or "development" => "Development",
+        "prod" or "production" => "Production",
+        _ => null
+    };
+    if (normalized is null)
+        return;
+
+    Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", normalized);
+}
