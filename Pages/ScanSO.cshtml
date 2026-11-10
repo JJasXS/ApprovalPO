@@ -5,6 +5,8 @@
     ViewData["AppName"] = "Approval PO";
     var ordersJsonUrl = Url.Page("/ScanSO", null, new { handler = "OrdersJson" })!;
     var detailPageUrl = "/ScanSODetail";
+    var outstandingOn = Model.ListFilter == ApprovalPO.Helpers.ScanSoListFilter.Outstanding;
+    var fullyDeliveredOn = Model.ListFilter == ApprovalPO.Helpers.ScanSoListFilter.FullyDelivered;
     var userName = User.Identity?.Name ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "User";
 }
 
@@ -15,7 +17,8 @@
 
 <div id="scanSoPageConfig" hidden
      data-orders-json-url="@ordersJsonUrl"
-     data-detail-page-url="@detailPageUrl"></div>
+     data-detail-page-url="@detailPageUrl"
+     data-initial-filter="@Model.ListFilter"></div>
 
 <header class="scan-header">
     <div class="scan-header-inner">
@@ -61,11 +64,22 @@
         <div class="scan-search-bar">
             <input id="scanSoSearch" class="scan-search-input" type="search" placeholder="Search SO #…" autocomplete="off" />
             <span id="scanSoResultCount" class="scan-result-count"></span>
-        </div>
-
-        <div class="scan-seg" role="tablist" aria-label="Delivery progress">
-            <button type="button" class="scan-seg-btn is-active" data-filter="outstanding" role="tab" aria-selected="true">Outstanding</button>
-            <button type="button" class="scan-seg-btn" data-filter="delivered" role="tab" aria-selected="false">Fully delivered</button>
+            <div class="scan-filter-kebab">
+                <button type="button"
+                        id="scanFilterKebabBtn"
+                        class="scan-filter-kebab-btn"
+                        aria-expanded="false"
+                        aria-controls="scanFilterKebabPanel"
+                        aria-haspopup="menu"
+                        aria-label="@(fullyDeliveredOn ? "Fully delivered" : "Outstanding")"
+                        title="Filter delivery progress">
+                    <span></span><span></span><span></span>
+                </button>
+                <div id="scanFilterKebabPanel" class="scan-filter-kebab-panel" hidden role="menu" aria-label="Delivery progress">
+                    <button type="button" role="menuitem" class="scan-filter-item@(outstandingOn ? " is-active" : "")" data-filter="outstanding" aria-selected="@(outstandingOn ? "true" : "false")">Outstanding</button>
+                    <button type="button" role="menuitem" class="scan-filter-item@(fullyDeliveredOn ? " is-active" : "")" data-filter="fully-delivered" aria-selected="@(fullyDeliveredOn ? "true" : "false")">Fully delivered</button>
+                </div>
+            </div>
         </div>
 
         <div class="scan-table-wrap">

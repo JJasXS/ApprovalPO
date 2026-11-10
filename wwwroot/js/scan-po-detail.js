@@ -159,9 +159,9 @@
   const remainingLines = () =>
     lineRows().filter((row) => {
       const po = orderQty(row);
-      const got = receivedQty(row);
-      if (po > 0) return got < po;
-      return got <= 0;
+      // Outstanding 0 = fully delivered line — not remaining.
+      if (!(po > 0)) return false;
+      return receivedQty(row) < po;
     }).length;
 
   const scrollRowIntoView = (row) => {
@@ -180,12 +180,20 @@
   const updateRemainingMeta = () => {
     if (!statusMeta) return;
     const deliveredRatio = (statusMeta.dataset.deliveredRatio || '').trim();
+    const left = remainingLines();
     if (deliveredRatio) {
-      // SO detail: always keep Delivered x/x visible.
-      statusMeta.textContent = `${deliveredRatio} · ${remainingLines()} left`;
+      // Fully delivered: no red status text — lines are green instead.
+      if (left <= 0) {
+        statusMeta.hidden = true;
+        statusMeta.textContent = '';
+        return;
+      }
+      statusMeta.hidden = false;
+      statusMeta.textContent = `${deliveredRatio} · ${left} left`;
       return;
     }
-    statusMeta.textContent = `${remainingLines()} remaining`;
+    statusMeta.hidden = false;
+    statusMeta.textContent = `${left} remaining`;
   };
 
   const setStatusBar = (state, mainText, metaText, opts = {}) => {
@@ -1049,20 +1057,37 @@
     return true;
   };
 
+  const lineFullyDelivered = (row) => {
+    const ratio = (row?.dataset?.deliveredRatio || '').trim();
+    const parts = ratio.split('/');
+    if (parts.length !== 2) return false;
+    const delivered = Number(parts[0]);
+    const ordered = Number(parts[1]);
+    return Number.isFinite(delivered) && Number.isFinite(ordered) && ordered > 0 && delivered >= ordered;
+  };
+
   const applyQtyRowClasses = (row, qty, max) => {
     const n = Number(qty);
     const po = Number(max);
-    const over = Number.isFinite(n) && po > 0 && n > po;
+    // Left is 0 on a finished line. Keep it green instead of treating the ratio as over-received.
+    if (!(po > 0)) {
+      row.classList.toggle('scan-line-received', lineFullyDelivered(row));
+      row.classList.remove('scan-line-over', 'scan-line-partial');
+      return;
+    }
+    const over = Number.isFinite(n) && n > po;
     const positive = Number.isFinite(n) && n > 0;
     row.classList.toggle('scan-line-over', over);
     row.classList.toggle('scan-line-received', !over && positive);
-    row.classList.toggle('scan-line-partial', !over && positive && po > 0 && n < po);
+    row.classList.toggle('scan-line-partial', !over && positive && n < po);
   };
 
   const syncRowVisuals = (row) => {
     const po = orderQty(row);
     const input = row.querySelector('.scan-received-input');
     const readonly = row.querySelector('.scan-received-readonly');
+    const ratioEl = row.querySelector('.scan-delivered-ratio');
+    const fixedRatio = (row.dataset.deliveredRatio || '').trim();
     let qty = receivedQty(row);
 
     // While typing, use the raw field value so over-Left can show red before clamp.
@@ -1076,7 +1101,10 @@
     if (input && document.activeElement !== input) {
       input.value = qty > 0 ? String(qty) : '';
     }
-    if (readonly) {
+    // Keep Delivered max/max (or delivered/ordered) — never replace with a dash.
+    if (ratioEl && fixedRatio) {
+      ratioEl.textContent = fixedRatio;
+    } else if (readonly) {
       readonly.textContent = qty > 0 ? String(qty) : '—';
     }
   };

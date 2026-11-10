@@ -6,6 +6,9 @@
     ViewData["Title"] = Model.Order?.SoNumber ?? "SO detail";
     ViewData["AppName"] = "Approval PO";
     var userName = User.Identity?.Name ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "User";
+    var listFilter = string.Equals(Model.Order?.DeliveryLabel, "Delivered", StringComparison.OrdinalIgnoreCase)
+        ? ApprovalPO.Helpers.ScanSoListFilter.FullyDelivered
+        : ApprovalPO.Helpers.ScanSoListFilter.Outstanding;
 }
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -16,7 +19,7 @@
 <header class="scan-header">
     <div class="scan-header-inner">
         <div class="scan-header-titles">
-            <a asp-page="/ScanSO" class="scan-back-link" title="Back to list">
+            <a asp-page="/ScanSO" asp-route-filter="@listFilter" class="scan-back-link" title="Back to list">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="15 18 9 12 15 6"/>
                 </svg>
@@ -46,7 +49,7 @@
         {
             <div class="scan-empty">
                 <p>Sales order not found or not approved.</p>
-                <a asp-page="/ScanSO" class="scan-detail-back-btn">Back to list</a>
+                <a asp-page="/ScanSO" asp-route-filter="@listFilter" class="scan-detail-back-btn">Back to list</a>
             </div>
         }
         else
@@ -92,7 +95,12 @@
                 </div>
                 <div class="scan-detail-field">
                     <label>Delivered</label>
-                    <span>@o.DeliveredQty.ToString("0.####")/@o.OrderedQty.ToString("0.####")@(o.OutstandingQty <= 0 && o.OrderedQty > 0 ? " · Complete" : "")</span>
+                    @{
+                        var headerDelivered = o.OutstandingQty <= 0 && o.OrderedQty > 0 ? o.OrderedQty : o.DeliveredQty;
+                        var headerRatio =
+                            $"{headerDelivered.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)}/{o.OrderedQty.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)}";
+                    }
+                    <span>@headerRatio@(o.OutstandingQty <= 0 && o.OrderedQty > 0 ? " · Complete" : "")</span>
                 </div>
                 <div class="scan-detail-field scan-detail-field--manual">
                     <label>Item code</label>
@@ -137,12 +145,13 @@
                             </form>
                         }
                         @{
-                            var deliveredRatioLabel =
-                                $"Delivered {o.DeliveredQty.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)}/{o.OrderedQty.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)}";
+                            var deliveredRatioLabel = $"Delivered {headerRatio}";
+                            var soFullyDelivered = o.OutstandingQty <= 0 && o.OrderedQty > 0;
                         }
                         <span id="scanStatusMeta"
                               class="scan-meta-remaining"
-                              data-delivered-ratio="@deliveredRatioLabel">@deliveredRatioLabel</span>
+                              data-delivered-ratio="@deliveredRatioLabel"
+                              hidden="@soFullyDelivered">@(soFullyDelivered ? "" : $"{deliveredRatioLabel} · {Model.Lines.Count(l => l.OutstandingQty > 0)} left")</span>
                     </div>
                 </div>
             </div>
@@ -202,15 +211,21 @@
                                 n++;
                                 var leftQty = line.OutstandingQty;
                                 var orderedTxt = line.OrderedQty.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture);
-                                var deliveredTxt = line.DeliveredQty.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture);
+                                // Fully delivered lines always show max/max (e.g. 12/12), not a dash.
+                                var shownDelivered = leftQty <= 0 && line.OrderedQty > 0
+                                    ? line.OrderedQty
+                                    : line.DeliveredQty;
+                                var deliveredTxt = shownDelivered.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture);
                                 var ratioTxt = $"{deliveredTxt}/{orderedTxt}";
+                                var lineFullyDelivered = leftQty <= 0 && line.OrderedQty > 0;
                                 var fullCode = line.ItemCode ?? "";
                                 var shortCode = fullCode.Length > 10 ? "…" + fullCode[^10..] : fullCode;
                                 <tr data-line-no="@line.LineNo"
                                     data-item-code="@fullCode"
                                     data-project="@line.Project"
                                     data-order-qty="@leftQty.ToString(System.Globalization.CultureInfo.InvariantCulture)"
-                                    class="@(leftQty <= 0 && line.OrderedQty > 0 ? "scan-line-received" : null)">
+                                    data-delivered-ratio="@ratioTxt"
+                                    class="@(lineFullyDelivered ? "scan-line-received" : null)">
                                     <td class="scan-line-num">@n</td>
                                     <td class="scan-line-code" title="@fullCode">
                                         <span class="scan-line-code-short">@shortCode</span>
@@ -220,7 +235,7 @@
                                     <td class="scan-line-project scan-col-project">@(string.IsNullOrWhiteSpace(line.Project) || line.Project == "----" ? "—" : line.Project)</td>
                                     <td class="num scan-line-order-qty">@leftQty.ToString("0.####")</td>
                                     <td class="num scan-line-status">
-                                        <span class="scan-delivered-ratio" title="Delivered / Ordered">@ratioTxt</span>
+                                        <span class="scan-delivered-ratio" data-fixed-ratio="1" title="Delivered / Ordered">@ratioTxt</span>
                                         @if (!scanSubmitted && leftQty > 0)
                                         {
                                             <input type="number" class="scan-received-input" min="0" max="@leftQty.ToString(System.Globalization.CultureInfo.InvariantCulture)" step="0.01" inputmode="decimal" placeholder="now" aria-label="Quantity to deliver now for @fullCode" />

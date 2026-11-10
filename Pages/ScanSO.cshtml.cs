@@ -15,11 +15,18 @@ public class ScanSOModel : PageModel
         _delivery = delivery;
     }
 
-    public async Task<IActionResult> OnGetAsync(string? tab, CancellationToken cancellationToken)
+    public string ListFilter { get; private set; } = ScanSoListFilter.Outstanding;
+
+    public IActionResult OnGet(string? tab, string? filter)
     {
         if (string.Equals(tab, "delivered", StringComparison.OrdinalIgnoreCase))
             return RedirectToPage("/DeliveryOrders");
 
+        var canonical = ScanSoListFilter.Canonical(filter);
+        if (!ScanSoListFilter.IsCanonical(filter))
+            return RedirectToPage("/ScanSO", new { filter = canonical });
+
+        ListFilter = canonical;
         return Page();
     }
 

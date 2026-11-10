@@ -8,9 +8,19 @@
   const ordersUrl = cfg.dataset.ordersJsonUrl || '';
   const detailPageUrl = (cfg.dataset.detailPageUrl || '/ScanSODetail').replace(/\/$/, '');
 
+  const FILTER_OUTSTANDING = 'outstanding';
+  const FILTER_FULL = 'fully-delivered';
+
+  const canonicalFilter = (raw) => {
+    const value = String(raw || '').trim().toLowerCase().replace(/_/g, '-');
+    if (value === FILTER_FULL || value === 'fullydelivered' || value === 'delivered' || value === 'complete')
+      return FILTER_FULL;
+    return FILTER_OUTSTANDING;
+  };
+
   let allOrders = [];
   let searchTerm = '';
-  let filter = 'outstanding';
+  let filter = canonicalFilter(cfg.dataset.initialFilter);
 
   const tbody = document.getElementById('scanSoTableBody');
   const emptyState = document.getElementById('scanSoEmpty');
@@ -30,8 +40,34 @@
 
   const matchesFilter = (o) => {
     const label = (o.deliveryLabel || '').toLowerCase();
-    if (filter === 'delivered') return label === 'delivered';
+    if (filter === FILTER_FULL) return label === 'delivered';
     return label !== 'delivered';
+  };
+
+  const filterBtn = document.getElementById('scanFilterKebabBtn');
+  const filterPanel = document.getElementById('scanFilterKebabPanel');
+  const filterLabel = () => (filter === FILTER_FULL ? 'Fully delivered' : 'Outstanding');
+
+  const setFilterPanelOpen = (open) => {
+    if (!filterBtn || !filterPanel) return;
+    filterPanel.hidden = !open;
+    filterBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+
+  const syncFilterButtons = () => {
+    document.querySelectorAll('.scan-filter-item').forEach((b) => {
+      const on = (b.dataset.filter || '') === filter;
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    if (filterBtn) filterBtn.setAttribute('aria-label', filterLabel());
+  };
+
+  const writeFilterParam = () => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('filter') === filter) return;
+    url.searchParams.set('filter', filter);
+    history.replaceState({ filter }, '', url);
   };
 
   const getFiltered = () => {
@@ -55,9 +91,8 @@
     const delivered = fmtQty(o.deliveredQty);
     const ordered = fmtQty(o.orderedQty);
     const ratio = `${delivered}/${ordered}`;
-    // Fully delivered tab: Progress shows Complete (with x/x so full qty is clear).
     const label = o.deliveryLabel === 'Delivered'
-      ? `Complete · ${ratio}`
+      ? 'Complete'
       : o.deliveryLabel === 'Partial'
         ? `${pct}% · ${ratio}`
         : `0/${ordered}`;
@@ -106,16 +141,33 @@
     render();
   });
 
-  document.querySelectorAll('.scan-seg-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.scan-seg-btn').forEach((b) => {
-        b.classList.toggle('is-active', b === btn);
-        b.setAttribute('aria-selected', b === btn ? 'true' : 'false');
-      });
-      filter = btn.dataset.filter || 'outstanding';
-      render();
-    });
+  filterBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setFilterPanelOpen(Boolean(filterPanel?.hidden));
   });
+
+  filterPanel?.addEventListener('click', (e) => {
+    const item = e.target.closest('.scan-filter-item');
+    if (!item) return;
+    filter = canonicalFilter(item.dataset.filter);
+    syncFilterButtons();
+    writeFilterParam();
+    render();
+    setFilterPanelOpen(false);
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!filterPanel || filterPanel.hidden) return;
+    if (filterBtn?.contains(e.target) || filterPanel.contains(e.target)) return;
+    setFilterPanelOpen(false);
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') setFilterPanelOpen(false);
+  });
+
+  syncFilterButtons();
+  writeFilterParam();
 
   fetch(ordersUrl, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
     .then((r) => r.json())
