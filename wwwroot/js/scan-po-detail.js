@@ -17,8 +17,15 @@
   const docKey = String(cfg.dataset.docKey || new URLSearchParams(location.search).get('docKey') || '');
   const poNumber = cfg.dataset.poNumber || '';
   const isSubmitted = cfg.dataset.isSubmitted === 'true';
-  const storageKey = docKey ? `approvalpo-scan-lines-v2-${docKey}` : '';
-  const offlineKey = docKey ? `approvalpo-scan-offline-${docKey}` : '';
+  const docShort = cfg.dataset.docShort || 'PO';
+  const docNoun = cfg.dataset.docNoun || 'purchase order';
+  const transferNoun = cfg.dataset.transferNoun || 'Goods Received';
+  const qtyVerb = cfg.dataset.qtyVerb || 'Received';
+  const submitBusyLabel = cfg.dataset.submitBusyLabel || 'Creating GR...';
+  const storagePrefix = cfg.dataset.storagePrefix || 'approvalpo-scan-lines-v2';
+  const offlinePrefix = cfg.dataset.offlinePrefix || 'approvalpo-scan-offline';
+  const storageKey = docKey ? `${storagePrefix}-${docKey}` : '';
+  const offlineKey = docKey ? `${offlinePrefix}-${docKey}` : '';
   const requireAllLines = cfg.dataset.requireAllLines !== 'false';
   const csrfToken = cfg.dataset.csrfToken || '';
 
@@ -293,7 +300,7 @@
       tdCode.textContent = shortCode(code);
       const tdNote = document.createElement('td');
       tdNote.className = 'scan-unmatched-note';
-      tdNote.textContent = 'Not on this PO';
+      tdNote.textContent = `Not on this ${docShort}`;
       tr.append(tdN, tdCode, tdNote);
       unmatchedBody.appendChild(tr);
     }
@@ -436,9 +443,9 @@
 
     if (lineAlreadyComplete(row)) {
       if (!opts.silent && !opts.fromQueue) {
-        showToast(`Already received: ${display}`, 'warn');
+        showToast(`Already ${qtyVerb.toLowerCase()}: ${display}`, 'warn');
         playAlreadyFeedback();
-        setStatusBar('already', 'Already received', display);
+        setStatusBar('already', `Already ${qtyVerb.toLowerCase()}`, display);
       }
       return { ok: true, already: true, row, qty: receivedQty(row) };
     }
@@ -459,7 +466,7 @@
       const proj = projectNorm(row.dataset.project || opts.project || '');
       const locPart = proj ? ` @ ${proj}` : '';
       showToast(`Matched: ${display}${locPart} — received ${qty}`, 'ok');
-      setStatusBar('ok', `Received ${qty}`, display);
+      setStatusBar('ok', `${qtyVerb} ${qty}`, display);
     } else {
       refreshIdleStatusBar();
     }
@@ -535,13 +542,13 @@
       }
       if (hits.length > 0) {
         if (!opts.silent && !opts.fromQueue) {
-          showToast(`Matched ${hits.length} PO line(s) from QR`, 'ok');
+          showToast(`Matched ${hits.length} ${docShort} line(s) from QR`, 'ok');
           setStatusBar('ok', `Matched ${hits.length}`, `${remainingLines()} remaining`);
         }
         return { handled: true, ok: true };
       }
       if (!opts.silent) {
-        showScanError('not_on_po', 'None of the QR lines match this PO.');
+        showScanError('not_on_po', `None of the QR lines match this ${docShort}.`);
       }
       return { handled: true, ok: false };
     }
@@ -558,7 +565,7 @@
     const row = pickScanRow(local.itemCode, proj, null);
     if (!row) {
       if (!opts.silent) {
-        showScanError('not_on_po', `${shortCode(local.itemCode)} @ ${proj} is not on this PO.`);
+        showScanError('not_on_po', `${shortCode(local.itemCode)} @ ${proj} is not on this ${docShort}.`);
       }
       return { handled: true, ok: false };
     }
@@ -621,9 +628,9 @@
     const hint = document.querySelector('.scan-session-hint');
     if (!hint) return;
     const who = formatActor(state.draftUpdatedByName, state.draftUpdatedByEmail);
-    const undoTip = ' Clear Received on a line to remove it.';
+    const undoTip = ` Clear ${qtyVerb} on a line to remove it.`;
     if (!who || who === 'Unknown user') {
-      hint.textContent = `Draft saves to server; submit creates Goods Received from Received qty.${undoTip}`;
+      hint.textContent = `Draft saves to server; submit creates ${transferNoun} from ${qtyVerb} qty.${undoTip}`;
       return;
     }
     const when = state.draftUpdatedAtUtc
@@ -662,16 +669,16 @@
         return d || 'This item appears on multiple project lines. Scan a QR that includes P1, P2, etc.';
       case 'not_on_po':
         if (/^[A-Fa-f0-9]{16,}$/i.test(d))
-          return `Item ${shortCode(d)} is not on this purchase order.`;
-        return d || 'That item / project is not on this purchase order.';
+          return `Item ${shortCode(d)} is not on this ${docNoun}.`;
+        return d || `That item / project is not on this ${docNoun}.`;
       case 'wrong_po':
-        return d || 'This QR belongs to a different purchase order. Open the correct PO and scan again.';
+        return d || `This QR belongs to a different ${docNoun}. Open the correct ${docShort} and scan again.`;
       case 'po_not_found':
-        return 'This purchase order is not found or not approved.';
+        return `This ${docNoun} is not found or not approved.`;
       case 'empty_scan':
         return 'Empty scan — try again.';
       case 'already_submitted':
-        return 'This PO is already submitted. Reopen to scan again.';
+        return `This ${docShort} is already submitted. Reopen to scan again.`;
       default:
         return d || 'Scan could not be processed.';
     }
@@ -681,7 +688,7 @@
     showToast(messageForScanError(code, detail), 'error');
     const label =
       code === 'not_on_po'
-        ? 'Not on PO'
+        ? `Not on ${docShort}`
         : code === 'need_project'
           ? 'Need project'
           : code === 'already_submitted'
@@ -805,8 +812,8 @@
     const withScan = linesWithScan();
     const msg =
       lines > 0
-        ? `Clear all received qty for this PO (${withScan} of ${lines} lines)?`
-        : 'Clear all received qty for this PO?';
+        ? `Clear all ${qtyVerb.toLowerCase()} qty for this ${docShort} (${withScan} of ${lines} lines)?`
+        : `Clear all ${qtyVerb.toLowerCase()} qty for this ${docShort}?`;
     const confirmed = await confirmAction(msg, 'Reset');
     if (!confirmed) return;
 
@@ -846,7 +853,7 @@
       }
     }
 
-    showToast('Received quantities cleared.', 'ok');
+    showToast(`${qtyVerb} quantities cleared.`, 'ok');
   };
 
   const scheduleDraftSave = () => {
@@ -1266,11 +1273,11 @@
     if (multi) {
       if (matched > 0) {
         showToast(
-          `Matched ${matched} tag(s)` + (missed ? `, ${missed} not on PO` : ''),
+          `Matched ${matched} tag(s)` + (missed ? `, ${missed} not on ${docShort}` : ''),
           missed ? 'warn' : 'ok'
         );
       } else if (missed > 0) {
-        showToast(`${missed} tag(s) not on this PO`, 'warn');
+        showToast(`${missed} tag(s) not on this ${docShort}`, 'warn');
       }
     }
 
@@ -1509,8 +1516,8 @@
       playMatchFeedback();
       showToast(
         `Matched ${matched} tag(s)` +
-          (already ? `, ${already} already received` : '') +
-          (missed ? `, ${missed} not on PO` : ''),
+          (already ? `, ${already} already ${qtyVerb.toLowerCase()}` : '') +
+          (missed ? `, ${missed} not on ${docShort}` : ''),
         missed ? 'warn' : 'ok'
       );
       setStatusBar('ok', `Matched ${matched}`, `${remainingLines()} remaining`);
@@ -1518,13 +1525,13 @@
     }
     if (already > 0 && missed === 0) {
       playAlreadyFeedback();
-      showToast(`Already received (${already})`, 'warn');
-      setStatusBar('already', 'Already received', `${remainingLines()} remaining`);
+      showToast(`Already ${qtyVerb.toLowerCase()} (${already})`, 'warn');
+      setStatusBar('already', `Already ${qtyVerb.toLowerCase()}`, `${remainingLines()} remaining`);
       return true;
     }
     if (missed) {
-      showToast(`${missed} tag(s) not on this PO`, 'warn');
-      setStatusBar('error', 'Not on PO', `${remainingLines()} remaining`);
+      showToast(`${missed} tag(s) not on this ${docShort}`, 'warn');
+      setStatusBar('error', `Not on ${docShort}`, `${remainingLines()} remaining`);
       return false;
     }
     showScanError('not_on_po', 'No tags matched');
@@ -1745,14 +1752,14 @@
 
       if (total < 1) {
         e.preventDefault();
-        showToast('Enter received qty for at least one line before submit.', 'error');
+        showToast(`Enter ${qtyVerb.toLowerCase()} qty for at least one line before submit.`, 'error');
         return;
       }
 
-      let msg = `Create Goods Received with ${total} total qty across ${withScan} line(s)?`;
+      let msg = `Create ${transferNoun} with ${total} total qty across ${withScan} line(s)?`;
       if (requireAllLines && withScan < lines) {
         msg =
-          `Only ${withScan} of ${lines} lines have received qty.\n\nSubmit anyway?`;
+          `Only ${withScan} of ${lines} lines have ${qtyVerb.toLowerCase()} qty.\n\nSubmit anyway?`;
       }
 
       if (submitForm.dataset.confirmed !== '1') {
@@ -1770,7 +1777,7 @@
       submitInProgress = true;
       submitBtn.disabled = true;
       submitBtn.classList.add('is-busy');
-      submitBtn.textContent = 'Creating GR...';
+      submitBtn.textContent = submitBusyLabel;
 
       if (storageKey) {
         try {

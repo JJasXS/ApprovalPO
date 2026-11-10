@@ -89,6 +89,7 @@ public sealed class SalesOrderDeliveryQueryService : ISalesOrderDeliveryQuery
               COALESCE(D.{dtlKeyCol}, 0) AS DTLKEY,
               TRIM(COALESCE(D.ITEMCODE, '')) AS ITEMCODE,
               TRIM(COALESCE(CAST(D.DESCRIPTION AS VARCHAR(800)), '')) AS DESCRIPTION,
+              TRIM(COALESCE(D.PROJECT, '')) AS PROJECT,
               COALESCE(D.SUOMQTY, 0) AS SUOMQTY,
               COALESCE(D.SQTY, 0) AS SQTY,
               COALESCE(D.QTY, 0) AS QTY,
@@ -106,7 +107,7 @@ public sealed class SalesOrderDeliveryQueryService : ISalesOrderDeliveryQuery
         await using var cmd = new FbCommand(sql, conn);
         cmd.Parameters.Add("@DocKey", FbDbType.Integer).Value = docKey;
 
-        var rawLines = new List<(int LineNo, int DtlKey, string ItemCode, string Description, decimal Ordered, bool? Transferable)>();
+        var rawLines = new List<(int LineNo, int DtlKey, string ItemCode, string Description, string Project, decimal Ordered, bool? Transferable)>();
         await using (var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
         {
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -120,6 +121,7 @@ public sealed class SalesOrderDeliveryQueryService : ISalesOrderDeliveryQuery
                     FirebirdDataReaderHelper.GetInt32(reader, "DTLKEY"),
                     (FirebirdDataReaderHelper.GetString(reader, "ITEMCODE") ?? "").Trim(),
                     (FirebirdDataReaderHelper.GetString(reader, "DESCRIPTION") ?? "").Trim(),
+                    (FirebirdDataReaderHelper.GetString(reader, "PROJECT") ?? "").Trim(),
                     FirebirdRowHelpers.Money(ordered),
                     FirebirdDataReaderHelper.GetBoolNullable(reader, "TRANSFERABLEINT", "TRANSFERABLE")));
             }
@@ -150,6 +152,7 @@ public sealed class SalesOrderDeliveryQueryService : ISalesOrderDeliveryQuery
                     DtlKey = l.DtlKey,
                     ItemCode = l.ItemCode,
                     Description = l.Description,
+                    Project = l.Project,
                     OrderedQty = l.Ordered,
                     DeliveredQty = delivered,
                     OutstandingQty = outstanding,
