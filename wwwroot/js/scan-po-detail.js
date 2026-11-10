@@ -261,11 +261,59 @@
     for (const code of codes || []) wedgeDebugLog(`EPC: ${code}`);
   };
 
+  const itemCodesEqual = (a, b) => {
+    if (typeof ScanResolve.codesEqual === 'function')
+      return ScanResolve.codesEqual(a, b);
+    if (ScanResolve.codes && typeof ScanResolve.codes.equal === 'function')
+      return ScanResolve.codes.equal(a, b);
+    return String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
+  };
+
+  /**
+   * Resolve typed/scanned text against document lines before space-splitting.
+   * Stock codes like "AL 6061-T6 …" contain spaces; RFID dumps are hex EPCs.
+   * @returns {string|null|'ambiguous'}
+   */
+  const resolveTypedItemCode = (raw) => {
+    const text = String(raw || '').trim();
+    if (!text) return null;
+
+    const exact = lineRows().find((r) => itemCodesEqual(text, r.dataset.itemCode));
+    if (exact) return String(exact.dataset.itemCode || '').trim();
+
+    const q = text.toLowerCase();
+    const prefixHits = lineRows().filter((r) => {
+      const ic = String(r.dataset.itemCode || '').trim().toLowerCase();
+      return ic.length > 0 && (ic === q || ic.startsWith(q));
+    });
+    if (prefixHits.length === 1)
+      return String(prefixHits[0].dataset.itemCode || '').trim();
+    if (prefixHits.length > 1) return 'ambiguous';
+    return null;
+  };
+
+  const looksLikeHexEpcDump = (raw) => {
+    const text = String(raw || '').trim();
+    if (!text) return false;
+    if (/^[A-Fa-f0-9]+$/.test(text) && text.length >= 24) return true;
+    const parts = text.split(/[\s,|\n\r]+/).filter(Boolean);
+    return parts.length > 0 && parts.every((p) => /^[A-Fa-f0-9]{24}$/.test(p));
+  };
+
   const splitWedgeCodes = (raw) => {
+    const text = String(raw || '').trim();
+    if (!text) return [];
+
+    const resolved = resolveTypedItemCode(text);
+    if (resolved && resolved !== 'ambiguous') return [resolved];
+    // Ambiguous / incomplete stock-code typing: keep whole string (do not split on spaces).
+    if (resolved === 'ambiguous') return [text];
+    if (/\s/.test(text) && !looksLikeHexEpcDump(text) && !text.includes(';'))
+      return [text];
+
     if (typeof ScanResolve.splitInventoryCodes === 'function')
       return ScanResolve.splitInventoryCodes(raw);
-    const t = String(raw || '').trim();
-    return t ? [t] : [];
+    return [text];
   };
 
   const recordHidFlush = (text, reason) => {
@@ -347,13 +395,21 @@
   const isBufferCompleteForIdleFlush = (text) => {
     const t = String(text || '').trim();
     if (t.length < 3) return false;
-    if (t.includes(';') || /[\s,|]/.test(t)) return true;
+    if (t.includes(';')) return true;
+    // Comma/pipe/newline dumps from guns — not ordinary spaces inside stock codes.
+    if (/[,|\n\r]/.test(t)) return true;
     if (/^[A-Fa-f0-9]+$/.test(t)) {
       // Complete single EPC (24) or glued multiples of 24.
       return t.length >= 24 && t.length % 24 === 0;
     }
+    // Spaces: only auto-flush when every token is a 24-char hex EPC (RFID burst).
+    // Stock codes like "AL 6061-T6 …" must wait for OK / Enter.
+    if (/\s/.test(t)) return looksLikeHexEpcDump(t);
+    // Unique exact/prefix match against a document line — safe to idle-accept.
+    const resolved = resolveTypedItemCode(t);
+    if (resolved && resolved !== 'ambiguous') return true;
     // Non-hex stock codes: require a pause after a substantial token (Enter is preferred).
-    return t.length >= 8;
+    return t.length >= 8 && resolved !== 'ambiguous';
   };
 
   // Declared early; assigned after processScan / enqueueWedgeCodes exist.
@@ -1243,10 +1299,39 @@
 
   /** Item code path: split multi dumps, processScan each (restores working RFID), keep focus. */
   processManualCodes = async (raw) => {
-    const parts = typeof ScanResolve.splitInventoryCodes === 'function'
-      ? ScanResolve.splitInventoryCodes(raw)
-      : [String(raw || '').trim()].filter(Boolean);
+    const text = String(raw || '').trim();
+    if (!text) return false;
+
+    const typed = resolveTypedItemCode(text);
+    if (typed === 'ambiguous') {
+      showToast('Several lines match — type more of the item code, then tap OK.', 'warn');
+      if (manualInput) {
+        manualInput.value = text;
+        try { manualInput.focus(); } catch (_) { /* ignore */ }
+      }
+      return false;
+    }
+
+    const parts = typed
+      ? [typed]
+      : splitWedgeCodes(text);
     if (!parts.length) return false;
+
+    // Incomplete stock-code typing (spaces, not an EPC dump): don't spam "Not on this SO".
+    if (
+      !typed &&
+      /\s/.test(text) &&
+      !looksLikeHexEpcDump(text) &&
+      parts.length === 1 &&
+      parts[0] === text
+    ) {
+      showToast('No matching item code. Keep typing the full code, then tap OK.', 'warn');
+      if (manualInput) {
+        manualInput.value = text;
+        try { manualInput.focus(); } catch (_) { /* ignore */ }
+      }
+      return false;
+    }
 
     const multi = parts.length > 1;
     let matched = 0;
@@ -1579,7 +1664,27 @@
   };
 
   enqueueWedgeCodes = (raw) => {
-    const parts = splitWedgeCodes(raw);
+    const text = String(raw || '').trim();
+    if (!text) return;
+
+    const typed = resolveTypedItemCode(text);
+    if (typed === 'ambiguous') {
+      showToast('Several lines match — type more of the item code, then tap OK.', 'warn');
+      if (manualInput) manualInput.value = text;
+      return;
+    }
+    // Don't treat partial stock-code typing as a failed RFID tag.
+    if (
+      !typed &&
+      /\s/.test(text) &&
+      !looksLikeHexEpcDump(text) &&
+      !text.includes(';')
+    ) {
+      if (manualInput) manualInput.value = text;
+      return;
+    }
+
+    const parts = typed ? [typed] : splitWedgeCodes(text);
     if (!parts.length) return;
 
     // Hold-trigger / Listening: match unique EPCs immediately — do not wait 2s.
