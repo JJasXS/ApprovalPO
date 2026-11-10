@@ -1473,9 +1473,8 @@
     // Manual item field owns typing (Listening capture + normal Item code).
     if (el.id === 'scanManualCode' || el.classList.contains('scan-manual-input'))
       return true;
-    // While inventory listening, allow page-wide capture even from Received qty.
-    if (inventoryArmed && el.classList.contains('scan-received-input'))
-      return false;
+    // Deliver / Received qty fields must always accept typed amounts (partial transfer).
+    // Do not steal keystrokes into the RFID wedge buffer while these are focused.
     if (el.classList.contains('scan-received-input'))
       return true;
     return true;
@@ -1741,12 +1740,17 @@
     }
 
     if (e.key.length !== 1) return;
-    if (inventoryArmed && e.target?.classList?.contains('scan-received-input'))
-      e.preventDefault();
     wedgeBuf += e.key;
     clearTimeout(wedgeTimer);
     wedgeTimer = setTimeout(flushWedgeBuffer, wedgeIdleMs());
     refreshWedgeDebug();
+  });
+
+  // Tap Deliver/Received qty → stop Item-code steal-back so partial qty can be typed.
+  document.addEventListener('focusin', (e) => {
+    const qtyInput = e.target?.closest?.('.scan-received-input');
+    if (!qtyInput || readOnly) return;
+    stopCaptureRefocus();
   });
 
   if (wedgeDebugEl && new URLSearchParams(location.search).get('scanDebug') === '1') {
