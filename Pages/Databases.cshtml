@@ -149,19 +149,6 @@
                         <button type="button" class="db-link" id="dbBrowseServer">Or browse server folders…</button>
                         <span asp-validation-for="Input.FbPath" class="db-field-error"></span>
                     </div>
-                    <div class="db-field-row db-field-row--login">
-                        <div class="db-field">
-                            <label asp-for="Input.FbUser"></label>
-                            <input asp-for="Input.FbUser" class="db-input" autocomplete="username" placeholder="SYSDBA" />
-                            <span asp-validation-for="Input.FbUser" class="db-field-error"></span>
-                        </div>
-                        <div class="db-field">
-                            <label asp-for="Input.FbPassword"></label>
-                            <input asp-for="Input.FbPassword" class="db-input" type="password" autocomplete="new-password" placeholder="@(string.IsNullOrWhiteSpace(Model.Input.Id) ? "masterkey" : "Leave blank to keep / masterkey")"/>
-                            <span asp-validation-for="Input.FbPassword" class="db-field-error"></span>
-                        </div>
-                    </div>
-                    <p class="db-form-hint">Default Firebird login is <strong>SYSDBA</strong> / <strong>masterkey</strong>.</p>
                     <div class="db-actions">
                         <button type="submit" formaction="?handler=Save" class="db-btn db-btn--primary">Save to Secrets Manager</button>
                         <button type="submit" formaction="?handler=Test" class="db-btn db-btn--secondary" formnovalidate>Test connection</button>
