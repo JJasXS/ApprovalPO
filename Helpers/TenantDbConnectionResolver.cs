@@ -5,7 +5,9 @@ using System.Text.Json;
 using Amazon.SecretsManager;
 using Amazon.SecretsManager.Model;
 using ApprovalPO.Models;
+using ApprovalPO.Services.Databases;
 using FirebirdSql.Data.FirebirdClient;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.WebUtilities;
 
 namespace ApprovalPO.Helpers;
@@ -28,16 +30,22 @@ public sealed class TenantDbConnectionResolver
     private readonly IConfiguration _configuration;
     private readonly IHttpClientFactory _httpFactory;
     private readonly IAmazonSecretsManager? _secrets;
+    private readonly IHttpContextAccessor? _httpContextAccessor;
+    private readonly IApprovalDatabaseStore? _approvalDatabases;
     private readonly ConcurrentDictionary<string, TenantResolvedPayload> _cache = new(StringComparer.OrdinalIgnoreCase);
 
     public TenantDbConnectionResolver(
         IConfiguration configuration,
         IHttpClientFactory httpFactory,
-        IAmazonSecretsManager? secrets = null)
+        IAmazonSecretsManager? secrets = null,
+        IHttpContextAccessor? httpContextAccessor = null,
+        IApprovalDatabaseStore? approvalDatabases = null)
     {
         _configuration = configuration;
         _httpFactory = httpFactory;
         _secrets = secrets;
+        _httpContextAccessor = httpContextAccessor;
+        _approvalDatabases = approvalDatabases;
     }
 
     public Task<string> RefreshTenantConfigAsync(string tenantCode, CancellationToken cancellationToken = default) =>
@@ -956,16 +964,107 @@ public sealed class TenantDbConnectionResolver
         }
     }
 
+    /// <summary>
+    /// Connection string for Acc document work: prefers the active company from
+    /// <c>approvalDatabases</c> when an HTTP request has selected one; otherwise tenant-config.
+    /// Login / background jobs without HTTP context always use tenant-config.
+    /// </summary>
+    public async Task<string> GetActiveConnectionStringAsync(
+        IConfiguration configuration,
+        string? operation = null,
+        CancellationToken cancellationToken = default)
+    {
+        var tenant = TenantConfigurationHelper.RequireTenantCode(configuration, operation);
+        var company = await TryResolveActiveCompanyAsync(cancellationToken).ConfigureAwait(false);
+        if (company is not null && !company.UseTenantBootstrap)
+            return BuildCompanyConnectionString(company);
+
+        return await GetConnectionStringForTenantAsync(tenant, cancellationToken).ConfigureAwait(false);
+    }
+
     /// <summary>Opens a tenant Firebird connection (caller disposes).</summary>
     public async Task<FbConnection> OpenConnectionAsync(
         IConfiguration configuration,
         string? operation = null,
         CancellationToken cancellationToken = default)
     {
-        var tenant = TenantConfigurationHelper.RequireTenantCode(configuration, operation);
-        var connStr = await GetConnectionStringForTenantAsync(tenant, cancellationToken).ConfigureAwait(false);
+        var connStr = await GetActiveConnectionStringAsync(configuration, operation, cancellationToken)
+            .ConfigureAwait(false);
         var conn = new FbConnection(connStr);
         await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
         return conn;
+    }
+
+    public static string BuildCompanyConnectionString(CompanyDatabaseEntry company)
+    {
+        ArgumentNullException.ThrowIfNull(company);
+        var host = (company.FbHost ?? "").Trim();
+        var path = (company.FbPath ?? "").Trim();
+        var user = (company.FbUser ?? "").Trim();
+        var password = company.FbPassword ?? "";
+        if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(path))
+            throw new InvalidOperationException(
+                $"Company '{company.DisplayName}' is missing Firebird host or database path.");
+        if (string.IsNullOrWhiteSpace(user))
+            throw new InvalidOperationException(
+                $"Company '{company.DisplayName}' is missing Firebird user.");
+        if (string.IsNullOrWhiteSpace(password))
+            throw new InvalidOperationException(
+                $"Company '{company.DisplayName}' is missing Firebird password.");
+
+        var csb = new FbConnectionStringBuilder
+        {
+            UserID = user,
+            Password = password,
+            Database = $"{host}:{path}",
+            Port = company.FbPort > 0 ? company.FbPort : 3050,
+            Dialect = company.FbDialect > 0 ? company.FbDialect : 3,
+            Charset = string.IsNullOrWhiteSpace(company.FbCharset) ? "UTF8" : company.FbCharset.Trim(),
+            Pooling = true,
+        };
+        return csb.ConnectionString;
+    }
+
+    private async Task<CompanyDatabaseEntry?> TryResolveActiveCompanyAsync(CancellationToken cancellationToken)
+    {
+        if (_approvalDatabases is null || _httpContextAccessor?.HttpContext is null)
+            return null;
+
+        try
+        {
+            var bundle = await _approvalDatabases.GetBundleAsync(cancellationToken).ConfigureAwait(false);
+            if (bundle.Companies.Count == 0)
+                return null;
+
+            // Only switch away from tenant-config when the registry has a real (non-bootstrap-only) set,
+            // or a single explicit company entry that is not UseTenantBootstrap.
+            var hasExplicit = bundle.Companies.Any(c => !c.UseTenantBootstrap);
+            if (!hasExplicit)
+                return null;
+
+            string? wanted = null;
+            if (_httpContextAccessor.HttpContext.Request.Cookies.TryGetValue(
+                    IActiveCompanyContext.CookieName, out var raw)
+                && !string.IsNullOrWhiteSpace(raw))
+            {
+                wanted = raw.Trim();
+            }
+
+            if (!string.IsNullOrWhiteSpace(wanted))
+            {
+                var match = bundle.Companies.FirstOrDefault(c =>
+                    string.Equals(c.Id, wanted, StringComparison.OrdinalIgnoreCase));
+                if (match is not null)
+                    return match;
+            }
+
+            return bundle.Companies.FirstOrDefault(c => !c.UseTenantBootstrap)
+                ?? bundle.Companies[0];
+        }
+        catch
+        {
+            // Registry unavailable — fall back to tenant-config connection.
+            return null;
+        }
     }
 }

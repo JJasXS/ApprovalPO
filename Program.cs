@@ -132,7 +132,7 @@ builder.Services.AddHttpClient(TenantDbConnectionResolver.HttpClientName, client
 {
     client.Timeout = TimeSpan.FromSeconds(30);
 });
-builder.Services.AddSingleton<TenantDbConnectionResolver>();
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<IAmazonSecretsManager>(_ =>
 {
     var regionName = builder.Configuration["AWS:Region"]
@@ -141,6 +141,9 @@ builder.Services.AddSingleton<IAmazonSecretsManager>(_ =>
         ?? "ap-southeast-1";
     return new AmazonSecretsManagerClient(RegionEndpoint.GetBySystemName(regionName));
 });
+builder.Services.AddSingleton<ApprovalPO.Services.Databases.IApprovalDatabaseStore, ApprovalPO.Services.Databases.ApprovalDatabaseStore>();
+builder.Services.AddScoped<ApprovalPO.Services.Databases.IActiveCompanyContext, ApprovalPO.Services.Databases.ActiveCompanyContext>();
+builder.Services.AddSingleton<TenantDbConnectionResolver>();
 builder.Services.AddScoped<ISyUserLoginValidator, SyUserLoginValidator>();
 builder.Services.AddHttpClient(nameof(ScanQrLinkResolver), client =>
 {
@@ -228,6 +231,7 @@ var razorPages = builder.Services.AddRazorPages(options =>
     options.Conventions.AuthorizePage("/ScanDeliveredDetail", PolicyNames.DirectorAccess);
     options.Conventions.AuthorizePage("/DetectRfid", PolicyNames.DirectorAccess);
     options.Conventions.AuthorizePage("/Databases", PolicyNames.DirectorAccess);
+    options.Conventions.AuthorizePage("/SelectCompany", PolicyNames.DirectorAccess);
 });
 if (builder.Environment.IsDevelopment())
     razorPages.AddRazorRuntimeCompilation();

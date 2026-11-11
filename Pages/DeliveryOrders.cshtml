@@ -48,6 +48,7 @@
 </header>
 
 <main class="scan-main">
+    @await Component.InvokeAsync("CompanyTabs")
     <div class="scan-main-inner">
         @if (TempData["ScanSoSubmitMessage"] is string submitMsg && !string.IsNullOrWhiteSpace(submitMsg))
         {

@@ -272,6 +272,48 @@ a.app-nav-link[aria-current="page"] {
   background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.45));
 }
 
+/* Company database switcher (shown when 2+ companies are registered). */
+.company-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 14px;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(241, 245, 249, 0.9);
+  border: 1px solid #e2e8f0;
+}
+
+.company-tab {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 9px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #475569;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.company-tab:hover {
+  background: #fff;
+  color: #0f172a;
+}
+
+.company-tab.is-active,
+a.company-tab[aria-current="page"] {
+  background: #fff;
+  color: #0369a1;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.po-main__inner > .company-tabs,
+.scan-main > .company-tabs,
+.dash-board > .company-tabs {
+  margin-top: 0;
+}
+
 .dash-menu-link--danger,
 .scan-menu-link--danger,
 .app-nav-link--danger {

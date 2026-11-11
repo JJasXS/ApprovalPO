@@ -36,8 +36,7 @@ public sealed class DocumentTransferFirebirdService
         if (sourceDocKey <= 0)
             return GrTransferResult.Failure("Invalid source document key.");
 
-        var tenant = TenantConfigurationHelper.RequireTenantCode(_configuration);
-        var connStr = await _tenantResolver.GetConnectionStringForTenantAsync(tenant, cancellationToken).ConfigureAwait(false);
+        var connStr = await _tenantResolver.GetActiveConnectionStringAsync(_configuration, "document transfer", cancellationToken).ConfigureAwait(false);
 
         await using var conn = new FbConnection(connStr);
         await conn.OpenAsync(cancellationToken).ConfigureAwait(false);

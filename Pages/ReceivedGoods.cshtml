@@ -48,6 +48,7 @@
 </header>
 
 <main class="scan-main">
+    @await Component.InvokeAsync("CompanyTabs")
     <div class="scan-main-inner">
         <div class="scan-search-bar">
             <input id="grSearch" class="scan-search-input" type="search" placeholder="Search GR # or PO #…" autocomplete="off" />

@@ -45,6 +45,7 @@
 </header>
 
 <main class="scan-main scan-main--detail">
+    @await Component.InvokeAsync("CompanyTabs")
     <div class="scan-main-inner">
         @if (Model.Order is null)
         {

@@ -1,0 +1,12 @@
+@model ApprovalPO.ViewComponents.CompanyTabsModel
+@if (Model.Companies.Count >= 2)
+{
+    <nav class="company-tabs" aria-label="Company databases">
+        @foreach (var c in Model.Companies)
+        {
+            <a class="company-tab @(c.IsActive ? "is-active" : "")"
+               href="/SelectCompany?id=@Uri.EscapeDataString(c.Id)&amp;returnUrl=@Uri.EscapeDataString(Model.ReturnUrl)"
+               aria-current="@(c.IsActive ? "page" : null)">@c.DisplayName</a>
+        }
+    </nav>
+}

@@ -46,6 +46,7 @@
 
     <main class="dash-main">
         <div class="dash-board">
+        @await Component.InvokeAsync("CompanyTabs")
         <div class="dash-overview">
             <p class="dash-overview-date">@DateTime.Now.ToString("dddd, d MMMM yyyy")</p>
             <h1 class="dash-overview-title">Overview</h1>

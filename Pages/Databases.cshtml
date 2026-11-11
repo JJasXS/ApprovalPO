@@ -48,34 +48,128 @@
             <p class="db-kicker">Settings</p>
             <h1 class="db-title">Connect databases</h1>
             <p class="db-lead">
-                Choose which SQL Accounting company file this approval app uses.
-                Multi-database switching (like SqlAccountSync) will be wired here next.
+                Register each SQL Accounting company <code>.FDB</code> this app can open.
+                Purchase, Sales, Goods Received, and Delivery Orders use the same menus — switch company with the tabs on those pages.
             </p>
 
-            <section class="db-card" aria-labelledby="dbCurrentTitle">
-                <h2 id="dbCurrentTitle" class="db-card-title">Current connection</h2>
+            <section class="db-card" aria-labelledby="dbSecretTitle">
+                <h2 id="dbSecretTitle" class="db-card-title">Secrets Manager</h2>
                 <dl class="db-meta">
                     <div>
                         <dt>Tenant</dt>
-                        <dd>@(string.IsNullOrWhiteSpace(Model.CurrentTenant) ? "—" : Model.CurrentTenant)</dd>
+                        <dd>@(string.IsNullOrWhiteSpace(Model.TenantCode) ? "—" : Model.TenantCode)</dd>
                     </div>
                     <div>
-                        <dt>Host</dt>
-                        <dd>@(string.IsNullOrWhiteSpace(Model.CurrentHost) ? "—" : Model.CurrentHost)</dd>
+                        <dt>Secret</dt>
+                        <dd class="db-path">@(string.IsNullOrWhiteSpace(Model.SecretId) ? "—" : Model.SecretId)</dd>
                     </div>
                     <div>
-                        <dt>Database</dt>
-                        <dd class="db-path">@(string.IsNullOrWhiteSpace(Model.CurrentDatabasePath) ? "—" : Model.CurrentDatabasePath)</dd>
+                        <dt>Stored databases</dt>
+                        <dd>@Model.CompanyCount</dd>
                     </div>
                 </dl>
+                @if (Model.Companies.Any(c => c.UseTenantBootstrap))
+                {
+                    <form method="post" asp-page-handler="PersistBootstrap" class="db-inline-form">
+                        <button type="submit" class="db-btn db-btn--secondary">Persist current connection to Secrets Manager</button>
+                    </form>
+                }
             </section>
 
-            <section class="db-card db-card--muted" aria-labelledby="dbSoonTitle">
-                <h2 id="dbSoonTitle" class="db-card-title">Coming soon</h2>
-                <p class="db-soon">
-                    Register Master / Sub company <code>.FDB</code> paths, test connections, and switch the active company
-                    without redeploying — same idea as SqlAccountSync Databases.
-                </p>
+            @if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+            {
+                <p class="db-flash db-flash--ok" role="status">@Model.StatusMessage</p>
+            }
+            @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+            {
+                <p class="db-flash db-flash--err" role="alert">@Model.ErrorMessage</p>
+            }
+
+            <section class="db-card" aria-labelledby="dbListTitle">
+                <h2 id="dbListTitle" class="db-card-title">Companies</h2>
+                @if (Model.Companies.Count == 0)
+                {
+                    <p class="db-empty">No companies yet. Add one below.</p>
+                }
+                else
+                {
+                    <ul class="db-list">
+                        @foreach (var c in Model.Companies)
+                        {
+                            var isActive = string.Equals(c.Id, Model.ActiveCompanyId, StringComparison.OrdinalIgnoreCase);
+                            <li class="db-list-item @(isActive ? "is-active" : "")">
+                                <div class="db-list-main">
+                                    <span class="db-list-name">@c.DisplayName</span>
+                                    @if (isActive)
+                                    {
+                                        <span class="db-pill">Active</span>
+                                    }
+                                    @if (c.UseTenantBootstrap)
+                                    {
+                                        <span class="db-pill db-pill--muted">Bootstrap</span>
+                                    }
+                                    <span class="db-list-path">@(string.IsNullOrWhiteSpace(c.FbHost) ? "—" : c.FbHost):@(string.IsNullOrWhiteSpace(c.FbPath) ? "tenant-config" : c.FbPath)</span>
+                                </div>
+                                <div class="db-list-actions">
+                                    <a class="db-link" href="/SelectCompany?id=@Uri.EscapeDataString(c.Id)&amp;returnUrl=@Uri.EscapeDataString("/Databases")">Use</a>
+                                    <a class="db-link" asp-page="/Databases" asp-route-edit="@c.Id">Edit</a>
+                                    <form method="post" asp-page-handler="Delete" class="db-inline-form" onsubmit="return confirm('Remove this company from Secrets Manager?');">
+                                        <input type="hidden" name="id" value="@c.Id" />
+                                        <button type="submit" class="db-link db-link--danger">Delete</button>
+                                    </form>
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                }
+            </section>
+
+            <section class="db-card" aria-labelledby="dbFormTitle">
+                <h2 id="dbFormTitle" class="db-card-title">@(string.IsNullOrWhiteSpace(Model.Input.Id) ? "Add company" : "Edit company")</h2>
+                <form method="post" class="db-form" novalidate>
+                    <input type="hidden" asp-for="Input.Id" />
+                    <div class="db-field">
+                        <label asp-for="Input.DisplayName"></label>
+                        <input asp-for="Input.DisplayName" class="db-input" autocomplete="organization" />
+                        <span asp-validation-for="Input.DisplayName" class="db-field-error"></span>
+                    </div>
+                    <div class="db-field-row">
+                        <div class="db-field">
+                            <label asp-for="Input.FbHost"></label>
+                            <input asp-for="Input.FbHost" class="db-input" placeholder="192.168.1.10" autocomplete="off" />
+                            <span asp-validation-for="Input.FbHost" class="db-field-error"></span>
+                        </div>
+                        <div class="db-field">
+                            <label asp-for="Input.FbPort">Port</label>
+                            <input asp-for="Input.FbPort" class="db-input" type="number" min="1" max="65535" />
+                        </div>
+                    </div>
+                    <div class="db-field">
+                        <label asp-for="Input.FbPath"></label>
+                        <input asp-for="Input.FbPath" class="db-input" placeholder="D:\ACC\COMPANY.FDB" autocomplete="off" />
+                        <span asp-validation-for="Input.FbPath" class="db-field-error"></span>
+                    </div>
+                    <div class="db-field-row">
+                        <div class="db-field">
+                            <label asp-for="Input.FbUser"></label>
+                            <input asp-for="Input.FbUser" class="db-input" autocomplete="username" />
+                            <span asp-validation-for="Input.FbUser" class="db-field-error"></span>
+                        </div>
+                        <div class="db-field">
+                            <label asp-for="Input.FbPassword"></label>
+                            <input asp-for="Input.FbPassword" class="db-input" type="password" autocomplete="new-password" placeholder="@(string.IsNullOrWhiteSpace(Model.Input.Id) ? "" : "Leave blank to keep")"/>
+                            <span asp-validation-for="Input.FbPassword" class="db-field-error"></span>
+                        </div>
+                    </div>
+                    <div class="db-actions">
+                        <button type="submit" formaction="?handler=Save" class="db-btn db-btn--primary">Save to Secrets Manager</button>
+                        <button type="submit" formaction="?handler=Test" class="db-btn db-btn--secondary" formnovalidate>Test connection</button>
+                        @if (!string.IsNullOrWhiteSpace(Model.Input.Id))
+                        {
+                            <a class="db-btn db-btn--ghost" href="/Databases">Cancel</a>
+                        }
+                    </div>
+                </form>
             </section>
         </div>
     </main>
