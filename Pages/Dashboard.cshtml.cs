@@ -21,12 +21,17 @@ public class DashboardModel : PageModel
     public bool ShowMaintenanceScanner { get; private set; } = true;
     public IReadOnlyList<DashboardFigure> Figures { get; private set; } = Array.Empty<DashboardFigure>();
     public DashboardTrend Trend { get; private set; } = new(Array.Empty<string>(), Array.Empty<DashboardTrendSeries>());
+    public IReadOnlyList<DashboardStatusKpi> StatusKpis { get; private set; } = Array.Empty<DashboardStatusKpi>();
+    public IReadOnlyList<DashboardActivityItem> RecentActivity { get; private set; } = Array.Empty<DashboardActivityItem>();
 
     public bool HasAnyModule =>
         ShowPurchaseApproval || ShowSalesApproval || ShowScanPo || ShowReceivedGoods
         || ShowScanSo || ShowDeliveryOrders || ShowMaintenanceScanner;
 
     public bool HasOverview => Figures.Count > 0;
+    public bool HasStatusKpis => StatusKpis.Count > 0;
+    public bool HasQuickActions => HasAnyModule;
+    public bool ShowRecentActivitySection => ShowPurchaseApproval || ShowSalesApproval;
 
     public string GoodsHref => ShowScanPo ? "/ScanPO" : "/ReceivedGoods";
     public string DeliveryHref => ShowScanSo ? "/ScanSO" : "/DeliveryOrders";
@@ -47,6 +52,14 @@ public class DashboardModel : PageModel
         "goods" => "receipts",
         "delivery" => "orders",
         _ => "items"
+    };
+
+    public static string ActivityTone(string status) => status switch
+    {
+        "Approved" => "green",
+        "Rejected" => "red",
+        "Cancelled" => "slate",
+        _ => "amber"
     };
 
     public string TrendJson
@@ -81,5 +94,7 @@ public class DashboardModel : PageModel
         ShowMaintenanceScanner = modules.MaintenanceScanner;
         Figures = overview.Figures;
         Trend = overview.Trend;
+        StatusKpis = overview.StatusKpis;
+        RecentActivity = overview.RecentActivity;
     }
 }

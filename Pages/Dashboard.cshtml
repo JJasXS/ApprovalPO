@@ -3,6 +3,8 @@
 @{
     ViewData["Title"] = "Home";
     var userName = User.Identity?.Name ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "User";
+    var purchaseFig = Model.Figure("purchase");
+    var salesFig = Model.Figure("sales");
 }
 
 @section Styles {
@@ -53,9 +55,136 @@
             var defaultTab = showActionTab ? "action" : "summary";
         }
 
+        @if (Model.HasStatusKpis)
+        {
+            <section class="dash-kpi" aria-label="Approval status">
+                @foreach (var kpi in Model.StatusKpis)
+                {
+                    <a class="dash-kpi-card dash-kpi-card--@kpi.Tone" href="@kpi.Href">
+                        <span class="dash-kpi-value">@kpi.Count.ToString("N0")</span>
+                        <span class="dash-kpi-label">@kpi.Label</span>
+                    </a>
+                }
+            </section>
+        }
+
+        @if (Model.HasQuickActions)
+        {
+            <section class="dash-quick" aria-labelledby="dashQuickTitle">
+                <h2 id="dashQuickTitle" class="dash-section-title">Quick Actions</h2>
+                <div class="dash-quick-grid" role="list">
+                    @if (Model.ShowPurchaseApproval)
+                    {
+                        <a href="/PurchaseOrders" class="dash-quick-tile" role="listitem" aria-label="Purchase Approval">
+                            <span class="dash-card-icon-wrap dash-card-icon-wrap--blue">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+                                    <line x1="3" y1="6" x2="21" y2="6"/>
+                                    <path d="M16 10a4 4 0 0 1-8 0"/>
+                                </svg>
+                            </span>
+                            <span class="dash-quick-label">Purchase</span>
+                            @if (purchaseFig?.Count is int pc)
+                            {
+                                <span class="dash-quick-badge" title="Pending">@pc.ToString("N0")</span>
+                            }
+                        </a>
+                    }
+                    @if (Model.ShowSalesApproval)
+                    {
+                        <a href="/SalesOrders" class="dash-quick-tile" role="listitem" aria-label="Sales Approval">
+                            <span class="dash-card-icon-wrap dash-card-icon-wrap--green">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <line x1="12" y1="1" x2="12" y2="23"/>
+                                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                                </svg>
+                            </span>
+                            <span class="dash-quick-label">Sales</span>
+                            @if (salesFig?.Count is int sc)
+                            {
+                                <span class="dash-quick-badge" title="Pending">@sc.ToString("N0")</span>
+                            }
+                        </a>
+                    }
+                    @if (Model.ShowScanPo || Model.ShowReceivedGoods)
+                    {
+                        <a href="@Model.GoodsHref" class="dash-quick-tile" role="listitem" aria-label="Goods Received">
+                            <span class="dash-card-icon-wrap dash-card-icon-wrap--violet">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                                    <line x1="12" y1="22.08" x2="12" y2="12"/>
+                                </svg>
+                            </span>
+                            <span class="dash-quick-label">Goods</span>
+                        </a>
+                    }
+                    @if (Model.ShowScanSo || Model.ShowDeliveryOrders)
+                    {
+                        <a href="@Model.DeliveryHref" class="dash-quick-tile" role="listitem" aria-label="Delivery Orders">
+                            <span class="dash-card-icon-wrap dash-card-icon-wrap--green">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <rect x="1" y="3" width="15" height="13" rx="1"/>
+                                    <path d="M16 8h4l3 3v5h-7V8z"/>
+                                    <circle cx="5.5" cy="18.5" r="2.5"/>
+                                    <circle cx="18.5" cy="18.5" r="2.5"/>
+                                </svg>
+                            </span>
+                            <span class="dash-quick-label">Delivery</span>
+                        </a>
+                    }
+                    @if (Model.ShowMaintenanceScanner)
+                    {
+                        <a asp-page="/MaintenanceScanner/Index" class="dash-quick-tile" role="listitem" aria-label="Maintenance Scanner">
+                            <span class="dash-card-icon-wrap dash-card-icon-wrap--teal">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <rect x="3" y="6" width="18" height="12" rx="1"/>
+                                    <line x1="6" y1="9" x2="6" y2="15"/>
+                                    <line x1="9" y1="9" x2="9" y2="15"/>
+                                    <line x1="12" y1="9" x2="12" y2="15"/>
+                                    <line x1="15" y1="9" x2="15" y2="15"/>
+                                    <line x1="18" y1="9" x2="18" y2="15"/>
+                                </svg>
+                            </span>
+                            <span class="dash-quick-label">Scanner</span>
+                        </a>
+                    }
+                </div>
+            </section>
+        }
+
+        @if (Model.ShowRecentActivitySection)
+        {
+            <section class="dash-activity" aria-labelledby="dashActivityTitle">
+                <h2 id="dashActivityTitle" class="dash-section-title">Recent Activity</h2>
+                @if (Model.RecentActivity.Count == 0)
+                {
+                    <div class="dash-activity-empty">
+                        <p>No recent purchase or sales approvals to show.</p>
+                    </div>
+                }
+                else
+                {
+                    <ul class="dash-activity-list">
+                        @foreach (var item in Model.RecentActivity)
+                        {
+                            var tone = DashboardModel.ActivityTone(item.Status);
+                            <li>
+                                <a class="dash-activity-row" href="@item.Href">
+                                    <span class="dash-activity-kind">@item.Kind</span>
+                                    <span class="dash-activity-ref">@item.Reference</span>
+                                    <span class="dash-activity-status dash-activity-status--@tone">@item.Status</span>
+                                </a>
+                            </li>
+                        }
+                    </ul>
+                }
+            </section>
+        }
+
         @if (Model.HasOverview)
         {
-            <section class="dash-insight" aria-label="Overview chart">
+            <section class="dash-insight" aria-label="Analytics chart">
                 <div class="dash-chart-card" id="dashTrend" data-trend='@Html.Raw(Model.TrendJson)' data-range="7">
                     <div class="dash-chart-head">
                         <div class="dash-chart-head-text">
@@ -192,8 +321,9 @@
                                                 <a href="@Model.GoodsHref" class="dash-action-icon" role="listitem" aria-label="Goods Received">
                                                     <span class="dash-card-icon-wrap dash-card-icon-wrap--violet">
                                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                                            <rect x="3" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/>
-                                                            <path d="M21 16h-3a2 2 0 0 0-2 2v3"/><line x1="21" y1="21" x2="21" y2="21.01"/><line x1="12" y1="3" x2="12" y2="6"/><path d="M12 12v3h3"/><line x1="12" y1="21" x2="12" y2="18"/>
+                                                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                                                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                                                            <line x1="12" y1="22.08" x2="12" y2="12"/>
                                                         </svg>
                                                     </span>
                                                     <span class="dash-action-icon-label">Goods</span>

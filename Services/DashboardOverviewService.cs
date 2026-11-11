@@ -11,15 +11,28 @@ public sealed record DashboardTrendSeries(string Key, string Label, string Color
 
 public sealed record DashboardTrend(IReadOnlyList<string> Labels, IReadOnlyList<DashboardTrendSeries> Series);
 
+public sealed record DashboardStatusKpi(string Key, string Label, int Count, string Href, string Tone);
+
+public sealed record DashboardActivityItem(
+    string Kind,
+    string Reference,
+    string Status,
+    string Href,
+    DateTime At);
+
 public sealed class DashboardOverview
 {
     public DashboardModuleFlags Modules { get; init; } = new();
     public IReadOnlyList<DashboardFigure> Figures { get; init; } = Array.Empty<DashboardFigure>();
     public DashboardTrend Trend { get; init; } = new(Array.Empty<string>(), Array.Empty<DashboardTrendSeries>());
+    public IReadOnlyList<DashboardStatusKpi> StatusKpis { get; init; } = Array.Empty<DashboardStatusKpi>();
+    public IReadOnlyList<DashboardActivityItem> RecentActivity { get; init; } = Array.Empty<DashboardActivityItem>();
 }
 
 public sealed class DashboardOverviewService
 {
+    private const int RecentActivityLimit = 8;
+
     private static readonly (string Key, string Label, string Color) PurchaseMeta = ("purchase", "Purchase", "#2563eb");
     private static readonly (string Key, string Label, string Color) SalesMeta = ("sales", "Sales", "#16a34a");
     private static readonly (string Key, string Label, string Color) GoodsMeta = ("goods", "Goods", "#7c3aed");
@@ -55,12 +68,15 @@ public sealed class DashboardOverviewService
         var labels = DashboardTrendBuilder.BuildLabels(endDate);
         var series = new List<DashboardTrendSeries>();
         var figures = new List<DashboardFigure>();
+        var purchaseRows = Array.Empty<PurchaseOrderRow>();
+        var salesRows = Array.Empty<SalesOrderRow>();
 
         if (modules.PurchaseApproval)
         {
             var pack = await LoadPurchaseAsync(endDate, cancellationToken).ConfigureAwait(false);
             figures.Add(pack.Figure);
             series.Add(pack.Series);
+            purchaseRows = pack.Rows;
         }
 
         if (modules.SalesApproval)
@@ -68,6 +84,7 @@ public sealed class DashboardOverviewService
             var pack = await LoadSalesAsync(endDate, cancellationToken).ConfigureAwait(false);
             figures.Add(pack.Figure);
             series.Add(pack.Series);
+            salesRows = pack.Rows;
         }
 
         if (modules.ScanPo || modules.ReceivedGoods)
@@ -90,7 +107,9 @@ public sealed class DashboardOverviewService
         {
             Modules = modules,
             Figures = figures,
-            Trend = new DashboardTrend(labels, series)
+            Trend = new DashboardTrend(labels, series),
+            StatusKpis = BuildStatusKpis(modules, purchaseRows, salesRows),
+            RecentActivity = BuildRecentActivity(modules, purchaseRows, salesRows)
         };
     }
 
@@ -108,7 +127,7 @@ public sealed class DashboardOverviewService
         return (count, amount);
     }
 
-    private async Task<(DashboardFigure Figure, DashboardTrendSeries Series)> LoadPurchaseAsync(
+    private async Task<(DashboardFigure Figure, DashboardTrendSeries Series, PurchaseOrderRow[] Rows)> LoadPurchaseAsync(
         DateTime endDate,
         CancellationToken cancellationToken)
     {
@@ -119,16 +138,18 @@ public sealed class DashboardOverviewService
             var values = TrendValues(PurchaseMeta.Key, rows.Select(o => o.OrderDate), endDate);
             return (
                 new DashboardFigure(PurchaseMeta.Key, "Purchase approvals", "/PurchaseOrders", pending.Count, pending.Amount),
-                new DashboardTrendSeries(PurchaseMeta.Key, PurchaseMeta.Label, PurchaseMeta.Color, values));
+                new DashboardTrendSeries(PurchaseMeta.Key, PurchaseMeta.Label, PurchaseMeta.Color, values),
+                rows.ToArray());
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Dashboard purchase totals unavailable.");
-            return EmptyPack(PurchaseMeta, "Purchase approvals", "/PurchaseOrders", endDate);
+            var empty = EmptyPack(PurchaseMeta, "Purchase approvals", "/PurchaseOrders", endDate);
+            return (empty.Figure, empty.Series, Array.Empty<PurchaseOrderRow>());
         }
     }
 
-    private async Task<(DashboardFigure Figure, DashboardTrendSeries Series)> LoadSalesAsync(
+    private async Task<(DashboardFigure Figure, DashboardTrendSeries Series, SalesOrderRow[] Rows)> LoadSalesAsync(
         DateTime endDate,
         CancellationToken cancellationToken)
     {
@@ -139,12 +160,14 @@ public sealed class DashboardOverviewService
             var values = TrendValues(SalesMeta.Key, rows.Select(o => o.OrderDate), endDate);
             return (
                 new DashboardFigure(SalesMeta.Key, "Sales approvals", "/SalesOrders", pending.Count, pending.Amount),
-                new DashboardTrendSeries(SalesMeta.Key, SalesMeta.Label, SalesMeta.Color, values));
+                new DashboardTrendSeries(SalesMeta.Key, SalesMeta.Label, SalesMeta.Color, values),
+                rows.ToArray());
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Dashboard sales totals unavailable.");
-            return EmptyPack(SalesMeta, "Sales approvals", "/SalesOrders", endDate);
+            var empty = EmptyPack(SalesMeta, "Sales approvals", "/SalesOrders", endDate);
+            return (empty.Figure, empty.Series, Array.Empty<SalesOrderRow>());
         }
     }
 
@@ -186,6 +209,86 @@ public sealed class DashboardOverviewService
             _logger.LogWarning(ex, "Dashboard delivery order totals unavailable.");
             return EmptyPack(DeliveryMeta, "Delivery orders", href, endDate);
         }
+    }
+
+    private static IReadOnlyList<DashboardStatusKpi> BuildStatusKpis(
+        DashboardModuleFlags modules,
+        IReadOnlyList<PurchaseOrderRow> purchaseRows,
+        IReadOnlyList<SalesOrderRow> salesRows)
+    {
+        if (!modules.PurchaseApproval && !modules.SalesApproval)
+            return Array.Empty<DashboardStatusKpi>();
+
+        var statuses = purchaseRows.Select(r => r.Status)
+            .Concat(salesRows.Select(r => r.Status))
+            .ToList();
+        var pending = CountStatus(statuses, "Pending");
+        var approved = CountStatus(statuses, "Approved");
+        var rejected = CountStatus(statuses, "Rejected");
+        var primaryList = modules.PurchaseApproval ? "/PurchaseOrders" : "/SalesOrders";
+
+        return
+        [
+            new DashboardStatusKpi("pending", "Pending", pending, $"{primaryList}?status=Pending", "amber"),
+            new DashboardStatusKpi("approved", "Approved", approved, $"{primaryList}?status=Approved", "green"),
+            new DashboardStatusKpi("rejected", "Rejected", rejected, $"{primaryList}?status=Rejected", "red")
+        ];
+    }
+
+    private static IReadOnlyList<DashboardActivityItem> BuildRecentActivity(
+        DashboardModuleFlags modules,
+        IReadOnlyList<PurchaseOrderRow> purchaseRows,
+        IReadOnlyList<SalesOrderRow> salesRows)
+    {
+        var items = new List<DashboardActivityItem>();
+        if (modules.PurchaseApproval)
+        {
+            items.AddRange(purchaseRows.Select(r => new DashboardActivityItem(
+                "Purchase",
+                string.IsNullOrWhiteSpace(r.PoNumber) ? $"PO-{r.DocKey}" : r.PoNumber.Trim(),
+                NormalizeStatus(r.Status),
+                $"/PurchaseOrders?status={Uri.EscapeDataString(NormalizeStatus(r.Status))}",
+                ActivityAt(r))));
+        }
+
+        if (modules.SalesApproval)
+        {
+            items.AddRange(salesRows.Select(r => new DashboardActivityItem(
+                "Sales",
+                string.IsNullOrWhiteSpace(r.SoNumber) ? $"SO-{r.DocKey}" : r.SoNumber.Trim(),
+                NormalizeStatus(r.Status),
+                $"/SalesOrders?status={Uri.EscapeDataString(NormalizeStatus(r.Status))}",
+                r.OrderDate)));
+        }
+
+        return items
+            .OrderByDescending(i => i.At)
+            .ThenBy(i => i.Reference, StringComparer.OrdinalIgnoreCase)
+            .Take(RecentActivityLimit)
+            .ToList();
+    }
+
+    private static DateTime ActivityAt(PurchaseOrderRow row)
+    {
+        var stamps = new[] { row.ApprovalLevel3At, row.ApprovalLevel2At, row.ApprovalLevel1At }
+            .Where(d => d.HasValue)
+            .Select(d => d!.Value)
+            .ToList();
+        if (stamps.Count > 0)
+            return stamps.Max();
+        return row.OrderDate;
+    }
+
+    private static int CountStatus(IEnumerable<string> statuses, string wanted) =>
+        statuses.Count(s => string.Equals(s, wanted, StringComparison.OrdinalIgnoreCase));
+
+    private static string NormalizeStatus(string? status)
+    {
+        var s = (status ?? "").Trim();
+        if (s.Equals("Approved", StringComparison.OrdinalIgnoreCase)) return "Approved";
+        if (s.Equals("Rejected", StringComparison.OrdinalIgnoreCase)) return "Rejected";
+        if (s.Equals("Cancelled", StringComparison.OrdinalIgnoreCase)) return "Cancelled";
+        return "Pending";
     }
 
     private static IReadOnlyList<int> TrendValues(string key, IEnumerable<DateTime> dates, DateTime endDate)

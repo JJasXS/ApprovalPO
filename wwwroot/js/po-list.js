@@ -1294,8 +1294,27 @@
     /* ignore */
   }
 
-  updateTabUi();
-  refreshView();
+  const statusFromUrl = (() => {
+    try {
+      const raw = new URLSearchParams(window.location.search).get('status');
+      if (!raw) return '';
+      const normalized = String(raw).trim().toLowerCase();
+      if (normalized === 'pending') return 'Pending';
+      if (normalized === 'waiting') return 'Waiting';
+      if (normalized === 'approved') return 'Approved';
+      if (normalized === 'rejected') return 'Rejected';
+      if (normalized === 'cancelled') return 'Cancelled';
+      return '';
+    } catch {
+      return '';
+    }
+  })();
+
+  if (statusFromUrl) setListTab(statusFromUrl);
+  else {
+    updateTabUi();
+    refreshView();
+  }
   syncStickyHeights();
 
   window.addEventListener('resize', () => syncStickyHeights(), { passive: true });
