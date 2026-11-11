@@ -36,9 +36,8 @@ internal sealed class ModuleAccessService : IModuleAccessService
         var tenantCode = (_configuration["TenantBootstrap:TenantCode"] ?? "").Trim();
         if (tenantCode.Length == 0)
         {
-            // Fail closed for module paths when tenant is required but missing.
-            _logger.LogWarning("Module path {Path} denied: TenantBootstrap:TenantCode is empty.", path.Value);
-            return false;
+            // No tenant bootstrap yet — keep app usable; page policies still apply.
+            return true;
         }
 
         var isMaintenance = user.IsInRole(ApprovalRoles.Maintenance);
@@ -48,11 +47,15 @@ internal sealed class ModuleAccessService : IModuleAccessService
 
         if (modules is null)
         {
-            _logger.LogWarning("Module path {Path} denied: tenant module config unavailable for {Tenant}.", path.Value, tenantCode);
-            return false;
+            // Transient tenant-config miss must not blank the product (Dashboard regression).
+            _logger.LogWarning(
+                "Module config unavailable for {Tenant}; allowing {Path} until config loads.",
+                tenantCode,
+                path.Value);
+            return true;
         }
 
-        // Null individual flags keep historical default (enabled); missing tenant/module pack fails closed above.
+        // Explicit false hides the module; null keeps historical default (enabled).
         return module switch
         {
             "purchaseApproval" => modules.PurchaseApproval ?? true,
@@ -70,20 +73,12 @@ internal sealed class ModuleAccessService : IModuleAccessService
         ClaimsPrincipal user,
         CancellationToken cancellationToken = default)
     {
-        var empty = new DashboardModuleFlags
-        {
-            PurchaseApproval = false,
-            SalesApproval = false,
-            ScanPo = false,
-            ReceivedGoods = false,
-            ScanSo = false,
-            DeliveryOrders = false,
-            MaintenanceScanner = false
-        };
+        // Defaults all true — empty Overview only when tenant explicitly disables every module.
+        var defaults = new DashboardModuleFlags();
 
         var tenantCode = (_configuration["TenantBootstrap:TenantCode"] ?? "").Trim();
         if (tenantCode.Length == 0)
-            return empty;
+            return defaults;
 
         var isMaintenance = user.IsInRole(ApprovalRoles.Maintenance);
         var modules = await _tenantResolver
@@ -91,7 +86,12 @@ internal sealed class ModuleAccessService : IModuleAccessService
             .ConfigureAwait(false);
 
         if (modules is null)
-            return empty;
+        {
+            _logger.LogWarning(
+                "Dashboard module config unavailable for {Tenant}; showing default modules.",
+                tenantCode);
+            return defaults;
+        }
 
         return new DashboardModuleFlags
         {
