@@ -176,6 +176,7 @@ builder.Services.AddHttpClient<ApprovalPO.Services.Ocr.IOpenAiVisionService, App
 });
 builder.Services.AddScoped<IApprovalAuthority, ApprovalAuthority>();
 builder.Services.AddScoped<IModuleAccessService, ModuleAccessService>();
+builder.Services.AddSingleton<ApprovalPO.Services.Audit.IApprovalAuditStore, ApprovalPO.Services.Audit.ApprovalAuditFileStore>();
 builder.Services.AddScoped<DashboardOverviewService>();
 
 builder.Services.Configure<Microsoft.AspNetCore.Antiforgery.AntiforgeryOptions>(options =>
@@ -268,6 +269,7 @@ builder.Services.AddAuthorization(options =>
 });
 
 var app = builder.Build();
+app.EnforceProductionSafety();
 
 app.UseForwardedHeaders();
 
@@ -330,7 +332,21 @@ app.Use(async (ctx, next) =>
         var allowed = await access.IsAllowedAsync(ctx.User, ctx.Request.Path, ctx.RequestAborted).ConfigureAwait(false);
         if (!allowed)
         {
-            ctx.Response.Redirect("/Dashboard");
+            var wantsJson = ctx.Request.Headers.Accept.ToString().Contains("application/json", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(ctx.Request.Headers["X-Requested-With"], "XMLHttpRequest", StringComparison.OrdinalIgnoreCase)
+                || ctx.Request.Path.StartsWithSegments("/api");
+            if (wantsJson || HttpMethods.IsPost(ctx.Request.Method)
+                || HttpMethods.IsPut(ctx.Request.Method)
+                || HttpMethods.IsDelete(ctx.Request.Method)
+                || HttpMethods.IsPatch(ctx.Request.Method))
+            {
+                ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
+                ctx.Response.ContentType = "application/json";
+                await ctx.Response.WriteAsJsonAsync(new { error = "Module access denied." }).ConfigureAwait(false);
+                return;
+            }
+
+            ctx.Response.Redirect("/NoAccess");
             return;
         }
     }
@@ -386,7 +402,9 @@ async Task WarmupTenantConnectionStringAsync()
         {
             await conn.OpenAsync().ConfigureAwait(false);
             await PhPoSchemaBootstrap.EnsureUdfPoStatusColumnAsync(conn, logger).ConfigureAwait(false);
+            await PhPoSchemaBootstrap.EnsurePoApprovalSlotColumnsAsync(conn, logger).ConfigureAwait(false);
             await SlSoSchemaBootstrap.EnsureUdfSoStatusColumnAsync(conn, logger).ConfigureAwait(false);
+            await SlSoSchemaBootstrap.EnsureSoApprovalSlotColumnsAsync(conn, logger).ConfigureAwait(false);
         }
         logger.LogInformation(
             "Tenant Firebird connection string cached for {Tenant} in {ElapsedMs} ms (startup warmup).",

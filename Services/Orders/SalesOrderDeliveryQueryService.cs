@@ -44,14 +44,16 @@ public sealed class SalesOrderDeliveryQueryService : ISalesOrderDeliveryQuery
         if (approved.Count == 0)
             return Array.Empty<SalesOrderDeliveryListItem>();
 
-        var result = new List<SalesOrderDeliveryListItem>(approved.Count);
-        foreach (var so in approved)
-        {
-            var lines = await GetLinesWithDeliveredAsync(so.DocKey, cancellationToken).ConfigureAwait(false);
-            result.Add(BuildListItem(so, lines));
-        }
+        // Batch load lines + delivered qty (PERF-001) instead of N+1 per SO.
+        var linesByDoc = await GetLinesWithDeliveredForDocsAsync(
+                approved.Select(o => o.DocKey).ToList(),
+                cancellationToken)
+            .ConfigureAwait(false);
 
-        return result
+        return approved
+            .Select(so => BuildListItem(
+                so,
+                linesByDoc.GetValueOrDefault(so.DocKey) ?? Array.Empty<SalesOrderDeliveryLineRow>()))
             .OrderByDescending(o => o.OrderDate)
             .ThenByDescending(o => o.SoNumber, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -75,16 +77,32 @@ public sealed class SalesOrderDeliveryQueryService : ISalesOrderDeliveryQuery
         if (docKey <= 0)
             return Array.Empty<SalesOrderDeliveryLineRow>();
 
+        var map = await GetLinesWithDeliveredForDocsAsync(new[] { docKey }, cancellationToken)
+            .ConfigureAwait(false);
+        return map.GetValueOrDefault(docKey) ?? Array.Empty<SalesOrderDeliveryLineRow>();
+    }
+
+    private async Task<Dictionary<int, IReadOnlyList<SalesOrderDeliveryLineRow>>> GetLinesWithDeliveredForDocsAsync(
+        IReadOnlyList<int> docKeys,
+        CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<int, IReadOnlyList<SalesOrderDeliveryLineRow>>();
+        var keys = docKeys.Where(k => k > 0).Distinct().ToList();
+        if (keys.Count == 0)
+            return result;
+
         await using var conn = await _tenantResolver
-            .OpenConnectionAsync(_configuration, "load SO delivery lines", cancellationToken)
+            .OpenConnectionAsync(_configuration, "load SO delivery lines batch", cancellationToken)
             .ConfigureAwait(false);
 
         var dtlCols = await FirebirdSchemaHelper.GetColumnNamesAsync(conn, "SL_SODTL", cancellationToken)
             .ConfigureAwait(false);
         var dtlKeyCol = FirebirdSchemaHelper.PickColumn(dtlCols, "DTLKEY", "ID") ?? "DTLKEY";
+        var placeholders = string.Join(", ", keys.Select((_, i) => $"@D{i}"));
 
         var sql = $"""
             SELECT
+              D.DOCKEY,
               COALESCE(D.SEQ, 0) AS LINENO,
               COALESCE(D.{dtlKeyCol}, 0) AS DTLKEY,
               TRIM(COALESCE(D.ITEMCODE, '')) AS ITEMCODE,
@@ -100,24 +118,31 @@ public sealed class SalesOrderDeliveryQueryService : ISalesOrderDeliveryQuery
                 ELSE NULL
               END AS SMALLINT) AS TRANSFERABLEINT
             FROM SL_SODTL D
-            WHERE D.DOCKEY = @DocKey
-            ORDER BY COALESCE(D.SEQ, 0)
+            WHERE D.DOCKEY IN ({placeholders})
+            ORDER BY D.DOCKEY, COALESCE(D.SEQ, 0)
             """;
 
         await using var cmd = new FbCommand(sql, conn);
-        cmd.Parameters.Add("@DocKey", FbDbType.Integer).Value = docKey;
+        for (var i = 0; i < keys.Count; i++)
+            cmd.Parameters.Add($"@D{i}", FbDbType.Integer).Value = keys[i];
 
-        var rawLines = new List<(int LineNo, int DtlKey, string ItemCode, string Description, string Project, decimal Ordered, bool? Transferable)>();
+        var rawByDoc = new Dictionary<int, List<(int LineNo, int DtlKey, string ItemCode, string Description, string Project, decimal Ordered, bool? Transferable)>>();
         await using (var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
         {
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
+                var dockey = FirebirdDataReaderHelper.GetInt32(reader, "DOCKEY");
                 var sqty = FirebirdDataReaderHelper.GetDecimal(reader, "SQTY");
                 var qty = FirebirdDataReaderHelper.GetDecimal(reader, "QTY");
                 var suom = FirebirdDataReaderHelper.GetDecimal(reader, "SUOMQTY");
-                // Scan/Left uses stock SQTY (not selling SUOMQTY).
                 var ordered = sqty > 0 ? sqty : (qty > 0 ? qty : suom);
-                rawLines.Add((
+                if (!rawByDoc.TryGetValue(dockey, out var list))
+                {
+                    list = new List<(int, int, string, string, string, decimal, bool?)>();
+                    rawByDoc[dockey] = list;
+                }
+
+                list.Add((
                     FirebirdDataReaderHelper.GetInt32(reader, "LINENO", "SEQ"),
                     FirebirdDataReaderHelper.GetInt32(reader, "DTLKEY"),
                     (FirebirdDataReaderHelper.GetString(reader, "ITEMCODE") ?? "").Trim(),
@@ -128,39 +153,48 @@ public sealed class SalesOrderDeliveryQueryService : ISalesOrderDeliveryQuery
             }
         }
 
-        if (rawLines.Count == 0)
-            return Array.Empty<SalesOrderDeliveryLineRow>();
-
         var xtransCols = await FirebirdSchemaHelper.GetColumnNamesAsync(conn, "ST_XTRANS", cancellationToken)
             .ConfigureAwait(false);
-        var deliveredMap = await XTransQtyQuery.FetchByFromDocAsync(
-                conn,
-                docKey,
-                SqlAccountingDocTypes.SalesOrder,
-                xtransCols,
-                cancellationToken,
-                SqlAccountingDocTypes.DeliveryOrder)
-            .ConfigureAwait(false);
 
-        return rawLines
-            .Select(l =>
+        foreach (var key in keys)
+        {
+            if (!rawByDoc.TryGetValue(key, out var rawLines) || rawLines.Count == 0)
             {
-                var delivered = deliveredMap.GetValueOrDefault(l.DtlKey);
-                var outstanding = FirebirdRowHelpers.Money(Math.Max(0, l.Ordered - delivered));
-                return new SalesOrderDeliveryLineRow
+                result[key] = Array.Empty<SalesOrderDeliveryLineRow>();
+                continue;
+            }
+
+            var deliveredMap = await XTransQtyQuery.FetchByFromDocAsync(
+                    conn,
+                    key,
+                    SqlAccountingDocTypes.SalesOrder,
+                    xtransCols,
+                    cancellationToken,
+                    SqlAccountingDocTypes.DeliveryOrder)
+                .ConfigureAwait(false);
+
+            result[key] = rawLines
+                .Select(l =>
                 {
-                    LineNo = l.LineNo,
-                    DtlKey = l.DtlKey,
-                    ItemCode = l.ItemCode,
-                    Description = l.Description,
-                    Project = l.Project,
-                    OrderedQty = l.Ordered,
-                    DeliveredQty = delivered,
-                    OutstandingQty = outstanding,
-                    Transferable = l.Transferable
-                };
-            })
-            .ToList();
+                    var delivered = deliveredMap.GetValueOrDefault(l.DtlKey);
+                    var outstanding = FirebirdRowHelpers.Money(Math.Max(0, l.Ordered - delivered));
+                    return new SalesOrderDeliveryLineRow
+                    {
+                        LineNo = l.LineNo,
+                        DtlKey = l.DtlKey,
+                        ItemCode = l.ItemCode,
+                        Description = l.Description,
+                        Project = l.Project,
+                        OrderedQty = l.Ordered,
+                        DeliveredQty = delivered,
+                        OutstandingQty = outstanding,
+                        Transferable = l.Transferable
+                    };
+                })
+                .ToList();
+        }
+
+        return result;
     }
 
     private async Task<IReadOnlyList<SalesOrderRow>> ListApprovedAsync(CancellationToken cancellationToken)

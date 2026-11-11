@@ -127,14 +127,14 @@ internal static class SalesApprovalChecks
     private static async Task ExpectRejectAsync(
         SmokeHost host, SmokeReport report, int docKey, string status, string label)
     {
-        var (ok, err) = await host.Sales.TrySetHeaderListStatusAsync(docKey, status).ConfigureAwait(false);
+        var (ok, err, _) = await host.Sales.TrySetHeaderListStatusAsync(docKey, status, "smoke@test.local", 3).ConfigureAwait(false);
         report.Check(!ok, "TrySetHeaderListStatusAsync rejects " + label, ok ? "write was accepted" : err ?? "");
     }
 
     private static async Task SetStatusAsync(
         SmokeHost host, SmokeReport report, int docKey, string status, string expect)
     {
-        var (ok, err) = await host.Sales.TrySetHeaderListStatusAsync(docKey, status).ConfigureAwait(false);
+        var (ok, err, _) = await host.Sales.TrySetHeaderListStatusAsync(docKey, status, "smoke@test.local", 3).ConfigureAwait(false);
         if (!ok)
         {
             report.Fail("set " + status, err ?? "update failed");

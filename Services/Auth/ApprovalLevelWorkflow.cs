@@ -3,29 +3,43 @@ using ApprovalPO.Models;
 namespace ApprovalPO.Services.Auth;
 
 /// <summary>
-/// Multi-level PO approval: L1 MANAGER, L2 HOD/PUR, L3 DIRECTOR.
+/// Multi-level PO/SO approval: L1 MANAGER, L2 HOD/PUR, L3 DIRECTOR.
 /// Any authorised level may sign in any order; all required levels must sign before final approval.
+/// Bands default to 10k / 100k / 1M and can be overridden via Approval:ApprovalBandLevel*Max.
 /// </summary>
 public static class ApprovalLevelWorkflow
 {
-    public const decimal BandLevel1Max = 10_000m;
-    public const decimal BandLevel2Max = 100_000m;
-    public const decimal BandLevel3Max = 1_000_000m;
+    private static decimal _band1 = 10_000m;
+    private static decimal _band2 = 100_000m;
+    private static decimal _band3 = 1_000_000m;
+
+    public static decimal BandLevel1Max => _band1;
+    public static decimal BandLevel2Max => _band2;
+    public static decimal BandLevel3Max => _band3;
+
+    public static void ConfigureBands(decimal level1Max, decimal level2Max, decimal level3Max)
+    {
+        if (level1Max <= 0 || level2Max <= level1Max || level3Max <= level2Max)
+            throw new ArgumentException("Approval bands must satisfy 0 < L1 < L2 < L3.");
+        _band1 = level1Max;
+        _band2 = level2Max;
+        _band3 = level3Max;
+    }
 
     public static int RequiredLevels(decimal amount)
     {
-        if (amount <= BandLevel1Max) return 1;
-        if (amount <= BandLevel2Max) return 2;
-        if (amount <= BandLevel3Max) return 3;
+        if (amount <= _band1) return 1;
+        if (amount <= _band2) return 2;
+        if (amount <= _band3) return 3;
         return 0;
     }
 
-    /// <summary>Upper amount band for POs that require <paramref name="requiredLevels"/> sign-offs.</summary>
+    /// <summary>Upper amount band for documents that require <paramref name="requiredLevels"/> sign-offs.</summary>
     public static decimal BandMaxForRequiredLevels(int requiredLevels) => requiredLevels switch
     {
-        1 => BandLevel1Max,
-        2 => BandLevel2Max,
-        3 => BandLevel3Max,
+        1 => _band1,
+        2 => _band2,
+        3 => _band3,
         _ => 0
     };
 
@@ -42,12 +56,11 @@ public static class ApprovalLevelWorkflow
     /// <summary>
     /// Returns the completed level count after a user at <paramref name="userLevel"/> signs.
     /// A higher-level approver implicitly covers all slots up to their own level,
-    /// so e.g. level 3 signing a 3-slot PO completes all 3 at once.
+    /// so e.g. level 3 signing a 3-slot document completes all 3 at once.
     /// </summary>
     public static int CompletedLevelsAfterSign(PoApprovalSlots slots, int userLevel)
     {
-        // Collect which slots will be filled: existing slots + all slots up to userLevel.
-        var filled = new bool[4]; // index 1-3
+        var filled = new bool[4];
         if (!string.IsNullOrWhiteSpace(slots.Level1Email)) filled[1] = true;
         if (!string.IsNullOrWhiteSpace(slots.Level2Email)) filled[2] = true;
         if (!string.IsNullOrWhiteSpace(slots.Level3Email)) filled[3] = true;

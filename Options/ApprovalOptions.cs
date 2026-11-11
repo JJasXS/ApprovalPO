@@ -13,6 +13,21 @@ public class ApprovalOptions
     /// <summary>PO amount at or above triggers extra confirm before approve.</summary>
     public decimal HighValueAmountThreshold { get; set; } = 5000m;
 
+    /// <summary>Optional override for L1 approval band ceiling (default 10000).</summary>
+    public decimal? ApprovalBandLevel1Max { get; set; }
+
+    /// <summary>Optional override for L2 approval band ceiling (default 100000).</summary>
+    public decimal? ApprovalBandLevel2Max { get; set; }
+
+    /// <summary>Optional override for L3 approval band ceiling (default 1000000).</summary>
+    public decimal? ApprovalBandLevel3Max { get; set; }
+
+    /// <summary>Shared secret for guide-capture login when APPROVAL_GUIDE_CAPTURE=1 (min 16 chars).</summary>
+    public string? GuideCaptureSharedSecret { get; set; }
+
+    /// <summary>Preferred email for guide-capture login (must exist on SY_USER).</summary>
+    public string? GuideCaptureEmail { get; set; }
+
     /// <summary>OTP lifetime in seconds (preferred). Default 120.</summary>
     public int OtpExpirySeconds { get; set; } = 120;
 

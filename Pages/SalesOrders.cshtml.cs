@@ -2,8 +2,9 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using ApprovalPO.Models;
 using ApprovalPO.Options;
-using ApprovalPO.Services;
+using ApprovalPO.Services.Audit;
 using ApprovalPO.Services.Auth;
+using ApprovalPO.Services.Orders;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Options;
@@ -37,15 +38,18 @@ public class SalesOrdersModel : PageModel
     private readonly IOptions<ApprovalOptions> _approval;
     private readonly ISalesOrderCatalog _orders;
     private readonly IApprovalAuthority _authority;
+    private readonly IApprovalAuditStore _audit;
 
     public SalesOrdersModel(
         IOptions<ApprovalOptions> approval,
         ISalesOrderCatalog orders,
-        IApprovalAuthority authority)
+        IApprovalAuthority authority,
+        IApprovalAuditStore audit)
     {
         _approval = approval;
         _orders = orders;
         _authority = authority;
+        _audit = audit;
     }
 
     public IReadOnlyList<SalesOrderRow> Orders { get; private set; } = Array.Empty<SalesOrderRow>();
@@ -112,13 +116,51 @@ public class SalesOrdersModel : PageModel
         if (!found.Allowed)
             return new JsonResult(new { ok = false, error = found.ErrorMessage ?? "Document not found." }, JsonCamel) { StatusCode = StatusCodes.Status404NotFound };
 
-        var decision = await _authority.AuthorizeListStatusChangeAsync(User, amount.Value, cancellationToken).ConfigureAwait(false);
-        if (!decision.Allowed)
-            return new JsonResult(new { ok = false, error = decision.ErrorMessage ?? "Not allowed." }, JsonCamel) { StatusCode = StatusCodes.Status403Forbidden };
+        var approverEmail = UserEmail;
+        var approverLevel = (int?)AppLevel ?? 0;
+        HeaderStatusChangeResult? changeResult = null;
 
-        var (ok, err) = await _orders.TrySetHeaderListStatusAsync(body.DocKey, normalized, cancellationToken).ConfigureAwait(false);
+        if (string.Equals(normalized, "Approved", StringComparison.OrdinalIgnoreCase))
+        {
+            var slots = await _orders.GetApprovalSlotsAsync(body.DocKey, cancellationToken).ConfigureAwait(false)
+                        ?? new PoApprovalSlots();
+            var decision = await _authority.AuthorizePartialApproveAsync(User, amount.Value, slots, cancellationToken)
+                .ConfigureAwait(false);
+            if (!decision.Allowed)
+                return new JsonResult(new { ok = false, error = decision.ErrorMessage ?? "Not allowed." }, JsonCamel) { StatusCode = StatusCodes.Status403Forbidden };
+
+            var (okApprove, errApprove, result) = await _orders.TrySetHeaderListStatusAsync(
+                body.DocKey, normalized, approverEmail, approverLevel, cancellationToken).ConfigureAwait(false);
+            if (!okApprove)
+                return new JsonResult(new { ok = false, error = errApprove ?? "Update failed." }, JsonCamel) { StatusCode = StatusCodes.Status409Conflict };
+
+            changeResult = result;
+            await _audit.AppendAsync(new ApprovalAuditEntry(
+                "SO", body.DocKey, null, "approve", approverEmail,
+                changeResult?.Message ?? decision.SuccessMessage, DateTime.UtcNow), cancellationToken).ConfigureAwait(false);
+
+            return new JsonResult(new
+            {
+                ok = true,
+                completedLevels = changeResult?.CompletedLevels ?? decision.CompletedLevels,
+                requiredLevels = changeResult?.RequiredLevels ?? decision.RequiredLevels,
+                isFinal = changeResult?.IsFinal ?? decision.IsFinalApproval,
+                message = changeResult?.Message ?? decision.SuccessMessage
+            }, JsonCamel);
+        }
+
+        var decisionOther = await _authority.AuthorizeListStatusChangeAsync(User, amount.Value, cancellationToken).ConfigureAwait(false);
+        if (!decisionOther.Allowed)
+            return new JsonResult(new { ok = false, error = decisionOther.ErrorMessage ?? "Not allowed." }, JsonCamel) { StatusCode = StatusCodes.Status403Forbidden };
+
+        var (ok, err, _) = await _orders.TrySetHeaderListStatusAsync(
+            body.DocKey, normalized, approverEmail, 0, cancellationToken).ConfigureAwait(false);
         if (!ok)
             return new JsonResult(new { ok = false, error = err ?? "Update failed." }, JsonCamel) { StatusCode = StatusCodes.Status409Conflict };
+
+        await _audit.AppendAsync(new ApprovalAuditEntry(
+            "SO", body.DocKey, null, normalized.ToLowerInvariant(), approverEmail, null, DateTime.UtcNow), cancellationToken)
+            .ConfigureAwait(false);
 
         return new JsonResult(new { ok = true }, JsonCamel);
     }
@@ -129,6 +171,15 @@ public class SalesOrdersModel : PageModel
     {
         if (body == null || body.DocKey <= 0 || body.LineNo < 0)
             return new JsonResult(new { ok = false, error = "Invalid request." }, JsonCamel) { StatusCode = StatusCodes.Status400BadRequest };
+
+        var amount = await _orders.GetHeaderAmountAsync(body.DocKey, cancellationToken).ConfigureAwait(false);
+        var found = ApprovalAmountGate.RequireHeaderAmount(amount);
+        if (!found.Allowed)
+            return new JsonResult(new { ok = false, error = found.ErrorMessage ?? "Document not found." }, JsonCamel) { StatusCode = StatusCodes.Status404NotFound };
+
+        var decision = await _authority.AuthorizeListStatusChangeAsync(User, amount.Value, cancellationToken).ConfigureAwait(false);
+        if (!decision.Allowed)
+            return new JsonResult(new { ok = false, error = decision.ErrorMessage ?? "Not allowed." }, JsonCamel) { StatusCode = StatusCodes.Status403Forbidden };
 
         var (ok, err) = await _orders.TrySetLineTransferableAsync(body.DocKey, body.LineNo, body.Transferable, cancellationToken).ConfigureAwait(false);
         if (!ok)
@@ -141,11 +192,11 @@ public class SalesOrdersModel : PageModel
     {
         normalized = "";
         var s = (raw ?? "").Trim();
-        if (s.Equals("Pending",   StringComparison.OrdinalIgnoreCase)) { normalized = "Pending";   return true; }
-        if (s.Equals("Approved",  StringComparison.OrdinalIgnoreCase)) { normalized = "Approved";  return true; }
+        if (s.Equals("Pending", StringComparison.OrdinalIgnoreCase)) { normalized = "Pending"; return true; }
+        if (s.Equals("Approved", StringComparison.OrdinalIgnoreCase)) { normalized = "Approved"; return true; }
         if (s.Equals("Cancelled", StringComparison.OrdinalIgnoreCase) ||
-            s.Equals("Canceled",  StringComparison.OrdinalIgnoreCase)) { normalized = "Cancelled"; return true; }
-        if (s.Equals("Rejected",  StringComparison.OrdinalIgnoreCase)) { normalized = "Rejected";  return true; }
+            s.Equals("Canceled", StringComparison.OrdinalIgnoreCase)) { normalized = "Cancelled"; return true; }
+        if (s.Equals("Rejected", StringComparison.OrdinalIgnoreCase)) { normalized = "Rejected"; return true; }
         return false;
     }
 }

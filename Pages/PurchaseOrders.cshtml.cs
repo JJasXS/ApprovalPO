@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using ApprovalPO.Models;
 using ApprovalPO.Options;
+using ApprovalPO.Services.Audit;
 using ApprovalPO.Services.Auth;
 using ApprovalPO.Services.Orders;
 using Microsoft.AspNetCore.Hosting;
@@ -42,6 +43,7 @@ public class PurchaseOrdersModel : PageModel
     private readonly IOptions<WebPushOptions> _webPush;
     private readonly IPurchaseOrderCatalog _orders;
     private readonly IApprovalAuthority _authority;
+    private readonly IApprovalAuditStore _audit;
     private readonly IWebHostEnvironment _env;
 
     public PurchaseOrdersModel(
@@ -49,12 +51,14 @@ public class PurchaseOrdersModel : PageModel
         IOptions<WebPushOptions> webPush,
         IPurchaseOrderCatalog orders,
         IApprovalAuthority authority,
+        IApprovalAuditStore audit,
         IWebHostEnvironment env)
     {
         _approval = approval;
         _webPush = webPush;
         _orders = orders;
         _authority = authority;
+        _audit = audit;
         _env = env;
     }
 
@@ -160,6 +164,10 @@ public class PurchaseOrdersModel : PageModel
                 return new JsonResult(new { ok = false, error = errApprove ?? "Update failed." }, JsonCamel) { StatusCode = StatusCodes.Status409Conflict };
 
             changeResult = result;
+            await _audit.AppendAsync(new ApprovalAuditEntry(
+                "PO", body.DocKey, null, "approve", approverEmail,
+                changeResult?.Message ?? decision.SuccessMessage, DateTime.UtcNow), cancellationToken).ConfigureAwait(false);
+
             return new JsonResult(new
             {
                 ok = true,
@@ -178,6 +186,10 @@ public class PurchaseOrdersModel : PageModel
         if (!ok)
             return new JsonResult(new { ok = false, error = err ?? "Update failed." }, JsonCamel) { StatusCode = StatusCodes.Status409Conflict };
 
+        await _audit.AppendAsync(new ApprovalAuditEntry(
+            "PO", body.DocKey, null, normalized.ToLowerInvariant(), approverEmail, null, DateTime.UtcNow), cancellationToken)
+            .ConfigureAwait(false);
+
         return new JsonResult(new { ok = true }, JsonCamel);
     }
 
@@ -187,6 +199,15 @@ public class PurchaseOrdersModel : PageModel
     {
         if (body == null || body.DocKey <= 0 || body.LineNo < 0)
             return new JsonResult(new { ok = false, error = "Invalid request." }, JsonCamel) { StatusCode = StatusCodes.Status400BadRequest };
+
+        var amount = await _orders.GetHeaderAmountAsync(body.DocKey, cancellationToken).ConfigureAwait(false);
+        var found = ApprovalAmountGate.RequireHeaderAmount(amount);
+        if (!found.Allowed)
+            return new JsonResult(new { ok = false, error = found.ErrorMessage ?? "Document not found." }, JsonCamel) { StatusCode = StatusCodes.Status404NotFound };
+
+        var decision = await _authority.AuthorizeListStatusChangeAsync(User, amount.Value, cancellationToken).ConfigureAwait(false);
+        if (!decision.Allowed)
+            return new JsonResult(new { ok = false, error = decision.ErrorMessage ?? "Not allowed." }, JsonCamel) { StatusCode = StatusCodes.Status403Forbidden };
 
         var (ok, err) = await _orders.TrySetLineTransferableAsync(body.DocKey, body.LineNo, body.Transferable, cancellationToken).ConfigureAwait(false);
         if (!ok)

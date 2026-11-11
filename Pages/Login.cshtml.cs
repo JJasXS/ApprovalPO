@@ -15,7 +15,7 @@ using Microsoft.Extensions.Options;
 namespace ApprovalPO.Pages;
 
 [AllowAnonymous]
-[IgnoreAntiforgeryToken]
+[ValidateAntiForgeryToken]
 public class LoginModel : PageModel
 {
     private static readonly Regex SixDigitOtp = new(@"^\d{6}$", RegexOptions.Compiled);

@@ -42,6 +42,7 @@
         <section class="landing-main">
             <div class="landing-container">
                 <input type="hidden" id="returnUrlField" name="ReturnUrl" value="@(Model.ReturnUrl ?? "")" />
+                @Html.AntiForgeryToken()
 
                 <div id="idGroup" class="landing-step is-active">
                     <h2 class="step-title">Welcome</h2>
@@ -212,6 +213,17 @@
     const emailDisplay = document.getElementById('emailDisplay');
     const otpTimer = document.getElementById('otpTimer');
 
+    const csrfToken = () =>
+        document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+    const appendCsrf = (fd) => {
+        const t = csrfToken();
+        if (t) fd.append('__RequestVerificationToken', t);
+    };
+    const csrfHeaders = () => {
+        const t = csrfToken();
+        return t ? { 'X-CSRF-TOKEN': t, 'RequestVerificationToken': t } : {};
+    };
+
     let expiresAtUnix = 0;
     let otpExpired = false;
     let otpTimerId = null;
@@ -367,8 +379,10 @@
             if (hp) fd.append('companyWebsite', hp.value || '');
             const ru = document.getElementById('returnUrlField');
             if (ru && ru.value) fd.append('ReturnUrl', ru.value);
+            appendCsrf(fd);
             const res = await fetch('@Url.Page("/Login", null, new { handler = "VerifyOtp" })', {
                 method: 'POST',
+                headers: csrfHeaders(),
                 body: fd
             });
             const data = await res.json().catch(() => ({}));
@@ -415,8 +429,10 @@
             fd.append('LoginId', loginId);
             const hp = document.getElementById('companyWebsite');
             if (hp) fd.append('companyWebsite', hp.value || '');
+            appendCsrf(fd);
             const res = await fetch('@Url.Page("/Login", null, new { handler = "SendOtp" })', {
                 method: 'POST',
+                headers: csrfHeaders(),
                 body: fd
             });
             const data = await res.json().catch(() => ({}));

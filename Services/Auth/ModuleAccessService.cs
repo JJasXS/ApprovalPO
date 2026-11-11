@@ -16,22 +16,30 @@ internal sealed class ModuleAccessService : IModuleAccessService
 {
     private readonly IConfiguration _configuration;
     private readonly TenantDbConnectionResolver _tenantResolver;
+    private readonly ILogger<ModuleAccessService> _logger;
 
-    public ModuleAccessService(IConfiguration configuration, TenantDbConnectionResolver tenantResolver)
+    public ModuleAccessService(
+        IConfiguration configuration,
+        TenantDbConnectionResolver tenantResolver,
+        ILogger<ModuleAccessService> logger)
     {
         _configuration = configuration;
         _tenantResolver = tenantResolver;
+        _logger = logger;
     }
 
     public async Task<bool> IsAllowedAsync(ClaimsPrincipal user, PathString path, CancellationToken cancellationToken = default)
     {
-        // Non-module pages are always allowed once signed-in.
         if (!TryMapPathToModule(path, out var module))
             return true;
 
         var tenantCode = (_configuration["TenantBootstrap:TenantCode"] ?? "").Trim();
         if (tenantCode.Length == 0)
-            return true; // no tenant config -> keep app usable
+        {
+            // Fail closed for module paths when tenant is required but missing.
+            _logger.LogWarning("Module path {Path} denied: TenantBootstrap:TenantCode is empty.", path.Value);
+            return false;
+        }
 
         var isMaintenance = user.IsInRole(ApprovalRoles.Maintenance);
         var modules = await _tenantResolver
@@ -39,8 +47,12 @@ internal sealed class ModuleAccessService : IModuleAccessService
             .ConfigureAwait(false);
 
         if (modules is null)
-            return true;
+        {
+            _logger.LogWarning("Module path {Path} denied: tenant module config unavailable for {Tenant}.", path.Value, tenantCode);
+            return false;
+        }
 
+        // Null individual flags keep historical default (enabled); missing tenant/module pack fails closed above.
         return module switch
         {
             "purchaseApproval" => modules.PurchaseApproval ?? true,
@@ -58,10 +70,20 @@ internal sealed class ModuleAccessService : IModuleAccessService
         ClaimsPrincipal user,
         CancellationToken cancellationToken = default)
     {
-        var flags = new DashboardModuleFlags();
+        var empty = new DashboardModuleFlags
+        {
+            PurchaseApproval = false,
+            SalesApproval = false,
+            ScanPo = false,
+            ReceivedGoods = false,
+            ScanSo = false,
+            DeliveryOrders = false,
+            MaintenanceScanner = false
+        };
+
         var tenantCode = (_configuration["TenantBootstrap:TenantCode"] ?? "").Trim();
         if (tenantCode.Length == 0)
-            return flags;
+            return empty;
 
         var isMaintenance = user.IsInRole(ApprovalRoles.Maintenance);
         var modules = await _tenantResolver
@@ -69,7 +91,7 @@ internal sealed class ModuleAccessService : IModuleAccessService
             .ConfigureAwait(false);
 
         if (modules is null)
-            return flags;
+            return empty;
 
         return new DashboardModuleFlags
         {
@@ -121,12 +143,12 @@ internal sealed class ModuleAccessService : IModuleAccessService
             module = "deliveryOrders";
             return true;
         }
-        if (p.Equals("/MaintenanceScanner", StringComparison.OrdinalIgnoreCase)
-            || p.Equals("/MaintenanceScanner/Index", StringComparison.OrdinalIgnoreCase))
+        if (path.StartsWithSegments("/MaintenanceScanner", StringComparison.OrdinalIgnoreCase))
         {
             module = "maintenanceScanner";
             return true;
         }
+
         return false;
     }
 }

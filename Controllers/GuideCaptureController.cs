@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using ApprovalPO.Authorization;
 using ApprovalPO.Helpers;
 using ApprovalPO.Models;
@@ -12,7 +14,8 @@ namespace ApprovalPO.Controllers;
 
 /// <summary>
 /// Gated helper for user-guide screenshot capture.
-/// Enabled only when APPROVAL_GUIDE_CAPTURE=1.
+/// Enabled only when APPROVAL_GUIDE_CAPTURE=1 and a shared secret is configured.
+/// Does not elevate roles beyond SY_USER claims.
 /// </summary>
 [ApiController]
 [Route("api/guide_capture")]
@@ -20,18 +23,15 @@ namespace ApprovalPO.Controllers;
 public sealed class GuideCaptureController : ControllerBase
 {
     private readonly ISyUserLoginValidator _syUser;
-    private readonly TenantDbConnectionResolver _tenantResolver;
     private readonly IConfiguration _configuration;
     private readonly ILogger<GuideCaptureController> _logger;
 
     public GuideCaptureController(
         ISyUserLoginValidator syUser,
-        TenantDbConnectionResolver tenantResolver,
         IConfiguration configuration,
         ILogger<GuideCaptureController> logger)
     {
         _syUser = syUser;
-        _tenantResolver = tenantResolver;
         _configuration = configuration;
         _logger = logger;
     }
@@ -39,51 +39,45 @@ public sealed class GuideCaptureController : ControllerBase
     private static bool IsEnabled()
         => string.Equals(Environment.GetEnvironmentVariable("APPROVAL_GUIDE_CAPTURE"), "1", StringComparison.Ordinal);
 
+    private bool SharedSecretOk()
+    {
+        var expected = (_configuration["Approval:GuideCaptureSharedSecret"] ?? "").Trim();
+        if (expected.Length < 16)
+            return false;
+
+        var provided = (Request.Headers["X-Guide-Capture-Secret"].ToString() ?? "").Trim();
+        if (provided.Length == 0)
+            provided = (Request.Query["secret"].ToString() ?? "").Trim();
+        if (provided.Length == 0)
+            return false;
+
+        var a = Encoding.UTF8.GetBytes(provided);
+        var b = Encoding.UTF8.GetBytes(expected);
+        return a.Length == b.Length && CryptographicOperations.FixedTimeEquals(a, b);
+    }
+
     [AllowAnonymous]
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] GuideLoginRequest? body, CancellationToken cancellationToken)
     {
-        if (!IsEnabled())
+        if (!IsEnabled() || !SharedSecretOk())
             return NotFound();
 
         var email = (body?.Email ?? "").Trim();
         if (string.IsNullOrWhiteSpace(email))
             email = (_configuration["Approval:GuideCaptureEmail"] ?? "").Trim();
         if (string.IsNullOrWhiteSpace(email))
-            email = await TryPickSyUserEmailAsync(cancellationToken).ConfigureAwait(false) ?? "";
-        if (string.IsNullOrWhiteSpace(email))
-            email = await TryPickAdminEmailAsync(cancellationToken).ConfigureAwait(false) ?? "";
+            return BadRequest(new { error = "Pass {\"email\":\"...\"} or set Approval:GuideCaptureEmail." });
 
-        SyUserEmailLookupResult? sy = null;
-        if (!string.IsNullOrWhiteSpace(email))
-        {
-            sy = await _syUser.LookupByEmailAsync(email, cancellationToken).ConfigureAwait(false);
-            if (sy.Status != SyUserEmailLookupStatus.Ok && sy.Status != SyUserEmailLookupStatus.Skipped)
-            {
-                _logger.LogWarning("Guide capture preferred email {Email} lookup {Status}; trying SY_USER fallback.", email, sy.Status);
-                email = "";
-                sy = null;
-            }
-        }
-
-        if (string.IsNullOrWhiteSpace(email))
-        {
-            email = await TryPickSyUserEmailAsync(cancellationToken).ConfigureAwait(false) ?? "";
-            if (string.IsNullOrWhiteSpace(email))
-                email = await TryPickAdminEmailAsync(cancellationToken).ConfigureAwait(false) ?? "";
-            if (!string.IsNullOrWhiteSpace(email))
-                sy = await _syUser.LookupByEmailAsync(email, cancellationToken).ConfigureAwait(false);
-        }
-
-        if (string.IsNullOrWhiteSpace(email))
-            return BadRequest(new { error = "No guide email available. Pass {\"email\":\"...\"} or set Approval:GuideCaptureEmail." });
-
-        sy ??= await _syUser.LookupByEmailAsync(email, cancellationToken).ConfigureAwait(false);
+        var sy = await _syUser.LookupByEmailAsync(email, cancellationToken).ConfigureAwait(false);
         if (sy.Status != SyUserEmailLookupStatus.Ok && sy.Status != SyUserEmailLookupStatus.Skipped)
         {
-            _logger.LogWarning("Guide capture login lookup {Status} for {Email}: {Diag}", sy.Status, email, sy.Diagnostic);
-            return BadRequest(new { error = $"User lookup failed: {sy.Status}", diagnostic = sy.Diagnostic });
+            _logger.LogWarning("Guide capture login lookup {Status} for {Email}", sy.Status, email);
+            return BadRequest(new { error = $"User lookup failed: {sy.Status}" });
         }
+
+        if (!SyUserApprovalMapper.CanAccessApprovalSystem(sy))
+            return Forbid();
 
         var displayName = string.IsNullOrWhiteSpace(sy.DisplayName) ? email : sy.DisplayName!.Trim();
         var claims = new List<Claim>
@@ -92,16 +86,8 @@ public sealed class GuideCaptureController : ControllerBase
             new(ClaimTypes.Email, email),
             new(ClaimTypes.Name, displayName),
         };
+        // Roles come only from SY_USER — no Admin/Director elevation.
         SyUserApprovalMapper.AddProfileClaims(claims, sy);
-
-        if (!claims.Any(c => c.Type == ClaimTypes.Role
-                             && string.Equals(c.Value, ApprovalRoles.Admin, StringComparison.OrdinalIgnoreCase)))
-            claims.Add(new Claim(ClaimTypes.Role, ApprovalRoles.Admin));
-
-        // Guide capture must reach DirectorAccess pages for screenshots.
-        if (!claims.Any(c => c.Type == ClaimTypes.Role
-                             && string.Equals(c.Value, ApprovalRoles.Director, StringComparison.OrdinalIgnoreCase)))
-            claims.Add(new Claim(ClaimTypes.Role, ApprovalRoles.Director));
 
         await HttpContext.SignInAsync(
             CookieAuthenticationDefaults.AuthenticationScheme,
@@ -114,59 +100,6 @@ public sealed class GuideCaptureController : ControllerBase
             displayName,
             roles = claims.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).ToArray()
         });
-    }
-
-    private async Task<string?> TryPickAdminEmailAsync(CancellationToken cancellationToken)
-    {
-        var tenant = (_configuration["TenantBootstrap:TenantCode"] ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(tenant))
-            return null;
-
-        try
-        {
-            var userRoles = await _tenantResolver.GetTenantUserRolesAsync(tenant, cancellationToken).ConfigureAwait(false);
-            var admin = userRoles?.Admin?.FirstOrDefault(e => !string.IsNullOrWhiteSpace(e) && e.Contains('@'));
-            if (!string.IsNullOrWhiteSpace(admin))
-                return admin.Trim();
-
-            var maint = userRoles?.Maintenance?.FirstOrDefault(e => !string.IsNullOrWhiteSpace(e) && e.Contains('@'));
-            if (!string.IsNullOrWhiteSpace(maint))
-                return maint.Trim();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Guide capture could not load tenant userRoles.");
-        }
-
-        return null;
-    }
-
-    private async Task<string?> TryPickSyUserEmailAsync(CancellationToken cancellationToken)
-    {
-        var tenant = (_configuration["TenantBootstrap:TenantCode"] ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(tenant))
-            return null;
-
-        try
-        {
-            var connStr = await _tenantResolver.GetConnectionStringForTenantAsync(tenant, cancellationToken).ConfigureAwait(false);
-            await using var conn = new FirebirdSql.Data.FirebirdClient.FbConnection(connStr);
-            await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
-            await using var cmd = conn.CreateCommand();
-            cmd.CommandText = @"
-SELECT FIRST 1 EMAIL
-FROM SY_USER
-WHERE EMAIL IS NOT NULL AND TRIM(EMAIL) <> ''
-ORDER BY EMAIL";
-            var result = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-            var email = result?.ToString()?.Trim();
-            return string.IsNullOrWhiteSpace(email) ? null : email;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Guide capture could not query SY_USER for a fallback email.");
-            return null;
-        }
     }
 
     public sealed class GuideLoginRequest

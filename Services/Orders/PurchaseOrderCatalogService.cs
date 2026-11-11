@@ -223,19 +223,44 @@ public sealed class PurchaseOrderCatalogService : IPurchaseOrderCatalog
         var isFinal = completed >= required;
         var dbStatus = isFinal ? ApprovalListStatusHelper.ApprovedDb : ApprovalListStatusHelper.PendingDb;
 
-        var sql = $"UPDATE PH_PO SET {string.Join(", ", setClauses)} WHERE DOCKEY = @D";
-        await using var cmd = new FbCommand(sql, conn);
-        cmd.Parameters.Add("@S", FbDbType.VarChar, 20).Value = dbStatus;
+        // Optimistic concurrency: only update when target slots are still empty (WF-001).
+        var whereParts = new List<string> { "DOCKEY = @D" };
         foreach (var lvl in slotsToFill)
         {
-            cmd.Parameters.Add($"@E{lvl}", FbDbType.VarChar, 80).Value = email;
-            cmd.Parameters.Add($"@T{lvl}", FbDbType.TimeStamp).Value = now;
+            var ec = SlotEmailColumn(lvl);
+            if (!poCols.Contains(ec))
+                continue;
+            whereParts.Add($"(TRIM(COALESCE({ec}, '')) = '')");
         }
-        cmd.Parameters.Add("@D", FbDbType.Integer).Value = docKey;
 
-        var n = await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-        if (n == 0)
-            return (false, "No row was updated (DOCKEY not found).", null);
+        var sql =
+            $"UPDATE PH_PO SET {string.Join(", ", setClauses)} WHERE {string.Join(" AND ", whereParts)}";
+        await using var tx = await conn.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using var cmd = new FbCommand(sql, conn, (FbTransaction)tx);
+            cmd.Parameters.Add("@S", FbDbType.VarChar, 20).Value = dbStatus;
+            foreach (var lvl in slotsToFill)
+            {
+                cmd.Parameters.Add($"@E{lvl}", FbDbType.VarChar, 80).Value = email;
+                cmd.Parameters.Add($"@T{lvl}", FbDbType.TimeStamp).Value = now;
+            }
+            cmd.Parameters.Add("@D", FbDbType.Integer).Value = docKey;
+
+            var n = await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            if (n == 0)
+            {
+                await tx.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                return (false, "Approval conflict: another user updated this PO. Refresh and try again.", null);
+            }
+
+            await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await tx.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            throw;
+        }
 
         var message = ApprovalLevelWorkflow.BuildProgressMessage(completed, required, 0, isFinal);
         return (true, null, new HeaderStatusChangeResult

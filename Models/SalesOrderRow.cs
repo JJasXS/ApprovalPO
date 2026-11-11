@@ -20,4 +20,15 @@ public class SalesOrderRow
     public string Description { get; set; } = "";
 
     public DateTime OrderDate { get; set; } = DateTime.UtcNow.Date;
+
+    public string? ApprovalLevel1 { get; set; }
+    public DateTime? ApprovalLevel1At { get; set; }
+    public string? ApprovalLevel2 { get; set; }
+    public DateTime? ApprovalLevel2At { get; set; }
+    public string? ApprovalLevel3 { get; set; }
+    public DateTime? ApprovalLevel3At { get; set; }
+
+    public int RequiredLevels { get; set; }
+    public int CompletedLevels { get; set; }
+    public int NextLevel { get; set; }
 }
