@@ -134,15 +134,18 @@
                         <input asp-for="Input.DisplayName" class="db-input" autocomplete="organization" />
                         <span asp-validation-for="Input.DisplayName" class="db-field-error"></span>
                     </div>
-                    <div class="db-field">
+                    <div class="db-field" data-db-path-group>
                         <label asp-for="Input.FbPath"></label>
-                        <input asp-for="Input.FbPath" class="db-input" placeholder="D:\ACC\COMPANY.FDB" autocomplete="off" />
-                        <button type="button" class="db-browse-trigger" id="dbBrowseOpen">
+                        <input asp-for="Input.FbPath" class="db-input" placeholder="D:\ACC\COMPANY.FDB" autocomplete="off" data-db-path />
+                        <button type="button" class="db-browse-trigger" id="dbBrowseOpen" data-db-path-os>
                             <svg class="db-browse-clip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                 <path d="M21.44 11.05l-8.49 8.49a5.5 5.5 0 0 1-7.78-7.78l8.49-8.49a3.5 3.5 0 0 1 4.95 4.95l-8.49 8.49a1.5 1.5 0 1 1-2.12-2.12l7.78-7.78"/>
                             </svg>
                             <span>Browse...</span>
                         </button>
+                        <input type="file" id="dbPathFile" accept=".fdb,.gdb" hidden data-db-path-file />
+                        <p class="db-path-hint" id="dbPathHint" data-db-path-hint>Use Browse to pick a company .FDB (same as SqlAccountSync).</p>
+                        <button type="button" class="db-link" id="dbBrowseServer">Or browse server folders…</button>
                         <span asp-validation-for="Input.FbPath" class="db-field-error"></span>
                     </div>
                     <div class="db-field-row db-field-row--login">
@@ -169,6 +172,17 @@
             </section>
         </div>
     </main>
+</div>
+
+<div id="dbMatchModal" class="db-browse-modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="dbMatchTitle">
+    <div class="db-match-panel">
+        <div class="db-browse-titlebar">
+            <h2 id="dbMatchTitle" class="db-browse-title">Choose database path</h2>
+            <button type="button" class="db-browse-close" id="dbMatchClose" aria-label="Close">×</button>
+        </div>
+        <p class="db-match-note" id="dbMatchNote"></p>
+        <ul class="db-match-list" id="dbMatchList"></ul>
+    </div>
 </div>
 
 <div id="dbBrowseModal" class="db-browse-modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="dbBrowseTitle">

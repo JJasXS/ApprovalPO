@@ -68,6 +68,15 @@ public class DatabasesModel : PageModel
             BeginEdit(edit);
     }
 
+    /// <summary>
+    /// SqlAccountSync-style lookup: OS dialog supplies a file name; resolve full path(s) on this server.
+    /// </summary>
+    public IActionResult OnGetFind(string? name)
+    {
+        var paths = ApprovalDatabaseFileBrowser.FindByName(name, _configuration);
+        return new JsonResult(new { paths });
+    }
+
     public IActionResult OnGetBrowse(string? path)
     {
         path = (path ?? "").Trim();

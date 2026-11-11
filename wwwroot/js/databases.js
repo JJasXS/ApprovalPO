@@ -1,6 +1,9 @@
 (function () {
   var pathInput = document.getElementById("Input_FbPath");
-  var openBtn = document.getElementById("dbBrowseOpen");
+  var osBtn = document.getElementById("dbBrowseOpen");
+  var fileInput = document.getElementById("dbPathFile");
+  var hintEl = document.getElementById("dbPathHint");
+  var serverBtn = document.getElementById("dbBrowseServer");
   var modal = document.getElementById("dbBrowseModal");
   var listEl = document.getElementById("dbBrowseList");
   var crumbEl = document.getElementById("dbBrowsePath");
@@ -10,10 +13,97 @@
   var confirmBtn = document.getElementById("dbBrowseConfirm");
   var fileNameEl = document.getElementById("dbBrowseFileName");
   var errEl = document.getElementById("dbBrowseError");
-  if (!pathInput || !openBtn || !modal || !listEl) return;
+  var matchModal = document.getElementById("dbMatchModal");
+  var matchList = document.getElementById("dbMatchList");
+  var matchClose = document.getElementById("dbMatchClose");
+  var matchNote = document.getElementById("dbMatchNote");
+  if (!pathInput) return;
 
   var parentPath = null;
   var selected = null;
+
+  function setHint(msg) {
+    if (!hintEl) return;
+    hintEl.textContent = msg || "Use Browse to pick a company .FDB (same as SqlAccountSync).";
+    var isError = !!msg && (
+      msg.indexOf("not on this server") >= 0
+      || msg.indexOf("Could not") >= 0
+      || msg.indexOf("More than one") >= 0
+    );
+    hintEl.classList.toggle("is-error", isError);
+  }
+
+  function applyPath(path) {
+    pathInput.value = path;
+    pathInput.dispatchEvent(new Event("input", { bubbles: true }));
+    pathInput.dispatchEvent(new Event("change", { bubbles: true }));
+    setHint("");
+  }
+
+  function openOsPicker() {
+    if (!fileInput) return;
+    fileInput.value = "";
+    fileInput.click();
+  }
+
+  function showMatches(paths, note) {
+    if (!matchModal || !matchList) {
+      if (paths.length) applyPath(paths[0]);
+      return;
+    }
+    if (matchNote) matchNote.textContent = note || "More than one file has that name. Pick the path to use.";
+    matchList.innerHTML = "";
+    paths.forEach(function (p) {
+      var li = document.createElement("li");
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "db-match-item";
+      btn.textContent = p;
+      btn.addEventListener("click", function () {
+        applyPath(p);
+        closeMatchModal();
+      });
+      li.appendChild(btn);
+      matchList.appendChild(li);
+    });
+    matchModal.hidden = false;
+    matchModal.setAttribute("aria-hidden", "false");
+  }
+
+  function closeMatchModal() {
+    if (!matchModal) return;
+    matchModal.hidden = true;
+    matchModal.setAttribute("aria-hidden", "true");
+  }
+
+  function onOsPicked() {
+    var file = fileInput && fileInput.files && fileInput.files[0];
+    if (!file) return;
+    setHint("Looking up “" + file.name + "” on this server…");
+    var url = "/Databases?handler=Find&name=" + encodeURIComponent(file.name);
+    fetch(url, { headers: { Accept: "application/json" }, credentials: "same-origin" })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          if (!res.ok) throw new Error((data && data.error) || "Could not look up that file.");
+          return data;
+        });
+      })
+      .then(function (data) {
+        var paths = data.paths || [];
+        if (paths.length === 1) {
+          applyPath(paths[0]);
+          return;
+        }
+        if (paths.length === 0) {
+          setHint("That file is not on this server. Choose a company .FDB that exists here, or browse server folders.");
+          return;
+        }
+        showMatches(paths, "More than one file has that name. Pick the path to use.");
+      })
+      .catch(function (err) {
+        setHint(err.message || "Could not look up that file.");
+      });
+  }
 
   function setError(msg) {
     if (!errEl) return;
@@ -25,6 +115,7 @@
     selected = entry && entry.kind === "file" ? entry : null;
     if (fileNameEl) fileNameEl.value = selected ? selected.name : "";
     if (confirmBtn) confirmBtn.disabled = !selected;
+    if (!listEl) return;
     Array.prototype.forEach.call(listEl.querySelectorAll("tr"), function (row) {
       row.classList.toggle("is-selected", !!(selected && row.getAttribute("data-path") === selected.path));
     });
@@ -32,12 +123,12 @@
 
   function confirmSelection() {
     if (!selected) return;
-    pathInput.value = selected.path;
-    pathInput.dispatchEvent(new Event("input", { bubbles: true }));
-    closeModal();
+    applyPath(selected.path);
+    closeServerModal();
   }
 
-  function openModal() {
+  function openServerModal() {
+    if (!modal || !listEl) return;
     modal.hidden = false;
     modal.setAttribute("aria-hidden", "false");
     setSelected(null);
@@ -50,7 +141,8 @@
     }
   }
 
-  function closeModal() {
+  function closeServerModal() {
+    if (!modal) return;
     modal.hidden = true;
     modal.setAttribute("aria-hidden", "true");
     setError("");
@@ -81,6 +173,7 @@
   }
 
   function loadBrowse(path) {
+    if (!listEl) return;
     setError("");
     setSelected(null);
     listEl.innerHTML = "<tr><td colspan=\"4\" class=\"db-browse-loading\">Loading…</td></tr>";
@@ -158,34 +251,36 @@
         loadBrowse(entry.path);
       });
 
-      tr.addEventListener("keydown", function (e) {
-        if (e.key !== "Enter") return;
-        if (entry.kind === "file") {
-          setSelected(entry);
-          confirmSelection();
-        } else {
-          loadBrowse(entry.path);
-        }
-      });
-
       listEl.appendChild(tr);
     });
   }
 
-  openBtn.addEventListener("click", openModal);
-  if (closeBtn) closeBtn.addEventListener("click", closeModal);
-  if (cancelBtn) cancelBtn.addEventListener("click", closeModal);
+  if (osBtn) osBtn.addEventListener("click", openOsPicker);
+  if (fileInput) fileInput.addEventListener("change", onOsPicked);
+  if (serverBtn) serverBtn.addEventListener("click", openServerModal);
+  if (closeBtn) closeBtn.addEventListener("click", closeServerModal);
+  if (cancelBtn) cancelBtn.addEventListener("click", closeServerModal);
   if (confirmBtn) confirmBtn.addEventListener("click", confirmSelection);
+  if (matchClose) matchClose.addEventListener("click", closeMatchModal);
   if (upBtn) {
     upBtn.addEventListener("click", function () {
       if (parentPath) loadBrowse(parentPath);
       else loadBrowse("");
     });
   }
-  modal.addEventListener("click", function (e) {
-    if (e.target === modal) closeModal();
-  });
+  if (modal) {
+    modal.addEventListener("click", function (e) {
+      if (e.target === modal) closeServerModal();
+    });
+  }
+  if (matchModal) {
+    matchModal.addEventListener("click", function (e) {
+      if (e.target === matchModal) closeMatchModal();
+    });
+  }
   document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape" && !modal.hidden) closeModal();
+    if (e.key !== "Escape") return;
+    if (matchModal && !matchModal.hidden) closeMatchModal();
+    else if (modal && !modal.hidden) closeServerModal();
   });
 })();
