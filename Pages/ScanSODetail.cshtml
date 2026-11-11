@@ -144,14 +144,7 @@
                                 <button type="submit" class="scan-detail-submit-btn" id="scanDetailSubmitBtn">Submit</button>
                             </form>
                         }
-                        @{
-                            var deliveredRatioLabel = $"Delivered {headerRatio}";
-                            var soFullyDelivered = o.OutstandingQty <= 0 && o.OrderedQty > 0;
-                        }
-                        <span id="scanStatusMeta"
-                              class="scan-meta-remaining"
-                              data-delivered-ratio="@deliveredRatioLabel"
-                              hidden="@soFullyDelivered">@(soFullyDelivered ? "" : $"{deliveredRatioLabel} · {Model.Lines.Count(l => l.OutstandingQty > 0)} left")</span>
+                        <span id="scanStatusMeta" class="scan-meta-remaining" data-suppress-meta="1" hidden></span>
                     </div>
                 </div>
             </div>
@@ -211,13 +204,15 @@
                                 n++;
                                 var leftQty = line.OutstandingQty;
                                 var orderedTxt = line.OrderedQty.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture);
-                                // Fully delivered lines always show max/max (e.g. 12/12), not a dash.
+                                // Fully delivered lines always show max/max (e.g. 12/12). Otherwise leave blank until keyed.
                                 var shownDelivered = leftQty <= 0 && line.OrderedQty > 0
                                     ? line.OrderedQty
                                     : line.DeliveredQty;
-                                var deliveredTxt = shownDelivered.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture);
-                                var ratioTxt = $"{deliveredTxt}/{orderedTxt}";
                                 var lineFullyDelivered = leftQty <= 0 && line.OrderedQty > 0;
+                                var showRatio = lineFullyDelivered || shownDelivered > 0;
+                                var ratioTxt = showRatio
+                                    ? $"{shownDelivered.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)}/{orderedTxt}"
+                                    : "";
                                 var fullCode = line.ItemCode ?? "";
                                 var shortCode = fullCode.Length > 10 ? "…" + fullCode[^10..] : fullCode;
                                 <tr data-line-no="@line.LineNo"
@@ -235,10 +230,13 @@
                                     <td class="scan-line-project scan-col-project">@(string.IsNullOrWhiteSpace(line.Project) || line.Project == "----" ? "—" : line.Project)</td>
                                     <td class="num scan-line-order-qty">@leftQty.ToString("0.####")</td>
                                     <td class="num scan-line-status">
-                                        <span class="scan-delivered-ratio" data-fixed-ratio="1" title="Delivered / Ordered">@ratioTxt</span>
+                                        @if (showRatio)
+                                        {
+                                            <span class="scan-delivered-ratio" data-fixed-ratio="1" title="Delivered / Ordered">@ratioTxt</span>
+                                        }
                                         @if (!scanSubmitted && leftQty > 0)
                                         {
-                                            <input type="number" class="scan-received-input" min="0" max="@leftQty.ToString(System.Globalization.CultureInfo.InvariantCulture)" step="0.01" inputmode="decimal" placeholder="now" aria-label="Quantity to deliver now for @fullCode" />
+                                            <input type="number" class="scan-received-input" min="0" max="@leftQty.ToString(System.Globalization.CultureInfo.InvariantCulture)" step="0.01" inputmode="decimal" aria-label="Quantity to deliver for @fullCode" />
                                         }
                                     </td>
                                 </tr>

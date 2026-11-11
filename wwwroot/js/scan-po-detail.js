@@ -179,6 +179,11 @@
 
   const updateRemainingMeta = () => {
     if (!statusMeta) return;
+    if (statusMeta.dataset.suppressMeta === '1') {
+      statusMeta.hidden = true;
+      statusMeta.textContent = '';
+      return;
+    }
     const deliveredRatio = (statusMeta.dataset.deliveredRatio || '').trim();
     const left = remainingLines();
     if (deliveredRatio) {
