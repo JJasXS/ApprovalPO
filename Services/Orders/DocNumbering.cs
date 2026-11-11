@@ -24,9 +24,8 @@ internal static class DocNumbering
             if (!dn.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            var dash = dn.LastIndexOf('-');
-            if (dash < 0 || dash == dn.Length - 1) continue;
-            var tail = dn[(dash + 1)..];
+            var tail = dn[prefix.Length..];
+            if (tail.Length == 0) continue;
             if (!int.TryParse(tail, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n))
                 continue;
 
