@@ -203,6 +203,7 @@
   var panels = Array.prototype.slice.call(tabs.querySelectorAll('[data-dash-panel]'));
 
   function activate(name) {
+    if (!name) return;
     buttons.forEach(function (btn) {
       var on = btn.getAttribute('data-dash-tab') === name;
       btn.classList.toggle('is-active', on);
@@ -213,6 +214,7 @@
       panel.classList.toggle('is-active', on);
       panel.hidden = !on;
     });
+    tabs.classList.toggle('is-action', name === 'action');
   }
 
   buttons.forEach(function (btn) {
@@ -220,4 +222,8 @@
       activate(btn.getAttribute('data-dash-tab'));
     });
   });
+
+  var initial = tabs.getAttribute('data-default-tab')
+    || (buttons[0] && buttons[0].getAttribute('data-dash-tab'));
+  activate(initial);
 })();

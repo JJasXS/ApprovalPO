@@ -245,7 +245,7 @@ a.dash-menu-link[aria-current="page"] {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
 }
 
 .dash-chart-card,
@@ -253,6 +253,28 @@ a.dash-menu-link[aria-current="page"] {
   background: #fff;
   border: 1px solid #e7e5e4;
   border-radius: 14px;
+}
+
+.dash-tabs {
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.dash-tabs.is-action {
+  background: transparent;
+  border-color: transparent;
+  overflow: visible;
+}
+
+.dash-tabs.is-action .dash-tablist {
+  background: #fff;
+  border: 1px solid #e7e5e4;
+  border-radius: 14px;
+  margin-bottom: 10px;
+}
+
+.dash-tabs.is-action .dash-tabpanels {
+  padding: 0;
 }
 
 .dash-chart-card {
@@ -402,6 +424,10 @@ a.dash-menu-link[aria-current="page"] {
 
 .dash-tabpanel.is-active {
   display: block;
+}
+
+.dash-tabpanel--action .dash-cards {
+  margin: 0;
 }
 
 .dash-indicators {
