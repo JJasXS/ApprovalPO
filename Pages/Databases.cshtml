@@ -1,0 +1,86 @@
+@page
+@model ApprovalPO.Pages.DatabasesModel
+@{
+    ViewData["Title"] = "Connect databases";
+    var userName = User.Identity?.Name ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "User";
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/dashboard.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/databases.css" asp-append-version="true" />
+}
+
+<div class="dash-shell">
+    <header class="dash-header">
+        <div class="dash-header-inner">
+            <div class="dash-brand">
+                <a href="/Dashboard" class="dash-brand-home" title="Overview">
+                    <svg class="dash-brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                        <polyline points="9 22 9 12 15 12 15 22"/>
+                    </svg>
+                </a>
+                <span class="dash-brand-name">ProAcc Approvals</span>
+            </div>
+            <div class="dash-header-actions">
+                <button id="menuBtn" class="dash-menu-btn" type="button" aria-expanded="false" aria-controls="menuPanel" aria-label="Open menu">
+                    <span></span><span></span><span></span>
+                </button>
+                <div id="menuPanel" class="dash-menu-panel app-menu-panel" aria-hidden="true">
+                    <div class="dash-menu-user app-menu-user">
+                        <span class="app-menu-avatar" aria-hidden="true">@((userName?.Trim().Length > 0 ? char.ToUpperInvariant(userName.Trim()[0]) : 'U'))</span>
+                        <div class="app-menu-user-copy">
+                            <span class="app-menu-kicker">Signed in</span>
+                            <span class="app-menu-name">@userName</span>
+                        </div>
+                    </div>
+                    @await Component.InvokeAsync("ModuleNav", new { linkClass = "dash-menu-link" })
+                    <form method="post" asp-page="/Logout" class="dash-menu-signout app-menu-signout">
+                        <button type="submit" class="dash-menu-link dash-menu-link--danger app-nav-link app-nav-link--danger">Sign out</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dash-main">
+        <div class="db-page">
+            <p class="db-kicker">Settings</p>
+            <h1 class="db-title">Connect databases</h1>
+            <p class="db-lead">
+                Choose which SQL Accounting company file this approval app uses.
+                Multi-database switching (like SqlAccountSync) will be wired here next.
+            </p>
+
+            <section class="db-card" aria-labelledby="dbCurrentTitle">
+                <h2 id="dbCurrentTitle" class="db-card-title">Current connection</h2>
+                <dl class="db-meta">
+                    <div>
+                        <dt>Tenant</dt>
+                        <dd>@(string.IsNullOrWhiteSpace(Model.CurrentTenant) ? "—" : Model.CurrentTenant)</dd>
+                    </div>
+                    <div>
+                        <dt>Host</dt>
+                        <dd>@(string.IsNullOrWhiteSpace(Model.CurrentHost) ? "—" : Model.CurrentHost)</dd>
+                    </div>
+                    <div>
+                        <dt>Database</dt>
+                        <dd class="db-path">@(string.IsNullOrWhiteSpace(Model.CurrentDatabasePath) ? "—" : Model.CurrentDatabasePath)</dd>
+                    </div>
+                </dl>
+            </section>
+
+            <section class="db-card db-card--muted" aria-labelledby="dbSoonTitle">
+                <h2 id="dbSoonTitle" class="db-card-title">Coming soon</h2>
+                <p class="db-soon">
+                    Register Master / Sub company <code>.FDB</code> paths, test connections, and switch the active company
+                    without redeploying — same idea as SqlAccountSync Databases.
+                </p>
+            </section>
+        </div>
+    </main>
+</div>
+
+@section Scripts {
+    <script src="~/js/dashboard.js" asp-append-version="true"></script>
+}

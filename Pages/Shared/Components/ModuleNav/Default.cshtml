@@ -9,6 +9,7 @@
     var deliveryOn = path.StartsWith("/ScanSO", StringComparison.OrdinalIgnoreCase)
         || path.StartsWith("/DeliveryOrders", StringComparison.OrdinalIgnoreCase)
         || path.StartsWith("/ScanDelivered", StringComparison.OrdinalIgnoreCase);
+    var databasesOn = path.StartsWith("/Databases", StringComparison.OrdinalIgnoreCase);
 }
 <nav class="app-nav-list" aria-label="Modules">
 @if (Model.ShowPurchase)
@@ -63,3 +64,15 @@
     </a>
 }
 </nav>
+<div class="app-menu-account">
+    <a href="/Databases" class="@Model.LinkClass app-nav-link" aria-current="@(databasesOn ? "page" : null)">
+        <span class="app-nav-ico app-nav-ico--slate" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                <path d="M3 5v6c0 1.7 4 3 9 3s9-1.3 9-3V5"/>
+                <path d="M3 11v6c0 1.7 4 3 9 3s9-1.3 9-3v-6"/>
+            </svg>
+        </span>
+        <span class="app-nav-text">Connect databases</span>
+    </a>
+</div>

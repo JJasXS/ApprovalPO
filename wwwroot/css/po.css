@@ -382,12 +382,25 @@ body.scan-menu-open {
   font-weight: 600;
 }
 
-#menuPanel .menu-logout-form {
+#menuPanel .app-menu-account {
   margin-top: auto;
   margin-left: -12px;
   margin-right: -12px;
   padding: 8px 12px 0;
   border-top: 1px solid #e2e8f0;
+  background: none;
+}
+
+#menuPanel .app-menu-account .app-nav-link {
+  margin: 0;
+}
+
+#menuPanel .menu-logout-form {
+  margin-top: 0;
+  margin-left: -12px;
+  margin-right: -12px;
+  padding: 4px 12px 0;
+  border-top: 0;
 }
 
 .menu-user {

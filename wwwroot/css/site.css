@@ -238,18 +238,37 @@ a.app-nav-link[aria-current="page"] {
   color: #0f766e;
 }
 
+.app-nav-ico--slate {
+  background: #f1f5f9;
+  color: #475569;
+}
+
 .app-nav-text {
   min-width: 0;
+}
+
+/* Sits just above Sign out (margin-top:auto pulls this block to the footer). */
+.app-menu-account {
+  margin-top: auto;
+  margin-left: -12px;
+  margin-right: -12px;
+  padding: 12px 12px 0;
+  border-top: 1px solid rgba(197, 223, 240, 0.85);
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.35));
+}
+
+.app-menu-account .app-nav-link {
+  margin: 0 12px;
 }
 
 .dash-menu-signout,
 .scan-menu-signout,
 .app-menu-signout {
-  margin-top: auto;
+  margin-top: 0;
   margin-left: -12px;
   margin-right: -12px;
-  padding: 12px 12px 4px;
-  border-top: 1px solid rgba(197, 223, 240, 0.85);
+  padding: 8px 12px 4px;
+  border-top: 0;
   background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.45));
 }
 

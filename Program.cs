@@ -227,6 +227,7 @@ var razorPages = builder.Services.AddRazorPages(options =>
     options.Conventions.AuthorizePage("/DeliveryOrders", PolicyNames.DirectorAccess);
     options.Conventions.AuthorizePage("/ScanDeliveredDetail", PolicyNames.DirectorAccess);
     options.Conventions.AuthorizePage("/DetectRfid", PolicyNames.DirectorAccess);
+    options.Conventions.AuthorizePage("/Databases", PolicyNames.DirectorAccess);
 });
 if (builder.Environment.IsDevelopment())
     razorPages.AddRazorRuntimeCompilation();
