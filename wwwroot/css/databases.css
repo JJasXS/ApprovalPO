@@ -218,17 +218,38 @@
   grid-template-columns: 1fr 1fr;
 }
 
-.db-path-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
+.db-browse-trigger {
+  margin-top: 8px;
+  width: 100%;
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.db-browse-trigger:hover {
+  background: #f8fafc;
+}
+
+.db-browse-clip {
+  width: 18px;
+  height: 18px;
+  color: #64748b;
+  flex-shrink: 0;
 }
 
 @media (max-width: 560px) {
   .db-field-row,
-  .db-field-row--login,
-  .db-path-row {
+  .db-field-row--login {
     grid-template-columns: 1fr;
   }
 }
@@ -248,113 +269,172 @@
   display: none;
 }
 
-.db-browse-panel {
-  width: min(560px, 100%);
-  max-height: min(70vh, 640px);
+.db-browse-panel--open {
+  width: min(760px, 100%);
+  height: min(72vh, 620px);
   display: flex;
   flex-direction: column;
-  background: #fff;
-  border-radius: 14px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.2);
+  background: #f3f3f3;
+  border-radius: 8px;
+  border: 1px solid #a0a0a0;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.28);
   overflow: hidden;
+  font-family: "Segoe UI", Tahoma, sans-serif;
 }
 
-.db-browse-head {
+.db-browse-titlebar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 16px;
-  border-bottom: 1px solid #e2e8f0;
+  padding: 8px 12px;
+  background: #fff;
+  border-bottom: 1px solid #d0d0d0;
 }
 
 .db-browse-title {
   margin: 0;
-  font-size: 1rem;
-  font-weight: 750;
-  color: #0f172a;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1a1a1a;
 }
 
 .db-browse-close {
   border: 0;
   background: transparent;
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   line-height: 1;
-  color: #64748b;
+  color: #555;
   cursor: pointer;
+  width: 28px;
+  height: 28px;
 }
 
-.db-browse-toolbar {
+.db-browse-close:hover {
+  background: #e81123;
+  color: #fff;
+}
+
+.db-browse-nav {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-  border-bottom: 1px solid #f1f5f9;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #f3f3f3;
+  border-bottom: 1px solid #dcdcdc;
 }
 
-.db-browse-crumb {
-  margin: 0;
+.db-browse-nav-btn {
+  width: 32px;
+  height: 28px;
+  border: 1px solid #c0c0c0;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.db-browse-nav-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.db-browse-address {
+  flex: 1;
   min-width: 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.75rem;
-  color: #475569;
-  word-break: break-all;
+  padding: 6px 10px;
+  border: 1px solid #c0c0c0;
+  border-radius: 4px;
+  background: #fff;
+  font-size: 0.8125rem;
+  color: #1a1a1a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .db-browse-error {
   margin: 0;
-  padding: 8px 16px;
+  padding: 8px 12px;
   color: #b91c1c;
   font-size: 0.8125rem;
   font-weight: 600;
   background: #fef2f2;
 }
 
-.db-browse-list {
-  list-style: none;
-  margin: 0;
-  padding: 8px;
-  overflow: auto;
+.db-browse-table-wrap {
   flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: #fff;
+  margin: 0 10px;
+  border: 1px solid #c0c0c0;
 }
 
-.db-browse-item {
+.db-browse-table {
   width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.db-browse-table th {
+  position: sticky;
+  top: 0;
+  text-align: left;
+  font-weight: 600;
+  color: #333;
+  background: #f7f7f7;
+  border-bottom: 1px solid #ddd;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
+.db-browse-table td {
+  padding: 5px 10px;
+  border-bottom: 1px solid #f0f0f0;
+  color: #1a1a1a;
+  vertical-align: middle;
+}
+
+.db-browse-row {
+  cursor: default;
+}
+
+.db-browse-row:hover {
+  background: #e8f4fc;
+}
+
+.db-browse-row.is-selected {
+  background: #cce8ff;
+}
+
+.db-browse-col-name {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
-  text-align: left;
-  font: inherit;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #0f172a;
-  cursor: pointer;
+  gap: 8px;
+  min-width: 180px;
 }
 
-.db-browse-item:hover {
-  background: #f0f9ff;
+.db-browse-col-size {
+  text-align: right;
+  white-space: nowrap;
 }
 
 .db-browse-ico {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
-  border-radius: 4px;
+  border-radius: 2px;
   background: #e2e8f0;
 }
 
-.db-browse-item--drive .db-browse-ico,
-.db-browse-item--dir .db-browse-ico {
-  background: #fde68a;
+.db-browse-row--drive .db-browse-ico,
+.db-browse-row--dir .db-browse-ico {
+  background: #f6c659;
 }
 
-.db-browse-item--file .db-browse-ico {
-  background: #7dd3fc;
+.db-browse-row--file .db-browse-ico {
+  background: #5eb6e4;
 }
 
 .db-browse-name {
@@ -364,9 +444,71 @@
 
 .db-browse-empty,
 .db-browse-loading {
-  padding: 16px;
-  color: #64748b;
-  font-size: 0.875rem;
+  padding: 18px 10px;
+  color: #666;
+  text-align: center;
+}
+
+.db-browse-footer {
+  padding: 10px 12px 12px;
+  background: #f3f3f3;
+  border-top: 1px solid #d0d0d0;
+  display: grid;
+  gap: 8px;
+}
+
+.db-browse-footer-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.db-browse-footer-label {
+  width: 72px;
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+  color: #333;
+}
+
+.db-browse-filename,
+.db-browse-filter {
+  flex: 1;
+  min-width: 160px;
+  padding: 6px 8px;
+  border: 1px solid #c0c0c0;
+  border-radius: 3px;
+  background: #fff;
+  font: inherit;
+  font-size: 0.8125rem;
+}
+
+.db-browse-footer-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.db-browse-open-btn,
+.db-browse-cancel-btn {
+  min-width: 88px;
+  padding: 6px 14px;
+  border-radius: 3px;
+  border: 1px solid #adadad;
+  background: #e1e1e1;
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.db-browse-open-btn:hover:not(:disabled),
+.db-browse-cancel-btn:hover {
+  background: #d4d4d4;
+}
+
+.db-browse-open-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .db-field {

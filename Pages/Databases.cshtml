@@ -136,10 +136,13 @@
                     </div>
                     <div class="db-field">
                         <label asp-for="Input.FbPath"></label>
-                        <div class="db-path-row">
-                            <input asp-for="Input.FbPath" class="db-input" placeholder="D:\ACC\COMPANY.FDB" autocomplete="off" />
-                            <button type="button" class="db-btn db-btn--secondary" id="dbBrowseOpen">Browse…</button>
-                        </div>
+                        <input asp-for="Input.FbPath" class="db-input" placeholder="D:\ACC\COMPANY.FDB" autocomplete="off" />
+                        <button type="button" class="db-browse-trigger" id="dbBrowseOpen">
+                            <svg class="db-browse-clip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M21.44 11.05l-8.49 8.49a5.5 5.5 0 0 1-7.78-7.78l8.49-8.49a3.5 3.5 0 0 1 4.95 4.95l-8.49 8.49a1.5 1.5 0 1 1-2.12-2.12l7.78-7.78"/>
+                            </svg>
+                            <span>Browse...</span>
+                        </button>
                         <span asp-validation-for="Input.FbPath" class="db-field-error"></span>
                     </div>
                     <div class="db-field-row db-field-row--login">
@@ -169,17 +172,45 @@
 </div>
 
 <div id="dbBrowseModal" class="db-browse-modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="dbBrowseTitle">
-    <div class="db-browse-panel">
-        <div class="db-browse-head">
-            <h2 id="dbBrowseTitle" class="db-browse-title">Choose database file</h2>
+    <div class="db-browse-panel db-browse-panel--open">
+        <div class="db-browse-titlebar">
+            <h2 id="dbBrowseTitle" class="db-browse-title">Open</h2>
             <button type="button" class="db-browse-close" id="dbBrowseClose" aria-label="Close">×</button>
         </div>
-        <div class="db-browse-toolbar">
-            <button type="button" class="db-btn db-btn--secondary" id="dbBrowseUp">Up</button>
-            <p class="db-browse-crumb" id="dbBrowsePath">This computer</p>
+        <div class="db-browse-nav">
+            <button type="button" class="db-browse-nav-btn" id="dbBrowseUp" title="Up one level" aria-label="Up one level">↑</button>
+            <div class="db-browse-address" id="dbBrowsePath">This PC</div>
         </div>
         <p class="db-browse-error" id="dbBrowseError" hidden></p>
-        <ul class="db-browse-list" id="dbBrowseList"></ul>
+        <div class="db-browse-table-wrap">
+            <table class="db-browse-table" aria-label="Files and folders">
+                <thead>
+                    <tr>
+                        <th scope="col">Name</th>
+                        <th scope="col">Date modified</th>
+                        <th scope="col">Type</th>
+                        <th scope="col">Size</th>
+                    </tr>
+                </thead>
+                <tbody id="dbBrowseList"></tbody>
+            </table>
+        </div>
+        <div class="db-browse-footer">
+            <div class="db-browse-footer-row">
+                <label class="db-browse-footer-label" for="dbBrowseFileName">File name:</label>
+                <input type="text" id="dbBrowseFileName" class="db-browse-filename" readonly />
+            </div>
+            <div class="db-browse-footer-row">
+                <label class="db-browse-footer-label" for="dbBrowseFilter">File type:</label>
+                <select id="dbBrowseFilter" class="db-browse-filter" disabled>
+                    <option>Firebird Database (*.fdb;*.gdb)</option>
+                </select>
+                <div class="db-browse-footer-actions">
+                    <button type="button" class="db-browse-open-btn" id="dbBrowseConfirm" disabled>Open</button>
+                    <button type="button" class="db-browse-cancel-btn" id="dbBrowseCancel">Cancel</button>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 

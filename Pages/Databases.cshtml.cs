@@ -82,6 +82,7 @@ public class DatabasesModel : PageModel
                         Name = d.Name.TrimEnd('\\'),
                         Path = d.RootDirectory.FullName,
                         Kind = "drive",
+                        TypeLabel = "Local Disk",
                     })
                     .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
                     .ToList();
@@ -99,7 +100,14 @@ public class DatabasesModel : PageModel
             {
                 try
                 {
-                    entries.Add(new BrowseEntry { Name = sub.Name, Path = sub.FullName, Kind = "dir" });
+                    entries.Add(new BrowseEntry
+                    {
+                        Name = sub.Name,
+                        Path = sub.FullName,
+                        Kind = "dir",
+                        TypeLabel = "File folder",
+                        ModifiedUtc = sub.LastWriteTimeUtc,
+                    });
                 }
                 catch
                 {
@@ -112,7 +120,15 @@ public class DatabasesModel : PageModel
                                      || f.Extension.Equals(".gdb", StringComparison.OrdinalIgnoreCase))
                          .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase))
             {
-                entries.Add(new BrowseEntry { Name = file.Name, Path = file.FullName, Kind = "file" });
+                entries.Add(new BrowseEntry
+                {
+                    Name = file.Name,
+                    Path = file.FullName,
+                    Kind = "file",
+                    TypeLabel = "Firebird Database",
+                    SizeBytes = file.Length,
+                    ModifiedUtc = file.LastWriteTimeUtc,
+                });
             }
 
             return new JsonResult(new BrowseResult
@@ -370,5 +386,8 @@ public class DatabasesModel : PageModel
         public string Name { get; set; } = "";
         public string Path { get; set; } = "";
         public string Kind { get; set; } = ""; // drive | dir | file
+        public string TypeLabel { get; set; } = "";
+        public long? SizeBytes { get; set; }
+        public DateTime? ModifiedUtc { get; set; }
     }
 }
