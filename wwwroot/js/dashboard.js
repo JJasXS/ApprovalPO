@@ -214,7 +214,6 @@
       panel.classList.toggle('is-active', on);
       panel.hidden = !on;
     });
-    tabs.classList.toggle('is-action', name === 'action');
   }
 
   buttons.forEach(function (btn) {

@@ -260,22 +260,6 @@ a.dash-menu-link[aria-current="page"] {
   overflow: hidden;
 }
 
-.dash-tabs.is-action {
-  background: transparent;
-  border-color: transparent;
-  overflow: visible;
-}
-
-.dash-tabs.is-action .dash-tablist {
-  background: #fff;
-  border: 1px solid #e7e5e4;
-  border-radius: 14px;
-  margin-bottom: 10px;
-}
-
-.dash-tabs.is-action .dash-tabpanels {
-  padding: 0;
-}
 
 .dash-chart-card {
   padding: 16px 16px 10px;
@@ -427,51 +411,52 @@ a.dash-menu-link[aria-current="page"] {
 }
 
 .dash-action-icons {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
   margin: 0;
-  padding: 4px 2px 8px;
+  padding: 12px 14px 14px;
 }
 
 .dash-action-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  aspect-ratio: 1;
-  min-height: 72px;
-  padding: 14px;
-  background: #fff;
-  border: 1px solid #e7e5e4;
-  border-radius: 16px;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 14px;
   text-decoration: none;
   color: inherit;
-  transition: border-color 0.18s ease, transform 0.18s ease;
+  transition: transform 0.15s ease, opacity 0.15s ease;
 }
 
 .dash-action-icon:hover,
 .dash-action-icon:focus-visible {
-  border-color: #cbd5e1;
   transform: translateY(-1px);
   outline: none;
+  opacity: 0.92;
 }
 
 .dash-action-icon .dash-card-icon-wrap {
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   margin: 0;
-  border-radius: 14px;
+  border-radius: 12px;
 }
 
 .dash-action-icon .dash-card-icon-wrap svg {
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
 }
 
 .dash-action-empty {
-  grid-column: 1 / -1;
+  width: 100%;
   margin: 0;
-  padding: 16px;
+  padding: 8px;
   text-align: center;
   color: #64748b;
   font-size: 13px;
