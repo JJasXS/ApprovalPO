@@ -23,11 +23,14 @@ public sealed class CompanyDatabaseEntry
     [JsonPropertyName("fbPath")]
     public string FbPath { get; set; } = "";
 
+    public const string DefaultFbUser = "SYSDBA";
+    public const string DefaultFbPassword = "masterkey";
+
     [JsonPropertyName("fbUser")]
-    public string FbUser { get; set; } = "SYSDBA";
+    public string FbUser { get; set; } = DefaultFbUser;
 
     [JsonPropertyName("fbPassword")]
-    public string FbPassword { get; set; } = "";
+    public string FbPassword { get; set; } = DefaultFbPassword;
 
     [JsonPropertyName("fbPort")]
     public int FbPort { get; set; } = 3050;

@@ -53,10 +53,10 @@ public class DatabasesModel : PageModel
         public string FbPath { get; set; } = "";
 
         [Required, Display(Name = "User")]
-        public string FbUser { get; set; } = "SYSDBA";
+        public string FbUser { get; set; } = CompanyDatabaseEntry.DefaultFbUser;
 
         [Display(Name = "Password")]
-        public string? FbPassword { get; set; }
+        public string? FbPassword { get; set; } = CompanyDatabaseEntry.DefaultFbPassword;
 
         public string FbCharset { get; set; } = "UTF8";
     }
@@ -170,16 +170,7 @@ public class DatabasesModel : PageModel
             existing = bundle.Companies.FirstOrDefault(c =>
                 string.Equals(c.Id, id, StringComparison.OrdinalIgnoreCase));
 
-        var password = (Input.FbPassword ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(password) && existing is not null)
-            password = existing.FbPassword;
-
-        if (string.IsNullOrWhiteSpace(password))
-        {
-            ModelState.AddModelError("Input.FbPassword", "Password is required for new companies.");
-            IsEditing = true;
-            return Page();
-        }
+        var password = ResolvePassword(Input.FbPassword, existing?.FbPassword);
 
         if (existing is null)
         {
@@ -193,7 +184,9 @@ public class DatabasesModel : PageModel
         existing.DisplayName = Input.DisplayName.Trim();
         existing.FbHost = DefaultHost;
         existing.FbPath = Input.FbPath.Trim();
-        existing.FbUser = string.IsNullOrWhiteSpace(Input.FbUser) ? "SYSDBA" : Input.FbUser.Trim();
+        existing.FbUser = string.IsNullOrWhiteSpace(Input.FbUser)
+            ? CompanyDatabaseEntry.DefaultFbUser
+            : Input.FbUser.Trim();
         existing.FbPassword = password;
         existing.FbPort = DefaultPort;
         existing.FbDialect = 3;
@@ -256,11 +249,11 @@ public class DatabasesModel : PageModel
         ApplyLocalDefaults();
         IsEditing = true;
 
-        var password = (Input.FbPassword ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(password) && !string.IsNullOrWhiteSpace(Input.Id))
+        string? storedPassword = null;
+        if (!string.IsNullOrWhiteSpace(Input.Id))
         {
             var existing = await _store.FindAsync(Input.Id!, cancellationToken).ConfigureAwait(false);
-            password = existing?.FbPassword ?? "";
+            storedPassword = existing?.FbPassword;
         }
 
         var probe = new CompanyDatabaseEntry
@@ -269,8 +262,10 @@ public class DatabasesModel : PageModel
             DisplayName = Input.DisplayName,
             FbHost = DefaultHost,
             FbPath = Input.FbPath,
-            FbUser = Input.FbUser,
-            FbPassword = password,
+            FbUser = string.IsNullOrWhiteSpace(Input.FbUser)
+                ? CompanyDatabaseEntry.DefaultFbUser
+                : Input.FbUser.Trim(),
+            FbPassword = ResolvePassword(Input.FbPassword, storedPassword),
             FbPort = DefaultPort,
             FbDialect = 3,
             FbCharset = Input.FbCharset,
@@ -351,6 +346,18 @@ public class DatabasesModel : PageModel
         // Host/port are fixed; clear any stale validation from removed fields.
         ModelState.Remove("Input.FbHost");
         ModelState.Remove("Input.FbPort");
+    }
+
+    /// <summary>Form password → stored SM password → SYSDBA default masterkey.</summary>
+    private static string ResolvePassword(string? formPassword, string? storedPassword)
+    {
+        var password = (formPassword ?? "").Trim();
+        if (!string.IsNullOrWhiteSpace(password))
+            return password;
+        password = (storedPassword ?? "").Trim();
+        if (!string.IsNullOrWhiteSpace(password))
+            return password;
+        return CompanyDatabaseEntry.DefaultFbPassword;
     }
 
     private async Task LoadAsync(CancellationToken cancellationToken)

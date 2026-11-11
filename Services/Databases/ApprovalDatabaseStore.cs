@@ -156,8 +156,10 @@ public sealed class ApprovalDatabaseStore : IApprovalDatabaseStore
             ?? Environment.GetEnvironmentVariable("FIREBIRD_DB_PATH")
             ?? Environment.GetEnvironmentVariable("DB_PATH")
             ?? "").Trim();
-        var user = (_configuration["TenantBootstrap:FirebirdUser"] ?? "SYSDBA").Trim();
-        var password = (_configuration["TenantBootstrap:FirebirdPassword"] ?? "").Trim();
+        var user = (_configuration["TenantBootstrap:FirebirdUser"]
+            ?? CompanyDatabaseEntry.DefaultFbUser).Trim();
+        var password = (_configuration["TenantBootstrap:FirebirdPassword"]
+            ?? CompanyDatabaseEntry.DefaultFbPassword).Trim();
         var useBootstrap = string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(path);
 
         return new CompanyDatabaseEntry
@@ -166,8 +168,10 @@ public sealed class ApprovalDatabaseStore : IApprovalDatabaseStore
             DisplayName = string.IsNullOrWhiteSpace(tenant) ? "Default" : tenant,
             FbHost = host,
             FbPath = path,
-            FbUser = string.IsNullOrWhiteSpace(user) ? "SYSDBA" : user,
-            FbPassword = password,
+            FbUser = string.IsNullOrWhiteSpace(user) ? CompanyDatabaseEntry.DefaultFbUser : user,
+            FbPassword = string.IsNullOrWhiteSpace(password)
+                ? CompanyDatabaseEntry.DefaultFbPassword
+                : password,
             UseTenantBootstrap = useBootstrap,
         };
     }
@@ -201,8 +205,12 @@ public sealed class ApprovalDatabaseStore : IApprovalDatabaseStore
             DisplayName = display,
             FbHost = (c.FbHost ?? "").Trim(),
             FbPath = (c.FbPath ?? "").Trim(),
-            FbUser = string.IsNullOrWhiteSpace(c.FbUser) ? "SYSDBA" : c.FbUser.Trim(),
-            FbPassword = c.FbPassword ?? "",
+            FbUser = string.IsNullOrWhiteSpace(c.FbUser)
+                ? CompanyDatabaseEntry.DefaultFbUser
+                : c.FbUser.Trim(),
+            FbPassword = string.IsNullOrWhiteSpace(c.FbPassword)
+                ? CompanyDatabaseEntry.DefaultFbPassword
+                : c.FbPassword,
             FbPort = c.FbPort > 0 ? c.FbPort : 3050,
             FbDialect = c.FbDialect > 0 ? c.FbDialect : 3,
             FbCharset = string.IsNullOrWhiteSpace(c.FbCharset) ? "UTF8" : c.FbCharset.Trim(),

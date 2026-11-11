@@ -1001,16 +1001,14 @@ public sealed class TenantDbConnectionResolver
         var host = (company.FbHost ?? "").Trim();
         var path = (company.FbPath ?? "").Trim();
         var user = (company.FbUser ?? "").Trim();
-        var password = company.FbPassword ?? "";
+        var password = (company.FbPassword ?? "").Trim();
         if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(path))
             throw new InvalidOperationException(
                 $"Company '{company.DisplayName}' is missing Firebird host or database path.");
         if (string.IsNullOrWhiteSpace(user))
-            throw new InvalidOperationException(
-                $"Company '{company.DisplayName}' is missing Firebird user.");
+            user = CompanyDatabaseEntry.DefaultFbUser;
         if (string.IsNullOrWhiteSpace(password))
-            throw new InvalidOperationException(
-                $"Company '{company.DisplayName}' is missing Firebird password.");
+            password = CompanyDatabaseEntry.DefaultFbPassword;
 
         var csb = new FbConnectionStringBuilder
         {
