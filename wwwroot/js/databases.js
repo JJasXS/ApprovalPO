@@ -24,7 +24,7 @@
 
   function setHint(msg) {
     if (!hintEl) return;
-    hintEl.textContent = msg || "Use Browse to pick a company .FDB (same as SqlAccountSync).";
+    hintEl.textContent = msg || "Use the pin to choose the company .FDB.";
     var isError = !!msg && (
       msg.indexOf("not on this server") >= 0
       || msg.indexOf("Could not") >= 0

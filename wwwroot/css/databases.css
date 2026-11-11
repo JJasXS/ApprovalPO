@@ -218,26 +218,36 @@
   grid-template-columns: 1fr 1fr;
 }
 
-.db-browse-trigger {
-  margin-top: 8px;
-  width: 100%;
-  display: inline-flex;
+.db-path-input {
+  position: relative;
+  display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  border: 1px solid #cbd5e1;
-  background: #fff;
-  color: #0f172a;
-  font: inherit;
-  font-size: 0.9375rem;
-  font-weight: 700;
-  cursor: pointer;
+  min-width: 0;
 }
 
-.db-browse-trigger:hover {
-  background: #f8fafc;
+.db-path-input .db-input {
+  width: 100%;
+  min-width: 0;
+  padding-right: 44px;
+}
+
+.db-path-pin {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  padding: 6px;
+  line-height: 0;
+  border-radius: 6px;
+}
+
+.db-path-pin:hover {
+  color: #0f172a;
+  background: #f1f5f9;
 }
 
 .db-path-hint {
