@@ -90,13 +90,14 @@ public static class FirebirdRowHelpers
         return null;
     }
 
+    /// <summary>Stock qty for scan/transfer: <c>SQTY</c>, then <c>QTY</c>, then <c>SUOMQTY</c>.</summary>
     public static decimal LineSourceQty(IReadOnlyDictionary<string, object?> line)
     {
-        var suom = Money(ToDecimal(line.GetValueOrDefault("SUOMQTY")));
-        if (suom > 0) return suom;
         var sqty = Money(ToDecimal(line.GetValueOrDefault("SQTY")));
         if (sqty > 0) return sqty;
-        return Money(ToDecimal(line.GetValueOrDefault("QTY")));
+        var qty = Money(ToDecimal(line.GetValueOrDefault("QTY")));
+        if (qty > 0) return qty;
+        return Money(ToDecimal(line.GetValueOrDefault("SUOMQTY")));
     }
 
     public static bool IsTransferable(IReadOnlyDictionary<string, object?> line)

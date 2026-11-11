@@ -112,10 +112,11 @@ public sealed class SalesOrderDeliveryQueryService : ISalesOrderDeliveryQuery
         {
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
-                var suom = FirebirdDataReaderHelper.GetDecimal(reader, "SUOMQTY");
                 var sqty = FirebirdDataReaderHelper.GetDecimal(reader, "SQTY");
                 var qty = FirebirdDataReaderHelper.GetDecimal(reader, "QTY");
-                var ordered = suom > 0 ? suom : (sqty > 0 ? sqty : qty);
+                var suom = FirebirdDataReaderHelper.GetDecimal(reader, "SUOMQTY");
+                // Scan/Left uses stock SQTY (not selling SUOMQTY).
+                var ordered = sqty > 0 ? sqty : (qty > 0 ? qty : suom);
                 rawLines.Add((
                     FirebirdDataReaderHelper.GetInt32(reader, "LINENO", "SEQ"),
                     FirebirdDataReaderHelper.GetInt32(reader, "DTLKEY"),

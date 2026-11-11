@@ -167,7 +167,7 @@ static async Task<(int LineNo, string ItemCode, decimal Outstanding)?> FirstTran
 {
     const string sql = """
         SELECT FIRST 1 COALESCE(SEQ, 0), TRIM(COALESCE(ITEMCODE, '')),
-               COALESCE(NULLIF(SUOMQTY, 0), NULLIF(SQTY, 0), COALESCE(QTY, 0), 0)
+               COALESCE(NULLIF(SQTY, 0), NULLIF(SUOMQTY, 0), COALESCE(QTY, 0), 0)
         FROM SL_SODTL
         WHERE DOCKEY = @D
           AND (TRANSFERABLE IS NULL OR TRANSFERABLE IS TRUE)
