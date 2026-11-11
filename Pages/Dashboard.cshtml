@@ -41,17 +41,48 @@
             <h1 class="dash-overview-title">Overview</h1>
         </div>
 
-        @if (Model.Figures.Count > 0)
+        @if (Model.HasOverview)
         {
-            <section class="dash-stats" aria-label="Totals">
-                @foreach (var fig in Model.Figures)
-                {
-                    <a class="dash-stat" href="@fig.Href">
-                        <span class="dash-stat-label">@fig.Label</span>
-                        <span class="dash-stat-count">@(fig.Count is int n ? n.ToString("N0") : "—")</span>
-                        <span class="dash-stat-amount">@(fig.Amount is decimal a ? a.ToString("N2") : "—")</span>
-                    </a>
-                }
+            <section class="dash-insight" aria-label="Overview">
+                <div class="dash-chart-card" id="dashTrend" data-trend='@Html.Raw(Model.TrendJson)'>
+                    <div class="dash-chart-head">
+                        <h2 class="dash-chart-title">Last 7 days</h2>
+                        <p class="dash-chart-sub">Purchase, sales &amp; goods volume</p>
+                    </div>
+                    <div class="dash-graph-frame" id="dashTrendGraph"></div>
+                    <div class="dash-graph-legend" aria-hidden="true"></div>
+                </div>
+
+                <div class="dash-tabs" data-dash-tabs>
+                    <div class="dash-tablist" role="tablist" aria-label="Overview panels">
+                        <button type="button" class="dash-tab is-active" role="tab" aria-selected="true" data-dash-tab="summary">Summary</button>
+                    </div>
+                    <div class="dash-tabpanels">
+                        <div class="dash-tabpanel is-active" role="tabpanel" data-dash-panel="summary">
+                            <ul class="dash-indicators">
+                                @foreach (var fig in Model.Figures)
+                                {
+                                    var color = Model.Trend.Series.FirstOrDefault(s => s.Key == fig.Key)?.Color ?? "#64748b";
+                                    <li>
+                                        <a class="dash-indicator" href="@fig.Href">
+                                            <span class="dash-indicator-dot" style="--dash-dot:@color"></span>
+                                            <span class="dash-indicator-copy">
+                                                <span class="dash-indicator-label">@fig.Label</span>
+                                                <span class="dash-indicator-meta">
+                                                    @(fig.Count is int n ? n.ToString("N0") : "—")
+                                                    @DashboardModel.IndicatorUnit(fig.Key)
+                                                    ·
+                                                    @(fig.Amount is decimal a ? a.ToString("N2") : "—")
+                                                </span>
+                                            </span>
+                                            <span class="dash-indicator-go" aria-hidden="true">›</span>
+                                        </a>
+                                    </li>
+                                }
+                            </ul>
+                        </div>
+                    </div>
+                </div>
             </section>
         }
 
@@ -190,3 +221,7 @@
         </div>
     </main>
 </div>
+
+@section Scripts {
+    <script src="~/js/dashboard.js" asp-append-version="true"></script>
+}

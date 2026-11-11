@@ -1,3 +1,4 @@
+using ApprovalPO.Helpers;
 using ApprovalPO.Models;
 using ApprovalPO.Services.Auth;
 using ApprovalPO.Services.Orders;
@@ -6,14 +7,23 @@ namespace ApprovalPO.Services;
 
 public sealed record DashboardFigure(string Key, string Label, string Href, int? Count, decimal? Amount);
 
+public sealed record DashboardTrendSeries(string Key, string Label, string Color, IReadOnlyList<int> Values);
+
+public sealed record DashboardTrend(IReadOnlyList<string> Labels, IReadOnlyList<DashboardTrendSeries> Series);
+
 public sealed class DashboardOverview
 {
     public DashboardModuleFlags Modules { get; init; } = new();
     public IReadOnlyList<DashboardFigure> Figures { get; init; } = Array.Empty<DashboardFigure>();
+    public DashboardTrend Trend { get; init; } = new(Array.Empty<string>(), Array.Empty<DashboardTrendSeries>());
 }
 
 public sealed class DashboardOverviewService
 {
+    private static readonly (string Key, string Label, string Color) PurchaseMeta = ("purchase", "Purchase", "#2563eb");
+    private static readonly (string Key, string Label, string Color) SalesMeta = ("sales", "Sales", "#16a34a");
+    private static readonly (string Key, string Label, string Color) GoodsMeta = ("goods", "Goods", "#7c3aed");
+
     private readonly IModuleAccessService _modules;
     private readonly IPurchaseOrderCatalog _purchase;
     private readonly ISalesOrderCatalog _sales;
@@ -37,11 +47,39 @@ public sealed class DashboardOverviewService
     public async Task<DashboardOverview> LoadAsync(System.Security.Claims.ClaimsPrincipal user, CancellationToken cancellationToken)
     {
         var modules = await _modules.GetDashboardModulesAsync(user, cancellationToken).ConfigureAwait(false);
-        var jobs = BuildJobs(modules, cancellationToken);
-        var figures = jobs.Count == 0
-            ? Array.Empty<DashboardFigure>()
-            : await Task.WhenAll(jobs).ConfigureAwait(false);
-        return new DashboardOverview { Modules = modules, Figures = figures };
+        var endDate = DateTime.Today;
+        var labels = DashboardTrendBuilder.BuildLabels(endDate);
+        var series = new List<DashboardTrendSeries>();
+        var figures = new List<DashboardFigure>();
+
+        if (modules.PurchaseApproval)
+        {
+            var pack = await LoadPurchaseAsync(endDate, cancellationToken).ConfigureAwait(false);
+            figures.Add(pack.Figure);
+            series.Add(pack.Series);
+        }
+
+        if (modules.SalesApproval)
+        {
+            var pack = await LoadSalesAsync(endDate, cancellationToken).ConfigureAwait(false);
+            figures.Add(pack.Figure);
+            series.Add(pack.Series);
+        }
+
+        if (modules.ScanPo || modules.ReceivedGoods)
+        {
+            var href = modules.ScanPo ? "/ScanPO" : "/ReceivedGoods";
+            var pack = await LoadGoodsAsync(href, endDate, cancellationToken).ConfigureAwait(false);
+            figures.Add(pack.Figure);
+            series.Add(pack.Series);
+        }
+
+        return new DashboardOverview
+        {
+            Modules = modules,
+            Figures = figures,
+            Trend = new DashboardTrend(labels, series)
+        };
     }
 
     public static (int Count, decimal Amount) SumPending(IEnumerable<(string Status, decimal Amount)> rows)
@@ -58,59 +96,74 @@ public sealed class DashboardOverviewService
         return (count, amount);
     }
 
-    private List<Task<DashboardFigure>> BuildJobs(DashboardModuleFlags modules, CancellationToken cancellationToken)
-    {
-        var jobs = new List<Task<DashboardFigure>>();
-        if (modules.PurchaseApproval)
-            jobs.Add(PurchaseAsync(cancellationToken));
-        if (modules.SalesApproval)
-            jobs.Add(SalesAsync(cancellationToken));
-        if (modules.ScanPo || modules.ReceivedGoods)
-            jobs.Add(GoodsAsync(modules.ScanPo ? "/ScanPO" : "/ReceivedGoods", cancellationToken));
-        return jobs;
-    }
-
-    private async Task<DashboardFigure> PurchaseAsync(CancellationToken cancellationToken)
+    private async Task<(DashboardFigure Figure, DashboardTrendSeries Series)> LoadPurchaseAsync(
+        DateTime endDate,
+        CancellationToken cancellationToken)
     {
         try
         {
             var rows = await _purchase.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
             var pending = SumPending(rows.Select(o => (o.Status, o.Amount)));
-            return new DashboardFigure("purchase", "Purchase approvals", "/PurchaseOrders", pending.Count, pending.Amount);
+            var values = DashboardTrendBuilder.CountByDay(rows.Select(o => o.OrderDate), endDate);
+            return (
+                new DashboardFigure(PurchaseMeta.Key, "Purchase approvals", "/PurchaseOrders", pending.Count, pending.Amount),
+                new DashboardTrendSeries(PurchaseMeta.Key, PurchaseMeta.Label, PurchaseMeta.Color, values));
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Dashboard purchase totals unavailable.");
-            return new DashboardFigure("purchase", "Purchase approvals", "/PurchaseOrders", null, null);
+            return EmptyPack(PurchaseMeta, "Purchase approvals", "/PurchaseOrders");
         }
     }
 
-    private async Task<DashboardFigure> SalesAsync(CancellationToken cancellationToken)
+    private async Task<(DashboardFigure Figure, DashboardTrendSeries Series)> LoadSalesAsync(
+        DateTime endDate,
+        CancellationToken cancellationToken)
     {
         try
         {
             var rows = await _sales.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
             var pending = SumPending(rows.Select(o => (o.Status, o.Amount)));
-            return new DashboardFigure("sales", "Sales approvals", "/SalesOrders", pending.Count, pending.Amount);
+            var values = DashboardTrendBuilder.CountByDay(rows.Select(o => o.OrderDate), endDate);
+            return (
+                new DashboardFigure(SalesMeta.Key, "Sales approvals", "/SalesOrders", pending.Count, pending.Amount),
+                new DashboardTrendSeries(SalesMeta.Key, SalesMeta.Label, SalesMeta.Color, values));
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Dashboard sales totals unavailable.");
-            return new DashboardFigure("sales", "Sales approvals", "/SalesOrders", null, null);
+            return EmptyPack(SalesMeta, "Sales approvals", "/SalesOrders");
         }
     }
 
-    private async Task<DashboardFigure> GoodsAsync(string href, CancellationToken cancellationToken)
+    private async Task<(DashboardFigure Figure, DashboardTrendSeries Series)> LoadGoodsAsync(
+        string href,
+        DateTime endDate,
+        CancellationToken cancellationToken)
     {
         try
         {
             var rows = await _receipts.GetReceiptsAsync(cancellationToken).ConfigureAwait(false);
-            return new DashboardFigure("goods", "Goods received", href, rows.Count, rows.Sum(r => r.Amount));
+            var values = DashboardTrendBuilder.CountByDay(rows.Select(r => r.GrDate), endDate);
+            return (
+                new DashboardFigure(GoodsMeta.Key, "Goods received", href, rows.Count, rows.Sum(r => r.Amount)),
+                new DashboardTrendSeries(GoodsMeta.Key, GoodsMeta.Label, GoodsMeta.Color, values));
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Dashboard goods receipt totals unavailable.");
-            return new DashboardFigure("goods", "Goods received", href, null, null);
+            return EmptyPack(GoodsMeta, "Goods received", href);
         }
+    }
+
+    private static (DashboardFigure Figure, DashboardTrendSeries Series) EmptyPack(
+        (string Key, string Label, string Color) meta,
+        string figureLabel,
+        string href)
+    {
+        var zeros = Enumerable.Repeat(0, DashboardTrendBuilder.DayCount).ToArray();
+        return (
+            new DashboardFigure(meta.Key, figureLabel, href, null, null),
+            new DashboardTrendSeries(meta.Key, meta.Label, meta.Color, zeros));
     }
 }
