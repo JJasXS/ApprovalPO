@@ -44,7 +44,7 @@
         @{
             var showSummaryTab = Model.HasOverview;
             var showActionTab = Model.HasAnyModule;
-            var defaultTab = showSummaryTab ? "summary" : "action";
+            var defaultTab = showActionTab ? "action" : "summary";
         }
 
         @if (Model.HasOverview)

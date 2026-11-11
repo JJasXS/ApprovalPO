@@ -199,11 +199,18 @@
   var tabs = document.querySelector('[data-dash-tabs]');
   if (!tabs) return;
 
+  var storageKey = 'dash.activeTab';
   var buttons = Array.prototype.slice.call(tabs.querySelectorAll('[data-dash-tab]'));
   var panels = Array.prototype.slice.call(tabs.querySelectorAll('[data-dash-panel]'));
 
+  function hasTab(name) {
+    return buttons.some(function (btn) {
+      return btn.getAttribute('data-dash-tab') === name;
+    });
+  }
+
   function activate(name) {
-    if (!name) return;
+    if (!name || !hasTab(name)) return;
     buttons.forEach(function (btn) {
       var on = btn.getAttribute('data-dash-tab') === name;
       btn.classList.toggle('is-active', on);
@@ -214,6 +221,9 @@
       panel.classList.toggle('is-active', on);
       panel.hidden = !on;
     });
+    try {
+      sessionStorage.setItem(storageKey, name);
+    } catch (e) { /* ignore */ }
   }
 
   buttons.forEach(function (btn) {
@@ -222,7 +232,15 @@
     });
   });
 
-  var initial = tabs.getAttribute('data-default-tab')
+  var saved = '';
+  try {
+    saved = sessionStorage.getItem(storageKey) || '';
+  } catch (e) {
+    saved = '';
+  }
+
+  var initial = (saved && hasTab(saved) && saved)
+    || tabs.getAttribute('data-default-tab')
     || (buttons[0] && buttons[0].getAttribute('data-dash-tab'));
   activate(initial);
 })();
