@@ -10,6 +10,9 @@ namespace ApprovalPO.Pages;
 
 public class DatabasesModel : PageModel
 {
+    public const string DefaultHost = "localhost";
+    public const int DefaultPort = 3050;
+
     private readonly IConfiguration _configuration;
     private readonly IApprovalDatabaseStore _store;
     private readonly IActiveCompanyContext _activeCompany;
@@ -46,9 +49,6 @@ public class DatabasesModel : PageModel
         [Required, Display(Name = "Display name")]
         public string DisplayName { get; set; } = "";
 
-        [Required, Display(Name = "Host")]
-        public string FbHost { get; set; } = "";
-
         [Required, Display(Name = "Database path")]
         public string FbPath { get; set; } = "";
 
@@ -58,8 +58,6 @@ public class DatabasesModel : PageModel
         [Display(Name = "Password")]
         public string? FbPassword { get; set; }
 
-        public int FbPort { get; set; } = 3050;
-        public int FbDialect { get; set; } = 3;
         public string FbCharset { get; set; } = "UTF8";
     }
 
@@ -70,9 +68,70 @@ public class DatabasesModel : PageModel
             BeginEdit(edit);
     }
 
+    public IActionResult OnGetBrowse(string? path)
+    {
+        path = (path ?? "").Trim();
+        try
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                var roots = DriveInfo.GetDrives()
+                    .Where(d => d.IsReady && (d.DriveType == DriveType.Fixed || d.DriveType == DriveType.Network))
+                    .Select(d => new BrowseEntry
+                    {
+                        Name = d.Name.TrimEnd('\\'),
+                        Path = d.RootDirectory.FullName,
+                        Kind = "drive",
+                    })
+                    .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                return new JsonResult(new BrowseResult { CurrentPath = "", ParentPath = null, Entries = roots });
+            }
+
+            var dir = new DirectoryInfo(path);
+            if (!dir.Exists)
+                return new JsonResult(new { error = "Folder not found." }) { StatusCode = 404 };
+
+            var parent = dir.Parent?.FullName;
+            var entries = new List<BrowseEntry>();
+
+            foreach (var sub in dir.EnumerateDirectories().OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    entries.Add(new BrowseEntry { Name = sub.Name, Path = sub.FullName, Kind = "dir" });
+                }
+                catch
+                {
+                    // skip inaccessible folders
+                }
+            }
+
+            foreach (var file in dir.EnumerateFiles()
+                         .Where(f => f.Extension.Equals(".fdb", StringComparison.OrdinalIgnoreCase)
+                                     || f.Extension.Equals(".gdb", StringComparison.OrdinalIgnoreCase))
+                         .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                entries.Add(new BrowseEntry { Name = file.Name, Path = file.FullName, Kind = "file" });
+            }
+
+            return new JsonResult(new BrowseResult
+            {
+                CurrentPath = dir.FullName,
+                ParentPath = parent,
+                Entries = entries,
+            });
+        }
+        catch (Exception ex)
+        {
+            return new JsonResult(new { error = ex.Message }) { StatusCode = 400 };
+        }
+    }
+
     public async Task<IActionResult> OnPostSaveAsync(CancellationToken cancellationToken)
     {
         await LoadAsync(cancellationToken).ConfigureAwait(false);
+        ApplyLocalDefaults();
         if (!ModelState.IsValid)
         {
             IsEditing = true;
@@ -107,16 +166,15 @@ public class DatabasesModel : PageModel
         }
 
         existing.DisplayName = Input.DisplayName.Trim();
-        existing.FbHost = Input.FbHost.Trim();
+        existing.FbHost = DefaultHost;
         existing.FbPath = Input.FbPath.Trim();
         existing.FbUser = string.IsNullOrWhiteSpace(Input.FbUser) ? "SYSDBA" : Input.FbUser.Trim();
         existing.FbPassword = password;
-        existing.FbPort = Input.FbPort > 0 ? Input.FbPort : 3050;
-        existing.FbDialect = Input.FbDialect > 0 ? Input.FbDialect : 3;
+        existing.FbPort = DefaultPort;
+        existing.FbDialect = 3;
         existing.FbCharset = string.IsNullOrWhiteSpace(Input.FbCharset) ? "UTF8" : Input.FbCharset.Trim();
         existing.UseTenantBootstrap = false;
 
-        // Drop ephemeral bootstrap-only placeholder once a real company is saved.
         bundle.Companies.RemoveAll(c =>
             c.UseTenantBootstrap
             && string.Equals(c.Id, "bootstrap", StringComparison.OrdinalIgnoreCase)
@@ -170,6 +228,7 @@ public class DatabasesModel : PageModel
     public async Task<IActionResult> OnPostTestAsync(CancellationToken cancellationToken)
     {
         await LoadAsync(cancellationToken).ConfigureAwait(false);
+        ApplyLocalDefaults();
         IsEditing = true;
 
         var password = (Input.FbPassword ?? "").Trim();
@@ -183,12 +242,12 @@ public class DatabasesModel : PageModel
         {
             Id = Input.Id ?? "probe",
             DisplayName = Input.DisplayName,
-            FbHost = Input.FbHost,
+            FbHost = DefaultHost,
             FbPath = Input.FbPath,
             FbUser = Input.FbUser,
             FbPassword = password,
-            FbPort = Input.FbPort,
-            FbDialect = Input.FbDialect,
+            FbPort = DefaultPort,
+            FbDialect = 3,
             FbCharset = Input.FbCharset,
             UseTenantBootstrap = false,
         };
@@ -233,23 +292,22 @@ public class DatabasesModel : PageModel
                 var database = (csb.Database ?? "").Trim();
                 var colon = database.IndexOf(':');
                 if (colon > 0)
-                {
-                    bootstrap.FbHost = database[..colon].Trim();
                     bootstrap.FbPath = database[(colon + 1)..].Trim();
-                }
 
                 if (string.IsNullOrWhiteSpace(bootstrap.FbUser))
                     bootstrap.FbUser = csb.UserID;
                 if (string.IsNullOrWhiteSpace(bootstrap.FbPassword))
                     bootstrap.FbPassword = csb.Password;
-                bootstrap.FbPort = csb.Port > 0 ? csb.Port : 3050;
-                bootstrap.FbDialect = csb.Dialect > 0 ? csb.Dialect : 3;
                 if (!string.IsNullOrWhiteSpace(csb.Charset))
                     bootstrap.FbCharset = csb.Charset;
-                bootstrap.UseTenantBootstrap = false;
                 if (string.IsNullOrWhiteSpace(bootstrap.DisplayName))
                     bootstrap.DisplayName = tenant;
             }
+
+            bootstrap.FbHost = DefaultHost;
+            bootstrap.FbPort = DefaultPort;
+            bootstrap.FbDialect = 3;
+            bootstrap.UseTenantBootstrap = false;
 
             await _store.SaveBundleAsync(bundle, cancellationToken).ConfigureAwait(false);
             StatusMessage = $"Persisted current connection into Secrets Manager ({_store.GetSecretId(TenantConfigurationHelper.RequireTenantCode(_configuration))}).";
@@ -261,6 +319,13 @@ public class DatabasesModel : PageModel
 
         await LoadAsync(cancellationToken).ConfigureAwait(false);
         return Page();
+    }
+
+    private void ApplyLocalDefaults()
+    {
+        // Host/port are fixed; clear any stale validation from removed fields.
+        ModelState.Remove("Input.FbHost");
+        ModelState.Remove("Input.FbPort");
     }
 
     private async Task LoadAsync(CancellationToken cancellationToken)
@@ -286,13 +351,24 @@ public class DatabasesModel : PageModel
         {
             Id = match.Id,
             DisplayName = match.DisplayName,
-            FbHost = match.FbHost,
             FbPath = match.FbPath,
             FbUser = match.FbUser,
             FbPassword = "",
-            FbPort = match.FbPort,
-            FbDialect = match.FbDialect,
             FbCharset = match.FbCharset,
         };
+    }
+
+    public sealed class BrowseResult
+    {
+        public string CurrentPath { get; set; } = "";
+        public string? ParentPath { get; set; }
+        public List<BrowseEntry> Entries { get; set; } = new();
+    }
+
+    public sealed class BrowseEntry
+    {
+        public string Name { get; set; } = "";
+        public string Path { get; set; } = "";
+        public string Kind { get; set; } = ""; // drive | dir | file
     }
 }

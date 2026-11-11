@@ -202,16 +202,171 @@
   gap: 12px;
 }
 
+.db-form-hint {
+  margin: -4px 0 12px;
+  font-size: 0.8125rem;
+  color: #64748b;
+}
+
 .db-field-row {
   display: grid;
-  grid-template-columns: 1fr 120px;
+  grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
 
+.db-field-row--login {
+  grid-template-columns: 1fr 1fr;
+}
+
+.db-path-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
 @media (max-width: 560px) {
-  .db-field-row {
+  .db-field-row,
+  .db-field-row--login,
+  .db-path-row {
     grid-template-columns: 1fr;
   }
+}
+
+.db-browse-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.db-browse-modal[hidden] {
+  display: none;
+}
+
+.db-browse-panel {
+  width: min(560px, 100%);
+  max-height: min(70vh, 640px);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.2);
+  overflow: hidden;
+}
+
+.db-browse-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.db-browse-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 750;
+  color: #0f172a;
+}
+
+.db-browse-close {
+  border: 0;
+  background: transparent;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.db-browse-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.db-browse-crumb {
+  margin: 0;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  color: #475569;
+  word-break: break-all;
+}
+
+.db-browse-error {
+  margin: 0;
+  padding: 8px 16px;
+  color: #b91c1c;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  background: #fef2f2;
+}
+
+.db-browse-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  flex: 1;
+}
+
+.db-browse-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #0f172a;
+  cursor: pointer;
+}
+
+.db-browse-item:hover {
+  background: #f0f9ff;
+}
+
+.db-browse-ico {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  background: #e2e8f0;
+}
+
+.db-browse-item--drive .db-browse-ico,
+.db-browse-item--dir .db-browse-ico {
+  background: #fde68a;
+}
+
+.db-browse-item--file .db-browse-ico {
+  background: #7dd3fc;
+}
+
+.db-browse-name {
+  min-width: 0;
+  word-break: break-all;
+}
+
+.db-browse-empty,
+.db-browse-loading {
+  padding: 16px;
+  color: #64748b;
+  font-size: 0.875rem;
 }
 
 .db-field {

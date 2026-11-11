@@ -108,7 +108,7 @@
                                     {
                                         <span class="db-pill db-pill--muted">Bootstrap</span>
                                     }
-                                    <span class="db-list-path">@(string.IsNullOrWhiteSpace(c.FbHost) ? "—" : c.FbHost):@(string.IsNullOrWhiteSpace(c.FbPath) ? "tenant-config" : c.FbPath)</span>
+                                    <span class="db-list-path">@(string.IsNullOrWhiteSpace(c.FbPath) ? "tenant-config" : c.FbPath)</span>
                                 </div>
                                 <div class="db-list-actions">
                                     <a class="db-link" href="/SelectCompany?id=@Uri.EscapeDataString(c.Id)&amp;returnUrl=@Uri.EscapeDataString("/Databases")">Use</a>
@@ -126,6 +126,7 @@
 
             <section class="db-card" aria-labelledby="dbFormTitle">
                 <h2 id="dbFormTitle" class="db-card-title">@(string.IsNullOrWhiteSpace(Model.Input.Id) ? "Add company" : "Edit company")</h2>
+                <p class="db-form-hint">Connects on <strong>localhost:3050</strong> (Firebird on this server).</p>
                 <form method="post" class="db-form" novalidate>
                     <input type="hidden" asp-for="Input.Id" />
                     <div class="db-field">
@@ -133,23 +134,15 @@
                         <input asp-for="Input.DisplayName" class="db-input" autocomplete="organization" />
                         <span asp-validation-for="Input.DisplayName" class="db-field-error"></span>
                     </div>
-                    <div class="db-field-row">
-                        <div class="db-field">
-                            <label asp-for="Input.FbHost"></label>
-                            <input asp-for="Input.FbHost" class="db-input" placeholder="192.168.1.10" autocomplete="off" />
-                            <span asp-validation-for="Input.FbHost" class="db-field-error"></span>
-                        </div>
-                        <div class="db-field">
-                            <label asp-for="Input.FbPort">Port</label>
-                            <input asp-for="Input.FbPort" class="db-input" type="number" min="1" max="65535" />
-                        </div>
-                    </div>
                     <div class="db-field">
                         <label asp-for="Input.FbPath"></label>
-                        <input asp-for="Input.FbPath" class="db-input" placeholder="D:\ACC\COMPANY.FDB" autocomplete="off" />
+                        <div class="db-path-row">
+                            <input asp-for="Input.FbPath" class="db-input" placeholder="D:\ACC\COMPANY.FDB" autocomplete="off" />
+                            <button type="button" class="db-btn db-btn--secondary" id="dbBrowseOpen">Browse…</button>
+                        </div>
                         <span asp-validation-for="Input.FbPath" class="db-field-error"></span>
                     </div>
-                    <div class="db-field-row">
+                    <div class="db-field-row db-field-row--login">
                         <div class="db-field">
                             <label asp-for="Input.FbUser"></label>
                             <input asp-for="Input.FbUser" class="db-input" autocomplete="username" />
@@ -175,6 +168,22 @@
     </main>
 </div>
 
+<div id="dbBrowseModal" class="db-browse-modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="dbBrowseTitle">
+    <div class="db-browse-panel">
+        <div class="db-browse-head">
+            <h2 id="dbBrowseTitle" class="db-browse-title">Choose database file</h2>
+            <button type="button" class="db-browse-close" id="dbBrowseClose" aria-label="Close">×</button>
+        </div>
+        <div class="db-browse-toolbar">
+            <button type="button" class="db-btn db-btn--secondary" id="dbBrowseUp">Up</button>
+            <p class="db-browse-crumb" id="dbBrowsePath">This computer</p>
+        </div>
+        <p class="db-browse-error" id="dbBrowseError" hidden></p>
+        <ul class="db-browse-list" id="dbBrowseList"></ul>
+    </div>
+</div>
+
 @section Scripts {
     <script src="~/js/dashboard.js" asp-append-version="true"></script>
+    <script src="~/js/databases.js" asp-append-version="true"></script>
 }
