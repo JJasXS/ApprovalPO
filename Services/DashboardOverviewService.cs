@@ -23,11 +23,13 @@ public sealed class DashboardOverviewService
     private static readonly (string Key, string Label, string Color) PurchaseMeta = ("purchase", "Purchase", "#2563eb");
     private static readonly (string Key, string Label, string Color) SalesMeta = ("sales", "Sales", "#16a34a");
     private static readonly (string Key, string Label, string Color) GoodsMeta = ("goods", "Goods", "#7c3aed");
+    private static readonly (string Key, string Label, string Color) DeliveryMeta = ("delivery", "Delivery", "#0f766e");
 
     private readonly IModuleAccessService _modules;
     private readonly IPurchaseOrderCatalog _purchase;
     private readonly ISalesOrderCatalog _sales;
     private readonly IGoodsReceiptCatalog _receipts;
+    private readonly IDeliveryOrderCatalog _deliveries;
     private readonly ILogger<DashboardOverviewService> _logger;
 
     public DashboardOverviewService(
@@ -35,12 +37,14 @@ public sealed class DashboardOverviewService
         IPurchaseOrderCatalog purchase,
         ISalesOrderCatalog sales,
         IGoodsReceiptCatalog receipts,
+        IDeliveryOrderCatalog deliveries,
         ILogger<DashboardOverviewService> logger)
     {
         _modules = modules;
         _purchase = purchase;
         _sales = sales;
         _receipts = receipts;
+        _deliveries = deliveries;
         _logger = logger;
     }
 
@@ -70,6 +74,14 @@ public sealed class DashboardOverviewService
         {
             var href = modules.ScanPo ? "/ScanPO" : "/ReceivedGoods";
             var pack = await LoadGoodsAsync(href, endDate, cancellationToken).ConfigureAwait(false);
+            figures.Add(pack.Figure);
+            series.Add(pack.Series);
+        }
+
+        if (modules.ScanSo || modules.DeliveryOrders)
+        {
+            var href = modules.ScanSo ? "/ScanSO" : "/DeliveryOrders";
+            var pack = await LoadDeliveryAsync(href, endDate, cancellationToken).ConfigureAwait(false);
             figures.Add(pack.Figure);
             series.Add(pack.Series);
         }
@@ -153,6 +165,26 @@ public sealed class DashboardOverviewService
         {
             _logger.LogWarning(ex, "Dashboard goods receipt totals unavailable.");
             return EmptyPack(GoodsMeta, "Goods received", href);
+        }
+    }
+
+    private async Task<(DashboardFigure Figure, DashboardTrendSeries Series)> LoadDeliveryAsync(
+        string href,
+        DateTime endDate,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var rows = await _deliveries.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
+            var values = DashboardTrendBuilder.CountByDay(rows.Select(r => r.DoDate), endDate);
+            return (
+                new DashboardFigure(DeliveryMeta.Key, "Delivery orders", href, rows.Count, rows.Sum(r => r.Amount)),
+                new DashboardTrendSeries(DeliveryMeta.Key, DeliveryMeta.Label, DeliveryMeta.Color, values));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Dashboard delivery order totals unavailable.");
+            return EmptyPack(DeliveryMeta, "Delivery orders", href);
         }
     }
 

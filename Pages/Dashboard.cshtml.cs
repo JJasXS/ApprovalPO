@@ -45,6 +45,7 @@ public class DashboardModel : PageModel
     {
         "purchase" or "sales" => "pending",
         "goods" => "receipts",
+        "delivery" => "orders",
         _ => "items"
     };
 
