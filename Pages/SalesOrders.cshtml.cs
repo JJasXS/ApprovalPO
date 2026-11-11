@@ -56,6 +56,12 @@ public class SalesOrdersModel : PageModel
 
     public decimal? AppTo => SyUserApprovalMapper.ReadDecimalClaim(User, ApprovalClaimTypes.AppTo);
 
+    public decimal? AppLevel => SyUserApprovalMapper.ReadDecimalClaim(User, ApprovalClaimTypes.AppLevel);
+
+    public string? UserEmail => User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value?.Trim();
+
+    public bool IsElevatedApprover => SyUserApprovalMapper.IsElevatedApprover(User);
+
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         Orders = await _orders.GetOrdersAsync(cancellationToken).ConfigureAwait(false);

@@ -38,7 +38,7 @@ public sealed class ApprovalAuthority : IApprovalAuthority
         if (ctx.Deny is not null)
             return ctx.Deny;
 
-        if (ctx.IsDirector)
+        if (ctx.IsElevated)
             return ApprovalAuthorityDecision.Allow();
 
         return ApprovalAmountGate.Evaluate(ctx.AppRole, ctx.AppFrom, ctx.AppTo, amount);
@@ -54,7 +54,7 @@ public sealed class ApprovalAuthority : IApprovalAuthority
         if (ctx.Deny is not null)
             return ctx.Deny;
 
-        if (ctx.IsDirector)
+        if (ctx.IsElevated)
             return DirectorFinalApproval(amount);
 
         var userLevel = ApprovalLevelWorkflow.ResolveUserLevel(ctx.AppLevel, ctx.AppRole);
@@ -125,16 +125,16 @@ public sealed class ApprovalAuthority : IApprovalAuthority
         decimal? AppLevel,
         decimal? AppFrom,
         decimal? AppTo,
-        bool IsDirector,
+        bool IsElevated,
         ApprovalAuthorityDecision? Deny)
     {
         public static UserApprovalContext Denied(string message) =>
             new("", null, null, null, null, false, ApprovalAuthorityDecision.Deny(message));
 
         public static UserApprovalContext FromSkipped(string email, SyUserEmailLookupResult sy) =>
-            new(email, sy.AppRole, sy.AppLevel, sy.AppFrom, sy.AppTo, sy.IsDirector, null);
+            new(email, sy.AppRole, sy.AppLevel, sy.AppFrom, sy.AppTo, SyUserApprovalMapper.IsElevatedApprover(sy), null);
 
         public static UserApprovalContext FromOk(string email, SyUserEmailLookupResult sy) =>
-            new(email, sy.AppRole, sy.AppLevel, sy.AppFrom, sy.AppTo, sy.IsDirector, null);
+            new(email, sy.AppRole, sy.AppLevel, sy.AppFrom, sy.AppTo, SyUserApprovalMapper.IsElevatedApprover(sy), null);
     }
 }

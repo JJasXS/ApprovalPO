@@ -25,12 +25,15 @@ public sealed class SyUserEmailLookupResult
     public decimal? AppTo { get; init; }
     public bool IsDirector { get; init; }
 
+    /// <summary><c>SY_USER.UDF_ISADMIN</c> — full approval bypass like director.</summary>
+    public bool IsAdmin { get; init; }
+
     /// <summary>Technical detail for logs / Development API responses only.</summary>
     public string? Diagnostic { get; init; }
 
     /// <summary>Dev/config bypass: treat as director so the app remains usable.</summary>
     public static SyUserEmailLookupResult Skipped() =>
-        new() { Status = SyUserEmailLookupStatus.Skipped, IsDirector = true };
+        new() { Status = SyUserEmailLookupStatus.Skipped, IsDirector = true, IsAdmin = true };
 
     public static SyUserEmailLookupResult Ok(
         string? displayName,
@@ -39,7 +42,8 @@ public sealed class SyUserEmailLookupResult
         decimal? appFrom = null,
         decimal? appTo = null,
         bool isDirector = false,
-        string? diagnostic = null) =>
+        string? diagnostic = null,
+        bool isAdmin = false) =>
         new()
         {
             Status = SyUserEmailLookupStatus.Ok,
@@ -49,6 +53,7 @@ public sealed class SyUserEmailLookupResult
             AppFrom = appFrom,
             AppTo = appTo,
             IsDirector = isDirector,
+            IsAdmin = isAdmin,
             Diagnostic = string.IsNullOrWhiteSpace(diagnostic) ? null : diagnostic,
         };
 
@@ -153,13 +158,14 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
         var includeIsActive = true;
         var includeApprovalUdfs = true;
         var includeIsDirector = true;
+        var includeIsAdmin = true;
         string? udfDiagnostic = null;
         var ensuredUdfColumns = false;
-        for (var attempt = 0; attempt < 6; attempt++)
+        for (var attempt = 0; attempt < 8; attempt++)
         {
             try
             {
-                var sql = BuildLookupSql(includeIsActive, includeApprovalUdfs, includeIsDirector);
+                var sql = BuildLookupSql(includeIsActive, includeApprovalUdfs, includeIsDirector, includeIsAdmin);
                 await using var cmd = new FbCommand(sql, conn);
                 cmd.Parameters.AddWithValue("@Email", email);
 
@@ -167,7 +173,8 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
                 if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                     return SyUserEmailLookupResult.NotFound();
 
-                return MapLookupRow(reader, includeIsActive, includeApprovalUdfs, includeIsDirector, udfDiagnostic);
+                return MapLookupRow(
+                    reader, includeIsActive, includeApprovalUdfs, includeIsDirector, includeIsAdmin, udfDiagnostic);
             }
             catch (Exception ex) when (includeIsActive && IsLikelyMissingColumn(ex, "ISACTIVE"))
             {
@@ -178,6 +185,11 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
             {
                 _logger.LogWarning(ex, "SY_USER without UDF_ISDIRECTOR — treating all users as non-director.");
                 includeIsDirector = false;
+            }
+            catch (Exception ex) when (includeIsAdmin && IsLikelyMissingColumn(ex, "UDF_ISADMIN"))
+            {
+                _logger.LogWarning(ex, "SY_USER without UDF_ISADMIN — treating all users as non-admin.");
+                includeIsAdmin = false;
             }
             catch (Exception ex) when (includeApprovalUdfs && IsLikelyMissingApprovalUdf(ex))
             {
@@ -193,8 +205,8 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
             catch (Exception ex)
             {
                 _logger.LogError(ex,
-                    "SY_USER query failed for {Email} (includeIsActive={IA}, includeApprovalUdfs={IU}, includeIsDirector={ID}): {Msg}",
-                    email, includeIsActive, includeApprovalUdfs, includeIsDirector, ex.Message);
+                    "SY_USER query failed for {Email} (includeIsActive={IA}, includeApprovalUdfs={IU}, includeIsDirector={ID}, includeIsAdmin={IA2}): {Msg}",
+                    email, includeIsActive, includeApprovalUdfs, includeIsDirector, includeIsAdmin, ex.Message);
                 return SyUserEmailLookupResult.DatabaseUnavailable(AppendLocalhostHint(ex.Message, "SY_USER query failed."));
             }
         }
@@ -227,7 +239,11 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
         }
     }
 
-    private static string BuildLookupSql(bool includeIsActive, bool includeApprovalUdfs, bool includeIsDirector)
+    private static string BuildLookupSql(
+        bool includeIsActive,
+        bool includeApprovalUdfs,
+        bool includeIsDirector,
+        bool includeIsAdmin)
     {
         var extra = "";
         if (includeIsActive)
@@ -236,6 +252,8 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
             extra += ", UDF_APPROLE, CAST(UDF_APPLEVEL AS NUMERIC(15,2)) AS UDF_APPLEVEL, CAST(UDF_APPFROM AS NUMERIC(15,2)) AS UDF_APPFROM, CAST(UDF_APPTO AS NUMERIC(15,2)) AS UDF_APPTO";
         if (includeIsDirector)
             extra += ", UDF_ISDIRECTOR";
+        if (includeIsAdmin)
+            extra += ", UDF_ISADMIN";
 
         return $"""
             SELECT FIRST 1
@@ -250,6 +268,7 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
         bool includeIsActive,
         bool includeApprovalUdfs,
         bool includeIsDirector,
+        bool includeIsAdmin,
         string? udfDiagnostic)
     {
         var displayName = (FirebirdDataReaderHelper.GetString(reader, "DISP_NAME") ?? "").Trim();
@@ -276,15 +295,8 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
             appTo = FirebirdDataReaderHelper.GetDecimalNullable(reader, "UDF_APPTO");
         }
 
-        var isDirector = false;
-        if (includeIsDirector)
-        {
-            var dirOrdinal = FirebirdDataReaderHelper.TryGetOrdinal(reader, "UDF_ISDIRECTOR");
-            var dirValue = dirOrdinal < 0 || reader.IsDBNull(dirOrdinal)
-                ? null
-                : reader.GetValue(dirOrdinal);
-            isDirector = ParseFlag(dirValue);
-        }
+        var isDirector = includeIsDirector && ReadFlagColumn(reader, "UDF_ISDIRECTOR");
+        var isAdmin = includeIsAdmin && ReadFlagColumn(reader, "UDF_ISADMIN");
 
         return SyUserEmailLookupResult.Ok(
             string.IsNullOrEmpty(displayName) ? null : displayName,
@@ -293,7 +305,16 @@ public sealed class SyUserLoginValidator : ISyUserLoginValidator
             appFrom,
             appTo,
             isDirector,
-            diagnostic: udfDiagnostic);
+            diagnostic: udfDiagnostic,
+            isAdmin: isAdmin);
+    }
+
+    private static bool ReadFlagColumn(System.Data.Common.DbDataReader reader, string column)
+    {
+        var ordinal = FirebirdDataReaderHelper.TryGetOrdinal(reader, column);
+        if (ordinal < 0 || reader.IsDBNull(ordinal))
+            return false;
+        return ParseFlag(reader.GetValue(ordinal));
     }
 
     private static bool IsLikelyMissingApprovalUdf(Exception ex) =>

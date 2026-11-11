@@ -13,7 +13,13 @@
   const appTo = hasAppRange ? Number.parseFloat(appToRaw) : Number.NaN;
   const appLevelRaw = String(cfgEl?.dataset.appLevel || '').trim();
   const userLevelNum = Number.parseInt(appLevelRaw, 10);
-  const userLevel = Number.isFinite(userLevelNum) && userLevelNum >= 1 && userLevelNum <= 3 ? userLevelNum : 0;
+  const isElevated = String(cfgEl?.dataset.isElevated || '').trim() === '1';
+  const userLevel =
+    isElevated
+      ? 3
+      : Number.isFinite(userLevelNum) && userLevelNum >= 1 && userLevelNum <= 3
+        ? userLevelNum
+        : 0;
   const userEmail = String(cfgEl?.dataset.userEmail || '').trim().toLowerCase();
 
   const modal = document.getElementById('reviewModal');
@@ -710,6 +716,7 @@
 
   /** Personal range for approve; partial sign-offs use the workflow band ceiling instead of appTo. */
   const amountInApprovalRangeForRow = (tr) => {
+    if (isElevated) return true;
     const amt = parseAmount(tr);
     if (!hasAppRange || Number.isNaN(appFrom) || Number.isNaN(appTo)) return false;
     if (amt < appFrom) return false;
@@ -741,6 +748,7 @@
   };
 
   const canWorkflowApprove = (tr) => {
+    if (isElevated) return true;
     if (!amountInApprovalRangeForRow(tr)) return false;
     if (userLevel <= 0) return false;
     const existing = slotEmailAtUserLevel(tr);

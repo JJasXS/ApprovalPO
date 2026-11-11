@@ -8,4 +8,5 @@ public static class ApprovalClaimTypes
     public const string AppFrom = "app_from";
     public const string AppTo = "app_to";
     public const string IsDirector = "is_director";
+    public const string IsAdmin = "is_admin";
 }

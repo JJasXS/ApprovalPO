@@ -9,7 +9,7 @@ namespace ApprovalPO.Services.Auth;
 /// </summary>
 public static class SyUserApprovalMapper
 {
-    /// <summary>Upper amount bound written onto director cookies so client range checks stay open.</summary>
+    /// <summary>Upper amount bound written onto director/admin cookies so client range checks stay open.</summary>
     public const decimal DirectorUnlimitedTo = 999_999_999_999m;
 
     public static IReadOnlyList<string> MapRoles(string? appRole)
@@ -38,8 +38,9 @@ public static class SyUserApprovalMapper
 
         AddOptional(claims, ApprovalClaimTypes.AppRole, sy.AppRole);
         AddOptional(claims, ApprovalClaimTypes.IsDirector, sy.IsDirector ? "1" : null);
+        AddOptional(claims, ApprovalClaimTypes.IsAdmin, sy.IsAdmin ? "1" : null);
 
-        if (sy.IsDirector)
+        if (sy.IsDirector || sy.IsAdmin)
         {
             AddOptionalDecimal(claims, ApprovalClaimTypes.AppLevel, 3m);
             AddOptionalDecimal(claims, ApprovalClaimTypes.AppFrom, 0m);
@@ -66,13 +67,23 @@ public static class SyUserApprovalMapper
         user.IsInRole(ApprovalRoles.Director)
         || string.Equals(user.FindFirst(ApprovalClaimTypes.IsDirector)?.Value, "1", StringComparison.Ordinal);
 
+    public static bool IsAdminFlag(ClaimsPrincipal user) =>
+        string.Equals(user.FindFirst(ApprovalClaimTypes.IsAdmin)?.Value, "1", StringComparison.Ordinal);
+
+    /// <summary>Director or <c>UDF_ISADMIN</c> — full amount/level bypass.</summary>
+    public static bool IsElevatedApprover(ClaimsPrincipal user) =>
+        IsDirector(user) || IsAdminFlag(user);
+
+    public static bool IsElevatedApprover(SyUserEmailLookupResult sy) =>
+        sy.IsDirector || sy.IsAdmin;
+
     /// <summary>Admin or Director may enter the Purchase Order Approval UI.</summary>
     public static bool CanAccessApprovalSystem(ClaimsPrincipal user) =>
-        user.IsInRole(ApprovalRoles.Admin) || IsDirector(user);
+        user.IsInRole(ApprovalRoles.Admin) || IsDirector(user) || IsAdminFlag(user);
 
-    /// <summary>True when SY_USER maps to Admin (non-Maintenance UDF_APPROLE) or is a director.</summary>
+    /// <summary>True when SY_USER maps to Admin (non-Maintenance UDF_APPROLE) or is a director/admin flag.</summary>
     public static bool CanAccessApprovalSystem(SyUserEmailLookupResult sy) =>
-        sy.IsDirector || MapRoles(sy.AppRole).Contains(ApprovalRoles.Admin, StringComparer.Ordinal);
+        IsElevatedApprover(sy) || MapRoles(sy.AppRole).Contains(ApprovalRoles.Admin, StringComparer.Ordinal);
 
     public static bool CanApproveFromClaims(ClaimsPrincipal user) =>
         ReadDecimalClaim(user, ApprovalClaimTypes.AppFrom) is not null

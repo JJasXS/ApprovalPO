@@ -30,7 +30,10 @@
      data-csrf-token="@csrf"
      data-high-value-threshold="@Model.HighValueThreshold.ToString(System.Globalization.CultureInfo.InvariantCulture)"
      data-app-from="@(Model.AppFrom?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "")"
-     data-app-to="@(Model.AppTo?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "")"></div>
+     data-app-to="@(Model.AppTo?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "")"
+     data-app-level="@(Model.AppLevel?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "")"
+     data-user-email="@(Model.UserEmail ?? "")"
+     data-is-elevated="@(Model.IsElevatedApprover ? "1" : "0")"></div>
 
 <main class="po-main">
     <header class="po-header po-header--hero">

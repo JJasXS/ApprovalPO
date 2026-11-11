@@ -87,6 +87,8 @@ public class PurchaseOrdersModel : PageModel
 
     public string? UserEmail => User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value?.Trim();
 
+    public bool IsElevatedApprover => SyUserApprovalMapper.IsElevatedApprover(User);
+
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         Orders = await _orders.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
