@@ -108,10 +108,11 @@
   z-index: 390;
   border: 0;
   padding: 0;
-  background: rgba(15, 23, 42, 0.12);
+  background: rgba(15, 23, 42, 0.28);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.22s ease;
+  backdrop-filter: blur(2px);
 }
 
 .scan-menu-backdrop.is-open {
@@ -128,21 +129,16 @@ body.scan-menu-open {
   top: 0;
   left: 0;
   bottom: 0;
-  width: min(280px, 84vw);
+  width: min(300px, 86vw);
   margin: 0;
   padding: 20px 12px 16px;
   display: flex;
   flex-direction: column;
-  background: #fff;
-  border-radius: 0 16px 16px 0;
-  box-shadow: 8px 0 28px rgba(15, 23, 42, 0.12);
+  border-radius: 0 18px 18px 0;
   z-index: 400;
   transform: translateX(-105%);
   transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
   overflow: auto;
-}
-
-.dash-menu-panel {
   pointer-events: none;
 }
 
@@ -151,52 +147,15 @@ body.scan-menu-open {
   pointer-events: auto;
 }
 
-.dash-menu-user {
-  margin: 0 -12px 12px;
-  padding: 4px 22px 14px;
-  font-size: 15px;
-  font-weight: 600;
-  color: #0f172a;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.dash-menu-signout {
-  margin-top: auto;
-  margin-left: -12px;
-  margin-right: -12px;
-  padding: 8px 12px 0;
-  border-top: 1px solid #e2e8f0;
-}
-
 .dash-menu-link {
-  display: block;
-  width: auto;
-  margin: 2px 0;
-  padding: 11px 12px;
   border: 0;
-  border-radius: 10px;
-  background: none;
+  width: auto;
   text-align: left;
   font: inherit;
   font-size: 15px;
-  font-weight: 500;
-  color: #334155;
   text-decoration: none;
   cursor: pointer;
-}
-
-a.dash-menu-link[aria-current="page"] {
-  background: #f0f9ff;
-  color: #0369a1;
-  font-weight: 600;
-}
-
-.dash-menu-link--danger {
-  color: #dc2626;
-}
-
-.dash-menu-link--danger:hover {
-  background: #fef2f2;
+  background: none;
 }
 
 /* ─── Responsive header ───────────────────────────────────── */

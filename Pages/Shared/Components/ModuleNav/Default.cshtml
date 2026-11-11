@@ -10,19 +10,56 @@
         || path.StartsWith("/DeliveryOrders", StringComparison.OrdinalIgnoreCase)
         || path.StartsWith("/ScanDelivered", StringComparison.OrdinalIgnoreCase);
 }
+<nav class="app-nav-list" aria-label="Modules">
 @if (Model.ShowPurchase)
 {
-    <a href="/PurchaseOrders" class="@Model.LinkClass" aria-current="@(purchaseOn ? "page" : null)">Purchase Approval</a>
+    <a href="/PurchaseOrders" class="@Model.LinkClass app-nav-link" aria-current="@(purchaseOn ? "page" : null)">
+        <span class="app-nav-ico app-nav-ico--blue" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+                <line x1="3" y1="6" x2="21" y2="6"/>
+                <path d="M16 10a4 4 0 0 1-8 0"/>
+            </svg>
+        </span>
+        <span class="app-nav-text">Purchase Approval</span>
+    </a>
 }
 @if (Model.ShowSales)
 {
-    <a href="/SalesOrders" class="@Model.LinkClass" aria-current="@(salesOn ? "page" : null)">Sales Approval</a>
+    <a href="/SalesOrders" class="@Model.LinkClass app-nav-link" aria-current="@(salesOn ? "page" : null)">
+        <span class="app-nav-ico app-nav-ico--green" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="1" x2="12" y2="23"/>
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+        </span>
+        <span class="app-nav-text">Sales Approval</span>
+    </a>
 }
 @if (Model.ShowGoods)
 {
-    <a href="@Model.GoodsHref" class="@Model.LinkClass" aria-current="@(goodsOn ? "page" : null)">Goods Received</a>
+    <a href="@Model.GoodsHref" class="@Model.LinkClass app-nav-link" aria-current="@(goodsOn ? "page" : null)">
+        <span class="app-nav-ico app-nav-ico--violet" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/>
+                <path d="M21 16h-3a2 2 0 0 0-2 2v3"/><line x1="21" y1="21" x2="21" y2="21.01"/>
+            </svg>
+        </span>
+        <span class="app-nav-text">Goods Received</span>
+    </a>
 }
 @if (Model.ShowDelivery)
 {
-    <a href="@Model.DeliveryHref" class="@Model.LinkClass" aria-current="@(deliveryOn ? "page" : null)">Delivery Orders</a>
+    <a href="@Model.DeliveryHref" class="@Model.LinkClass app-nav-link" aria-current="@(deliveryOn ? "page" : null)">
+        <span class="app-nav-ico app-nav-ico--teal" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="1" y="3" width="15" height="13" rx="1"/>
+                <path d="M16 8h4l3 3v5h-7V8z"/>
+                <circle cx="5.5" cy="18.5" r="2.5"/>
+                <circle cx="18.5" cy="18.5" r="2.5"/>
+            </svg>
+        </span>
+        <span class="app-nav-text">Delivery Orders</span>
+    </a>
 }
+</nav>
