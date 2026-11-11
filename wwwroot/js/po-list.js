@@ -21,6 +21,7 @@
         ? userLevelNum
         : 0;
   const userEmail = String(cfgEl?.dataset.userEmail || '').trim().toLowerCase();
+  const partyLabel = String(cfgEl?.dataset.partyLabel || 'Supplier').trim() || 'Supplier';
 
   const modal = document.getElementById('reviewModal');
   const reviewBody = document.getElementById('reviewBody');
@@ -335,7 +336,7 @@
       <td class="td-check" data-label="">${chk}</td>
       <td class="po-status-td" data-label=""><div class="po-status-stack ${stack}"><span class="po-status-icon" aria-hidden="true"></span><span class="po-status-text">${escapeHtml(progressLabel)}</span></div></td>
       <td class="po-num" data-label="PO #"><span class="po-num-text">${escapeHtml(po)}</span></td>
-      <td class="po-vendor" data-label="Supplier">${escapeHtml(vendor) || '—'}</td>
+      <td class="po-vendor" data-label="${escapeHtml(partyLabel)}">${escapeHtml(vendor) || '—'}</td>
       <td class="num po-date" data-label="Date">${escapeHtml(formatDisplayDate(dateStr))}</td>
       <td class="num po-amount" data-label="Amount">${amtNum.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
       <td class="actions" data-label="">
@@ -606,7 +607,7 @@
       <div class="review-card">
         <div class="review-grid">
           <div class="review-field">
-            <div class="review-label">Supplier</div>
+            <div class="review-label">${escapeHtml(partyLabel)}</div>
             <div class="review-value">${escapeHtml(vendor) || '—'}</div>
           </div>
           <div class="review-field">
