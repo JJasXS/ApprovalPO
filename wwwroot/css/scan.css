@@ -314,6 +314,20 @@ body.scan-menu-open { overflow: hidden; }
   color: #14532d;
   background: #ecfdf5;
   border: 1px solid #86efac;
+  transition: opacity 0.7s ease, transform 0.7s ease, margin 0.7s ease, padding 0.7s ease, max-height 0.7s ease, border-width 0.7s ease;
+  max-height: 120px;
+  overflow: hidden;
+}
+
+.scan-flash--ok.is-fading {
+  opacity: 0;
+  transform: translateY(-4px);
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  max-height: 0;
+  border-width: 0;
 }
 
 .scan-flash--error {

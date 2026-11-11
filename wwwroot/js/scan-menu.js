@@ -56,4 +56,11 @@ function bindAppDrawer(btn, panel) {
     window.ScanMenu.close();
     window.AppMenu.close();
   });
+
+  document.querySelectorAll('.scan-flash--ok').forEach((el) => {
+    window.setTimeout(() => {
+      el.classList.add('is-fading');
+      window.setTimeout(() => el.remove(), 750);
+    }, 4200);
+  });
 })();
