@@ -426,8 +426,55 @@ a.dash-menu-link[aria-current="page"] {
   display: block;
 }
 
-.dash-tabpanel--action .dash-cards {
+.dash-action-icons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  gap: 12px;
   margin: 0;
+  padding: 4px 2px 8px;
+}
+
+.dash-action-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  min-height: 72px;
+  padding: 14px;
+  background: #fff;
+  border: 1px solid #e7e5e4;
+  border-radius: 16px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.18s ease, transform 0.18s ease;
+}
+
+.dash-action-icon:hover,
+.dash-action-icon:focus-visible {
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.dash-action-icon .dash-card-icon-wrap {
+  width: 48px;
+  height: 48px;
+  margin: 0;
+  border-radius: 14px;
+}
+
+.dash-action-icon .dash-card-icon-wrap svg {
+  width: 26px;
+  height: 26px;
+}
+
+.dash-action-empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 16px;
+  text-align: center;
+  color: #64748b;
+  font-size: 13px;
 }
 
 .dash-indicators {
