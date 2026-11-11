@@ -585,7 +585,7 @@ public class ScanPODetailModel : PageModel
     }
 
     private static IReadOnlyList<Services.Orders.GrTransferLineRequest> TransferLinesFromScanCounts(
-        IReadOnlyDictionary<string, int> scanCounts,
+        IReadOnlyDictionary<string, decimal> scanCounts,
         IReadOnlyList<PurchaseRequestLineRow>? poLines = null)
     {
         if (scanCounts.Count == 0)
@@ -603,7 +603,7 @@ public class ScanPODetailModel : PageModel
                 if (code.Length == 0)
                     continue;
                 var poQty = line.Sqty != 0 ? line.Sqty : line.Qty;
-                var received = (decimal)n;
+                var received = n;
                 if (poQty > 0)
                     received = Math.Min(received, poQty);
                 if (received <= 0)
@@ -624,21 +624,20 @@ public class ScanPODetailModel : PageModel
             .ToList();
     }
 
-    private static IReadOnlyDictionary<string, int> ScanCountsFromTransferLines(
+    private static IReadOnlyDictionary<string, decimal> ScanCountsFromTransferLines(
         IReadOnlyList<Services.Orders.GrTransferLineRequest> transferLines,
-        IReadOnlyDictionary<string, int> fallback)
+        IReadOnlyDictionary<string, decimal> fallback)
     {
         if (transferLines.Count == 0)
             return fallback;
 
-        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var counts = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
         foreach (var line in transferLines)
         {
             var code = (line.ItemCode ?? "").Trim();
             if (code.Length == 0) continue;
-            var n = (int)Math.Round(line.Quantity, MidpointRounding.AwayFromZero);
-            if (n <= 0) continue;
-            counts[code] = n;
+            if (line.Quantity <= 0) continue;
+            counts[code] = line.Quantity;
         }
 
         return counts;
@@ -651,18 +650,18 @@ public class ScanPODetailModel : PageModel
         public decimal Qty { get; set; }
     }
 
-    private static IReadOnlyDictionary<string, int> TryParseScanCounts(string? json)
+    private static IReadOnlyDictionary<string, decimal> TryParseScanCounts(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))
-            return new Dictionary<string, int>();
+            return new Dictionary<string, decimal>();
 
         try
         {
             var raw = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json);
             if (raw is null || raw.Count == 0)
-                return new Dictionary<string, int>();
+                return new Dictionary<string, decimal>();
 
-            var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var counts = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
             foreach (var (code, el) in raw)
             {
                 if (string.IsNullOrWhiteSpace(code)) continue;
@@ -674,11 +673,11 @@ public class ScanPODetailModel : PageModel
         }
         catch
         {
-            return new Dictionary<string, int>();
+            return new Dictionary<string, decimal>();
         }
     }
 
-    private static int ParseScanCountElement(JsonElement el)
+    private static decimal ParseScanCountElement(JsonElement el)
     {
         decimal d = el.ValueKind switch
         {
@@ -690,7 +689,6 @@ public class ScanPODetailModel : PageModel
                 out var parsed) => parsed,
             _ => 0
         };
-        if (d <= 0) return 0;
-        return (int)Math.Round(d, MidpointRounding.AwayFromZero);
+        return d > 0 ? d : 0;
     }
 }

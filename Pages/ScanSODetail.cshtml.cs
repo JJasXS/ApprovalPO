@@ -286,7 +286,7 @@ public class ScanSODetailModel : PageModel
             .ToList();
 
     private static IReadOnlyList<GrTransferLineRequest> TransferLinesFromScanCounts(
-        IReadOnlyDictionary<string, int> scanCounts,
+        IReadOnlyDictionary<string, decimal> scanCounts,
         IReadOnlyList<SalesOrderDeliveryLineRow> soLines)
     {
         if (scanCounts.Count == 0 || soLines.Count == 0)
@@ -301,7 +301,7 @@ public class ScanSODetailModel : PageModel
             var code = (line.ItemCode ?? "").Trim();
             if (code.Length == 0)
                 continue;
-            var qty = Math.Min((decimal)n, line.OutstandingQty);
+            var qty = Math.Min(n, line.OutstandingQty);
             if (qty <= 0)
                 continue;
             list.Add(new GrTransferLineRequest(code, qty, line.LineNo));
@@ -330,27 +330,30 @@ public class ScanSODetailModel : PageModel
         return result;
     }
 
-    private static Dictionary<string, int> TryParseScanCounts(string? json)
+    private static Dictionary<string, decimal> TryParseScanCounts(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))
-            return new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            return new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
 
         try
         {
             var raw = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json, ApprovalJson.CamelCase);
             if (raw is null || raw.Count == 0)
-                return new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                return new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
 
-            var result = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var result = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
             foreach (var (key, el) in raw)
             {
                 if (string.IsNullOrWhiteSpace(key)) continue;
                 var n = el.ValueKind switch
                 {
-                    JsonValueKind.Number when el.TryGetInt32(out var i) => i,
-                    JsonValueKind.Number => (int)Math.Ceiling(el.GetDecimal()),
-                    JsonValueKind.String when int.TryParse(el.GetString(), out var p) => p,
-                    _ => 0
+                    JsonValueKind.Number when el.TryGetDecimal(out var d) => d,
+                    JsonValueKind.String when decimal.TryParse(
+                        el.GetString(),
+                        System.Globalization.NumberStyles.Any,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out var p) => p,
+                    _ => 0m
                 };
                 if (n > 0)
                     result[key.Trim()] = n;
@@ -360,7 +363,7 @@ public class ScanSODetailModel : PageModel
         }
         catch
         {
-            return new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            return new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
         }
     }
 }

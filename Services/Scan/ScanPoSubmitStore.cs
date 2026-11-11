@@ -17,7 +17,7 @@ public interface IScanPoSubmitStore
     Task SaveDraftAsync(
         int docKey,
         string poNumber,
-        IReadOnlyDictionary<string, int> scanCounts,
+        IReadOnlyDictionary<string, decimal> scanCounts,
         ScanPoAuditActor actor,
         string docKind = ScanDocKinds.PurchaseOrder,
         CancellationToken cancellationToken = default);
@@ -25,7 +25,7 @@ public interface IScanPoSubmitStore
     Task MarkSubmittedAsync(
         int docKey,
         string poNumber,
-        IReadOnlyDictionary<string, int> scanCounts,
+        IReadOnlyDictionary<string, decimal> scanCounts,
         ScanPoAuditActor actor,
         string docKind = ScanDocKinds.PurchaseOrder,
         CancellationToken cancellationToken = default);
@@ -144,7 +144,7 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
     public async Task SaveDraftAsync(
         int docKey,
         string poNumber,
-        IReadOnlyDictionary<string, int> scanCounts,
+        IReadOnlyDictionary<string, decimal> scanCounts,
         ScanPoAuditActor actor,
         string docKind = ScanDocKinds.PurchaseOrder,
         CancellationToken cancellationToken = default)
@@ -175,7 +175,7 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
                 UpdatedByName = actor.DisplayName
             });
 
-            AppendAudit(file, docKey, kind, po, "draft_saved", actor, TotalScans(counts));
+            AppendAudit(file, docKey, kind, po, "draft_saved", actor, TotalScansRounded(counts));
             await WriteFileUnlockedAsync(file, cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -187,7 +187,7 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
     public async Task MarkSubmittedAsync(
         int docKey,
         string poNumber,
-        IReadOnlyDictionary<string, int> scanCounts,
+        IReadOnlyDictionary<string, decimal> scanCounts,
         ScanPoAuditActor actor,
         string docKind = ScanDocKinds.PurchaseOrder,
         CancellationToken cancellationToken = default)
@@ -216,7 +216,7 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
                 SubmittedByName = actor.DisplayName
             });
 
-            AppendAudit(file, docKey, kind, po, "submitted", actor, TotalScans(counts));
+            AppendAudit(file, docKey, kind, po, "submitted", actor, TotalScansRounded(counts));
             await WriteFileUnlockedAsync(file, cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -247,7 +247,7 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
                 po = sub.PoNumber;
 
             file.Submissions.RemoveAll(s => s.DocKey == docKey && KindEquals(s.DocKind, kind));
-            AppendAudit(file, docKey, kind, po, "reopened", actor, sub is null ? null : TotalScans(sub.ScanCounts));
+            AppendAudit(file, docKey, kind, po, "reopened", actor, sub is null ? null : TotalScansRounded(sub.ScanCounts));
             await WriteFileUnlockedAsync(file, cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -281,7 +281,7 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
                 return;
 
             file.Drafts.RemoveAll(d => d.DocKey == docKey && KindEquals(d.DocKind, kind));
-            AppendAudit(file, docKey, kind, po, "scan_reset", actor, draft is null ? null : TotalScans(draft.ScanCounts));
+            AppendAudit(file, docKey, kind, po, "scan_reset", actor, draft is null ? null : TotalScansRounded(draft.ScanCounts));
             await WriteFileUnlockedAsync(file, cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -336,15 +336,15 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
             file.AuditTrail.RemoveRange(0, file.AuditTrail.Count - MaxAuditEntries);
     }
 
-    private static int TotalScans(IReadOnlyDictionary<string, int> counts) =>
-        counts.Values.Sum();
+    private static int TotalScansRounded(IReadOnlyDictionary<string, decimal> counts) =>
+        (int)Math.Round(counts.Values.Sum(), MidpointRounding.AwayFromZero);
 
-    private static Dictionary<string, int> NormalizeCounts(IReadOnlyDictionary<string, int>? counts)
+    private static Dictionary<string, decimal> NormalizeCounts(IReadOnlyDictionary<string, decimal>? counts)
     {
         if (counts is null || counts.Count == 0)
-            return new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            return new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
 
-        var d = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var d = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
         foreach (var (code, n) in counts)
         {
             if (string.IsNullOrWhiteSpace(code) || n <= 0) continue;
@@ -406,7 +406,7 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
         public string DocKind { get; set; } = ScanDocKinds.PurchaseOrder;
         public string PoNumber { get; set; } = "";
         public DateTime SubmittedAtUtc { get; set; }
-        public Dictionary<string, int> ScanCounts { get; set; } = new();
+        public Dictionary<string, decimal> ScanCounts { get; set; } = new();
         public string SubmittedByEmail { get; set; } = "";
         public string SubmittedByName { get; set; } = "";
     }
@@ -417,7 +417,7 @@ public sealed class ScanPoSubmitFileStore : IScanPoSubmitStore
         public string DocKind { get; set; } = ScanDocKinds.PurchaseOrder;
         public string PoNumber { get; set; } = "";
         public DateTime UpdatedAtUtc { get; set; }
-        public Dictionary<string, int> ScanCounts { get; set; } = new();
+        public Dictionary<string, decimal> ScanCounts { get; set; } = new();
         public string UpdatedByEmail { get; set; } = "";
         public string UpdatedByName { get; set; } = "";
     }

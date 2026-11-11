@@ -880,7 +880,7 @@
       showScanError('already_submitted');
       return;
     }
-    if (totalScans() < 1) {
+    if (!(totalScans() > 0)) {
       showToast('Nothing to reset.', 'warn');
       return;
     }
@@ -1923,7 +1923,8 @@
       const lines = totalLines();
       const withScan = linesWithScan();
 
-      if (total < 1) {
+      // Fractional qty (e.g. 0.276) is valid — do not require total >= 1 (integer scan assumption).
+      if (!(total > 0)) {
         e.preventDefault();
         showToast(`Enter ${qtyVerb.toLowerCase()} qty for at least one line before submit.`, 'error');
         return;

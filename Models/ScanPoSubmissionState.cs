@@ -6,7 +6,7 @@ public sealed class ScanPoSubmissionState
     public bool IsSubmitted { get; set; }
     public DateTime? SubmittedAtUtc { get; set; }
     public string PoNumber { get; set; } = "";
-    public Dictionary<string, int> ScanCounts { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, decimal> ScanCounts { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public string? SubmittedByEmail { get; set; }
     public string? SubmittedByName { get; set; }
     public DateTime? DraftUpdatedAtUtc { get; set; }
