@@ -2,6 +2,7 @@ using ApprovalPO.Helpers;
 using ApprovalPO.Models;
 using ApprovalPO.Services.Auth;
 using ApprovalPO.Services.Orders;
+using ApprovalPO.Services.Scan;
 
 namespace ApprovalPO.Services;
 
@@ -43,6 +44,9 @@ public sealed class DashboardOverviewService
     private readonly ISalesOrderCatalog _sales;
     private readonly IGoodsReceiptCatalog _receipts;
     private readonly IDeliveryOrderCatalog _deliveries;
+    private readonly IPurchaseOrderScanQuery _poScan;
+    private readonly ISalesOrderDeliveryQuery _soDelivery;
+    private readonly IScanPoSubmitStore _scanSubmits;
     private readonly ILogger<DashboardOverviewService> _logger;
 
     public DashboardOverviewService(
@@ -51,6 +55,9 @@ public sealed class DashboardOverviewService
         ISalesOrderCatalog sales,
         IGoodsReceiptCatalog receipts,
         IDeliveryOrderCatalog deliveries,
+        IPurchaseOrderScanQuery poScan,
+        ISalesOrderDeliveryQuery soDelivery,
+        IScanPoSubmitStore scanSubmits,
         ILogger<DashboardOverviewService> logger)
     {
         _modules = modules;
@@ -58,6 +65,9 @@ public sealed class DashboardOverviewService
         _sales = sales;
         _receipts = receipts;
         _deliveries = deliveries;
+        _poScan = poScan;
+        _soDelivery = soDelivery;
+        _scanSubmits = scanSubmits;
         _logger = logger;
     }
 
@@ -90,7 +100,8 @@ public sealed class DashboardOverviewService
         if (modules.ScanPo || modules.ReceivedGoods)
         {
             var href = modules.ScanPo ? "/ScanPO" : "/ReceivedGoods";
-            var pack = await LoadGoodsAsync(href, endDate, cancellationToken).ConfigureAwait(false);
+            var pack = await LoadGoodsAsync(href, modules.ScanPo, endDate, cancellationToken)
+                .ConfigureAwait(false);
             figures.Add(pack.Figure);
             series.Add(pack.Series);
         }
@@ -98,7 +109,8 @@ public sealed class DashboardOverviewService
         if (modules.ScanSo || modules.DeliveryOrders)
         {
             var href = modules.ScanSo ? "/ScanSO" : "/DeliveryOrders";
-            var pack = await LoadDeliveryAsync(href, endDate, cancellationToken).ConfigureAwait(false);
+            var pack = await LoadDeliveryAsync(href, modules.ScanSo, endDate, cancellationToken)
+                .ConfigureAwait(false);
             figures.Add(pack.Figure);
             series.Add(pack.Series);
         }
@@ -173,6 +185,7 @@ public sealed class DashboardOverviewService
 
     private async Task<(DashboardFigure Figure, DashboardTrendSeries Series)> LoadGoodsAsync(
         string href,
+        bool scanPoMode,
         DateTime endDate,
         CancellationToken cancellationToken)
     {
@@ -180,6 +193,14 @@ public sealed class DashboardOverviewService
         {
             var rows = await _receipts.GetReceiptsAsync(cancellationToken).ConfigureAwait(false);
             var values = TrendValues(GoodsMeta.Key, rows.Select(r => r.GrDate), endDate);
+            if (scanPoMode)
+            {
+                var todo = await CountGoodsTodoAsync(cancellationToken).ConfigureAwait(false);
+                return (
+                    new DashboardFigure(GoodsMeta.Key, "Goods to receive", href, todo.Count, todo.Amount),
+                    new DashboardTrendSeries(GoodsMeta.Key, GoodsMeta.Label, GoodsMeta.Color, values));
+            }
+
             return (
                 new DashboardFigure(GoodsMeta.Key, "Goods received", href, rows.Count, rows.Sum(r => r.Amount)),
                 new DashboardTrendSeries(GoodsMeta.Key, GoodsMeta.Label, GoodsMeta.Color, values));
@@ -187,12 +208,13 @@ public sealed class DashboardOverviewService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Dashboard goods receipt totals unavailable.");
-            return EmptyPack(GoodsMeta, "Goods received", href, endDate);
+            return EmptyPack(GoodsMeta, scanPoMode ? "Goods to receive" : "Goods received", href, endDate);
         }
     }
 
     private async Task<(DashboardFigure Figure, DashboardTrendSeries Series)> LoadDeliveryAsync(
         string href,
+        bool scanSoMode,
         DateTime endDate,
         CancellationToken cancellationToken)
     {
@@ -200,6 +222,14 @@ public sealed class DashboardOverviewService
         {
             var rows = await _deliveries.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
             var values = TrendValues(DeliveryMeta.Key, rows.Select(r => r.DoDate), endDate);
+            if (scanSoMode)
+            {
+                var todo = await CountDeliveryTodoAsync(cancellationToken).ConfigureAwait(false);
+                return (
+                    new DashboardFigure(DeliveryMeta.Key, "Deliveries outstanding", href, todo.Count, todo.Amount),
+                    new DashboardTrendSeries(DeliveryMeta.Key, DeliveryMeta.Label, DeliveryMeta.Color, values));
+            }
+
             return (
                 new DashboardFigure(DeliveryMeta.Key, "Delivery orders", href, rows.Count, rows.Sum(r => r.Amount)),
                 new DashboardTrendSeries(DeliveryMeta.Key, DeliveryMeta.Label, DeliveryMeta.Color, values));
@@ -207,8 +237,30 @@ public sealed class DashboardOverviewService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Dashboard delivery order totals unavailable.");
-            return EmptyPack(DeliveryMeta, "Delivery orders", href, endDate);
+            return EmptyPack(
+                DeliveryMeta,
+                scanSoMode ? "Deliveries outstanding" : "Delivery orders",
+                href,
+                endDate);
         }
+    }
+
+    private async Task<(int Count, decimal Amount)> CountGoodsTodoAsync(CancellationToken cancellationToken)
+    {
+        var approved = await _poScan.ListApprovedAsync(cancellationToken).ConfigureAwait(false);
+        var submitted = await _scanSubmits
+            .GetSubmitSummariesAsync(ScanDocKinds.PurchaseOrder, cancellationToken)
+            .ConfigureAwait(false);
+        var done = submitted.Select(s => s.DocKey).ToHashSet();
+        var todo = approved.Where(o => !done.Contains(o.DocKey)).ToList();
+        return (todo.Count, todo.Sum(o => o.Amount));
+    }
+
+    private async Task<(int Count, decimal Amount)> CountDeliveryTodoAsync(CancellationToken cancellationToken)
+    {
+        var list = await _soDelivery.ListApprovedWithProgressAsync(cancellationToken).ConfigureAwait(false);
+        var todo = list.Where(o => o.OutstandingQty > 0).ToList();
+        return (todo.Count, todo.Sum(o => o.Amount));
     }
 
     private static IReadOnlyList<DashboardStatusKpi> BuildStatusKpis(

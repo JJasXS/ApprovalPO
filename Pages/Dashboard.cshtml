@@ -5,6 +5,8 @@
     var userName = User.Identity?.Name ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "User";
     var purchaseFig = Model.Figure("purchase");
     var salesFig = Model.Figure("sales");
+    var goodsFig = Model.Figure("goods");
+    var deliveryFig = Model.Figure("delivery");
 }
 
 @section Styles {
@@ -117,6 +119,10 @@
                                 </svg>
                             </span>
                             <span class="dash-quick-label">Goods</span>
+                            @if (goodsFig?.Count is int gc and > 0)
+                            {
+                                <span class="dash-quick-badge" title="To receive">@gc.ToString("N0")</span>
+                            }
                         </a>
                     }
                     @if (Model.ShowScanSo || Model.ShowDeliveryOrders)
@@ -131,6 +137,10 @@
                                 </svg>
                             </span>
                             <span class="dash-quick-label">Delivery</span>
+                            @if (deliveryFig?.Count is int dc and > 0)
+                            {
+                                <span class="dash-quick-badge" title="To deliver">@dc.ToString("N0")</span>
+                            }
                         </a>
                     }
                     @if (Model.ShowMaintenanceScanner)
@@ -327,6 +337,10 @@
                                                         </svg>
                                                     </span>
                                                     <span class="dash-action-icon-label">Goods</span>
+                                                    @if (goodsFig?.Count is int agc and > 0)
+                                                    {
+                                                        <span class="dash-quick-badge" title="To receive">@agc.ToString("N0")</span>
+                                                    }
                                                 </a>
                                             }
                                             @if (Model.ShowScanSo || Model.ShowDeliveryOrders)
@@ -341,6 +355,10 @@
                                                         </svg>
                                                     </span>
                                                     <span class="dash-action-icon-label">Delivery</span>
+                                                    @if (deliveryFig?.Count is int adc and > 0)
+                                                    {
+                                                        <span class="dash-quick-badge" title="To deliver">@adc.ToString("N0")</span>
+                                                    }
                                                 </a>
                                             }
                                             @if (Model.ShowMaintenanceScanner)

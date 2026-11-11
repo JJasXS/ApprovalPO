@@ -49,8 +49,8 @@ public class DashboardModel : PageModel
     public static string IndicatorUnit(string key) => key switch
     {
         "purchase" or "sales" => "pending",
-        "goods" => "receipts",
-        "delivery" => "orders",
+        "goods" => "to receive",
+        "delivery" => "to deliver",
         _ => "items"
     };
 
