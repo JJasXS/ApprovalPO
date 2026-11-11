@@ -319,56 +319,15 @@ a.dash-menu-link[aria-current="page"] {
 }
 
 .dash-graph-frame {
+  position: relative;
   width: 100%;
-  min-height: 170px;
+  height: 210px;
 }
 
-.dash-graph-svg {
+.dash-graph-frame canvas {
   display: block;
-  width: 100%;
-  height: auto;
-  overflow: visible;
-}
-
-.dash-graph-grid {
-  stroke: #e8eef7;
-  stroke-width: 1;
-  stroke-dasharray: 3 4;
-}
-
-.dash-graph-axis {
-  fill: #94a3b8;
-  font-size: 10px;
-  font-family: var(--app-font);
-}
-
-.dash-graph-area {
-  opacity: 0;
-  animation: dash-graph-fade 0.7s ease forwards;
-  animation-delay: var(--dash-delay, 0s);
-}
-
-.dash-graph-line {
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
-  animation: dash-graph-draw 1.05s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  animation-delay: var(--dash-delay, 0s);
-  filter: drop-shadow(0 4px 8px rgba(37, 99, 235, 0.12));
-}
-
-.dash-graph-glow {
-  opacity: 0;
-  animation: dash-graph-fade 0.55s ease forwards;
-  animation-delay: calc(var(--dash-delay, 0s) + 0.55s);
-  filter: blur(3px);
-}
-
-.dash-graph-dot {
-  opacity: 0;
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: dash-graph-pop 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  animation-delay: calc(var(--dash-delay, 0s) + 0.6s);
+  width: 100% !important;
+  height: 100% !important;
 }
 
 .dash-graph-legend {
@@ -407,36 +366,6 @@ a.dash-menu-link[aria-current="page"] {
   box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.16);
 }
 
-@keyframes dash-graph-draw {
-  to { stroke-dashoffset: 0; }
-}
-
-@keyframes dash-graph-fade {
-  to { opacity: 1; }
-}
-
-@keyframes dash-graph-pop {
-  from {
-    opacity: 0;
-    transform: scale(0.4);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dash-graph-area,
-  .dash-graph-line,
-  .dash-graph-glow,
-  .dash-graph-dot {
-    animation: none;
-    opacity: 1;
-    stroke-dashoffset: 0;
-    transform: none;
-  }
-}
 
 .dash-tablist {
   display: flex;
@@ -670,7 +599,7 @@ a.dash-menu-link[aria-current="page"] {
   }
 
   .dash-graph-frame {
-    min-height: 150px;
+    height: 190px;
   }
 
   .dash-tabs {
