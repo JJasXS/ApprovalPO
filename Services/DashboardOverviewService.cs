@@ -116,7 +116,7 @@ public sealed class DashboardOverviewService
         {
             var rows = await _purchase.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
             var pending = SumPending(rows.Select(o => (o.Status, o.Amount)));
-            var values = DashboardTrendBuilder.CountByDay(rows.Select(o => o.OrderDate), endDate);
+            var values = TrendValues(PurchaseMeta.Key, rows.Select(o => o.OrderDate), endDate);
             return (
                 new DashboardFigure(PurchaseMeta.Key, "Purchase approvals", "/PurchaseOrders", pending.Count, pending.Amount),
                 new DashboardTrendSeries(PurchaseMeta.Key, PurchaseMeta.Label, PurchaseMeta.Color, values));
@@ -124,7 +124,7 @@ public sealed class DashboardOverviewService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Dashboard purchase totals unavailable.");
-            return EmptyPack(PurchaseMeta, "Purchase approvals", "/PurchaseOrders");
+            return EmptyPack(PurchaseMeta, "Purchase approvals", "/PurchaseOrders", endDate);
         }
     }
 
@@ -136,7 +136,7 @@ public sealed class DashboardOverviewService
         {
             var rows = await _sales.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
             var pending = SumPending(rows.Select(o => (o.Status, o.Amount)));
-            var values = DashboardTrendBuilder.CountByDay(rows.Select(o => o.OrderDate), endDate);
+            var values = TrendValues(SalesMeta.Key, rows.Select(o => o.OrderDate), endDate);
             return (
                 new DashboardFigure(SalesMeta.Key, "Sales approvals", "/SalesOrders", pending.Count, pending.Amount),
                 new DashboardTrendSeries(SalesMeta.Key, SalesMeta.Label, SalesMeta.Color, values));
@@ -144,7 +144,7 @@ public sealed class DashboardOverviewService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Dashboard sales totals unavailable.");
-            return EmptyPack(SalesMeta, "Sales approvals", "/SalesOrders");
+            return EmptyPack(SalesMeta, "Sales approvals", "/SalesOrders", endDate);
         }
     }
 
@@ -156,7 +156,7 @@ public sealed class DashboardOverviewService
         try
         {
             var rows = await _receipts.GetReceiptsAsync(cancellationToken).ConfigureAwait(false);
-            var values = DashboardTrendBuilder.CountByDay(rows.Select(r => r.GrDate), endDate);
+            var values = TrendValues(GoodsMeta.Key, rows.Select(r => r.GrDate), endDate);
             return (
                 new DashboardFigure(GoodsMeta.Key, "Goods received", href, rows.Count, rows.Sum(r => r.Amount)),
                 new DashboardTrendSeries(GoodsMeta.Key, GoodsMeta.Label, GoodsMeta.Color, values));
@@ -164,7 +164,7 @@ public sealed class DashboardOverviewService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Dashboard goods receipt totals unavailable.");
-            return EmptyPack(GoodsMeta, "Goods received", href);
+            return EmptyPack(GoodsMeta, "Goods received", href, endDate);
         }
     }
 
@@ -176,7 +176,7 @@ public sealed class DashboardOverviewService
         try
         {
             var rows = await _deliveries.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
-            var values = DashboardTrendBuilder.CountByDay(rows.Select(r => r.DoDate), endDate);
+            var values = TrendValues(DeliveryMeta.Key, rows.Select(r => r.DoDate), endDate);
             return (
                 new DashboardFigure(DeliveryMeta.Key, "Delivery orders", href, rows.Count, rows.Sum(r => r.Amount)),
                 new DashboardTrendSeries(DeliveryMeta.Key, DeliveryMeta.Label, DeliveryMeta.Color, values));
@@ -184,18 +184,26 @@ public sealed class DashboardOverviewService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Dashboard delivery order totals unavailable.");
-            return EmptyPack(DeliveryMeta, "Delivery orders", href);
+            return EmptyPack(DeliveryMeta, "Delivery orders", href, endDate);
         }
+    }
+
+    private static IReadOnlyList<int> TrendValues(string key, IEnumerable<DateTime> dates, DateTime endDate)
+    {
+        var real = DashboardTrendBuilder.CountByDay(dates, endDate);
+        var mock = DashboardTrendBuilder.BuildMockValues(key, endDate);
+        return DashboardTrendBuilder.MergeRealAndMock(real, mock);
     }
 
     private static (DashboardFigure Figure, DashboardTrendSeries Series) EmptyPack(
         (string Key, string Label, string Color) meta,
         string figureLabel,
-        string href)
+        string href,
+        DateTime endDate)
     {
-        var zeros = Enumerable.Repeat(0, DashboardTrendBuilder.DayCount).ToArray();
+        var mock = DashboardTrendBuilder.BuildMockValues(meta.Key, endDate);
         return (
             new DashboardFigure(meta.Key, figureLabel, href, null, null),
-            new DashboardTrendSeries(meta.Key, meta.Label, meta.Color, zeros));
+            new DashboardTrendSeries(meta.Key, meta.Label, meta.Color, mock));
     }
 }

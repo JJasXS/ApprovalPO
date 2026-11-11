@@ -44,10 +44,18 @@
         @if (Model.HasOverview)
         {
             <section class="dash-insight" aria-label="Overview">
-                <div class="dash-chart-card" id="dashTrend" data-trend='@Html.Raw(Model.TrendJson)'>
+                <div class="dash-chart-card" id="dashTrend" data-trend='@Html.Raw(Model.TrendJson)' data-range="7">
                     <div class="dash-chart-head">
-                        <h2 class="dash-chart-title">Last 7 days</h2>
-                        <p class="dash-chart-sub">Purchase, sales, goods &amp; delivery volume</p>
+                        <div class="dash-chart-head-text">
+                            <h2 class="dash-chart-title" data-dash-title>Last 7 days</h2>
+                            <p class="dash-chart-sub">Purchase, sales, goods &amp; delivery volume</p>
+                        </div>
+                        <div class="dash-range" role="group" aria-label="Trend range">
+                            <button type="button" class="dash-range-btn is-active" data-range="7">7D</button>
+                            <button type="button" class="dash-range-btn" data-range="30">30D</button>
+                            <button type="button" class="dash-range-btn" data-range="90">90D</button>
+                            <button type="button" class="dash-range-btn" data-range="100">100D</button>
+                        </div>
                     </div>
                     <div class="dash-graph-frame" id="dashTrendGraph"></div>
                     <div class="dash-graph-legend" aria-hidden="true"></div>
