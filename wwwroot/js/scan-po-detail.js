@@ -1119,6 +1119,35 @@
     updateProgress();
   };
 
+  /** Lines where the typed Delivered/Received qty still exceeds Left (red state). */
+  const collectOverMaxInputs = () => {
+    const bad = [];
+    lineRows().forEach((row) => {
+      const input = row.querySelector('.scan-received-input');
+      if (!input) return;
+      const raw = String(input.value || '').trim();
+      if (!raw) return;
+      const n = Number(raw);
+      const max = orderQty(row);
+      if (!(Number.isFinite(n) && max > 0 && n > max)) return;
+      bad.push({ row, input, n, max });
+    });
+    return bad;
+  };
+
+  /** Clamp input to Left max and sync scanCounts (clears red). */
+  const clampReceivedInput = (row, input) => {
+    const raw = String(input?.value || '').trim();
+    if (!raw) {
+      clearReceived(row, { quiet: true });
+      if (input) input.value = '';
+      return 0;
+    }
+    const n = setReceivedQty(row, raw);
+    if (input) input.value = n > 0 ? String(n) : '';
+    return n;
+  };
+
   /** Read editable Received inputs into scanCounts (submit must not rely on change/blur alone). */
   const syncReceivedFromDom = () => {
     if (readOnly) return;
@@ -1874,12 +1903,7 @@
       if (!input || readOnly) return;
       const row = input.closest('tr[data-item-code]');
       if (!row) return;
-      const raw = input.value.trim();
-      if (!raw) {
-        clearReceived(row, { quiet: true });
-        return;
-      }
-      setReceivedQty(row, raw);
+      clampReceivedInput(row, input);
     });
     let receivedInputTimer = null;
     linesTableBody.addEventListener('input', (e) => {
@@ -1889,7 +1913,6 @@
       if (!row) return;
       const max = orderQty(row);
       const typed = Number(String(input.value || '').trim());
-      const over = Number.isFinite(typed) && max > 0 && typed > max;
       applyQtyRowClasses(row, Number.isFinite(typed) ? typed : 0, max);
       clearTimeout(receivedInputTimer);
       receivedInputTimer = setTimeout(() => {
@@ -1914,6 +1937,20 @@
     submitForm.addEventListener('submit', (e) => {
       if (submitInProgress) {
         e.preventDefault();
+        return;
+      }
+
+      const overs = collectOverMaxInputs();
+      if (overs.length > 0) {
+        e.preventDefault();
+        const first = overs[0];
+        showToast(
+          `${qtyVerb} qty cannot exceed Left (max ${first.max}). Fix the red line(s) before submit.`,
+          'error'
+        );
+        applyQtyRowClasses(first.row, first.n, first.max);
+        first.input.focus();
+        first.input.select();
         return;
       }
 
