@@ -369,12 +369,54 @@ body.scan-menu-open {
   display: block;
 }
 
+.dash-action-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 10px 12px 14px;
+}
+
+.dash-action-group {
+  margin: 0;
+}
+
+.dash-action-rule {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 10px;
+}
+
+.dash-action-rule-line {
+  flex: 1;
+  height: 1px;
+  background: #dbe7f1;
+}
+
+.dash-action-rule-label {
+  margin: 0;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+  white-space: nowrap;
+}
+
 .dash-action-icons {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px 8px;
   margin: 0;
-  padding: 14px 12px 16px;
+  padding: 0;
+}
+
+.dash-action-icons--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dash-action-icons--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .dash-action-icon {
@@ -426,7 +468,6 @@ body.scan-menu-open {
 }
 
 .dash-action-empty {
-  grid-column: 1 / -1;
   margin: 0;
   padding: 8px;
   text-align: center;
