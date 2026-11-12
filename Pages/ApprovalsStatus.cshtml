@@ -3,13 +3,6 @@
 @{
     ViewData["Title"] = $"{Model.StatusFilter} approvals";
     var userName = User.Identity?.Name ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "User";
-    var tone = Model.StatusFilter switch
-    {
-        "Approved" => "green",
-        "Rejected" => "red",
-        "Cancelled" => "slate",
-        _ => "amber"
-    };
 }
 
 @section Styles {
@@ -79,7 +72,6 @@
                             <ul class="dash-status-list">
                                 @foreach (var row in Model.PurchaseRows)
                                 {
-                                    var label = ApprovalsStatusModel.ProgressLabel(row);
                                     <li>
                                         <a class="dash-status-item" href="/PurchaseOrders?status=@Uri.EscapeDataString(Model.StatusFilter)">
                                             <span class="dash-status-item-main">
@@ -87,7 +79,6 @@
                                                 <span class="dash-status-item-party">@(string.IsNullOrWhiteSpace(row.Vendor) ? "—" : row.Vendor)</span>
                                             </span>
                                             <span class="dash-status-item-meta">
-                                                <span class="dash-status-badge dash-status-badge--@tone">@label</span>
                                                 <span class="dash-status-item-amt">@row.Amount.ToString("N2")</span>
                                                 <span class="dash-status-item-date">@row.OrderDate.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</span>
                                             </span>
@@ -115,7 +106,6 @@
                             <ul class="dash-status-list">
                                 @foreach (var row in Model.SalesRows)
                                 {
-                                    var label = ApprovalsStatusModel.ProgressLabel(row);
                                     <li>
                                         <a class="dash-status-item" href="/SalesOrders?status=@Uri.EscapeDataString(Model.StatusFilter)">
                                             <span class="dash-status-item-main">
@@ -123,7 +113,6 @@
                                                 <span class="dash-status-item-party">@(string.IsNullOrWhiteSpace(row.Customer) ? "—" : row.Customer)</span>
                                             </span>
                                             <span class="dash-status-item-meta">
-                                                <span class="dash-status-badge dash-status-badge--@tone">@label</span>
                                                 <span class="dash-status-item-amt">@row.Amount.ToString("N2")</span>
                                                 <span class="dash-status-item-date">@row.OrderDate.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</span>
                                             </span>
