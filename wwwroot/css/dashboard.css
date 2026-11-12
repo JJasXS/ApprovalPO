@@ -581,6 +581,30 @@ body.scan-menu-open {
   color: #64748b;
 }
 
+.dash-activity-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.dash-activity-more {
+  margin-top: 8px;
+  align-self: center;
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 10px;
+}
+
+.dash-activity-more:hover,
+.dash-activity-more:focus-visible {
+  text-decoration: underline;
+  outline: none;
+}
+
 .dash-insight {
   display: flex;
   flex-direction: column;

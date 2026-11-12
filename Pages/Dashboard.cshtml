@@ -176,19 +176,35 @@
                 }
                 else
                 {
-                    <ul class="dash-activity-list">
-                        @foreach (var item in Model.RecentActivity)
+                    const int activityPreview = 5;
+                    var showActivityMore = Model.RecentActivity.Count > activityPreview;
+                    <div class="dash-activity-wrap" data-dash-activity @(showActivityMore ? "data-collapsed" : null)>
+                        <ul class="dash-activity-list">
+                            @{ var activityIndex = 0; }
+                            @foreach (var item in Model.RecentActivity)
+                            {
+                                var tone = DashboardModel.ActivityTone(item.Status);
+                                var extra = activityIndex >= activityPreview;
+                                <li class="@(extra ? "dash-activity-extra" : null)" @(extra ? "hidden" : null)>
+                                    <a class="dash-activity-row" href="@item.Href">
+                                        <span class="dash-activity-kind">@item.Kind</span>
+                                        <span class="dash-activity-ref">@item.Reference</span>
+                                        <span class="dash-activity-status dash-activity-status--@tone">@item.Status</span>
+                                    </a>
+                                </li>
+                                activityIndex++;
+                            }
+                        </ul>
+                        @if (showActivityMore)
                         {
-                            var tone = DashboardModel.ActivityTone(item.Status);
-                            <li>
-                                <a class="dash-activity-row" href="@item.Href">
-                                    <span class="dash-activity-kind">@item.Kind</span>
-                                    <span class="dash-activity-ref">@item.Reference</span>
-                                    <span class="dash-activity-status dash-activity-status--@tone">@item.Status</span>
-                                </a>
-                            </li>
+                            <button type="button"
+                                    class="dash-activity-more"
+                                    data-dash-activity-more
+                                    aria-expanded="false">
+                                More
+                            </button>
                         }
-                    </ul>
+                    </div>
                 }
             </section>
         }
