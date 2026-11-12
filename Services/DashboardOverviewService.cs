@@ -271,20 +271,42 @@ public sealed class DashboardOverviewService
         if (!modules.PurchaseApproval && !modules.SalesApproval)
             return Array.Empty<DashboardStatusKpi>();
 
-        var statuses = purchaseRows.Select(r => r.Status)
-            .Concat(salesRows.Select(r => r.Status))
-            .ToList();
-        var pending = CountStatus(statuses, "Pending");
-        var approved = CountStatus(statuses, "Approved");
-        var rejected = CountStatus(statuses, "Rejected");
-        var primaryList = modules.PurchaseApproval ? "/PurchaseOrders" : "/SalesOrders";
+        var poStatuses = purchaseRows.Select(r => r.Status).ToList();
+        var soStatuses = salesRows.Select(r => r.Status).ToList();
+        var poPending = modules.PurchaseApproval ? CountStatus(poStatuses, "Pending") : 0;
+        var soPending = modules.SalesApproval ? CountStatus(soStatuses, "Pending") : 0;
+        var poApproved = modules.PurchaseApproval ? CountStatus(poStatuses, "Approved") : 0;
+        var soApproved = modules.SalesApproval ? CountStatus(soStatuses, "Approved") : 0;
+        var poRejected = modules.PurchaseApproval ? CountStatus(poStatuses, "Rejected") : 0;
+        var soRejected = modules.SalesApproval ? CountStatus(soStatuses, "Rejected") : 0;
 
         return
         [
-            new DashboardStatusKpi("pending", "Pending", pending, $"{primaryList}?status=Pending", "amber"),
-            new DashboardStatusKpi("approved", "Approved", approved, $"{primaryList}?status=Approved", "green"),
-            new DashboardStatusKpi("rejected", "Rejected", rejected, $"{primaryList}?status=Rejected", "red")
+            BuildStatusKpi(modules, "pending", "Pending", "amber", poPending, soPending),
+            BuildStatusKpi(modules, "approved", "Approved", "green", poApproved, soApproved),
+            BuildStatusKpi(modules, "rejected", "Rejected", "red", poRejected, soRejected)
         ];
+    }
+
+    private static DashboardStatusKpi BuildStatusKpi(
+        DashboardModuleFlags modules,
+        string key,
+        string label,
+        string tone,
+        int purchaseCount,
+        int salesCount)
+    {
+        var encoded = Uri.EscapeDataString(label);
+        var overviewHref = $"/ApprovalsStatus?status={encoded}";
+        var total = purchaseCount + salesCount;
+
+        if (modules.PurchaseApproval && modules.SalesApproval)
+            return new DashboardStatusKpi(key, label, total, overviewHref, tone);
+
+        if (modules.SalesApproval && !modules.PurchaseApproval)
+            return new DashboardStatusKpi(key, label, salesCount, $"/SalesOrders?status={encoded}", tone);
+
+        return new DashboardStatusKpi(key, label, purchaseCount, $"/PurchaseOrders?status={encoded}", tone);
     }
 
     private static IReadOnlyList<DashboardActivityItem> BuildRecentActivity(

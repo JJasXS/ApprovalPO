@@ -85,7 +85,7 @@
 
   const updateResultCount = (shown, total) => {
     if (!resultCount) return;
-    const label = 'to scan';
+    const label = 'outstanding';
     if (total === 0) {
       resultCount.textContent = `0 ${label}`;
       return;

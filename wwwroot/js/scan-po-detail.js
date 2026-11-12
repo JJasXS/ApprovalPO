@@ -205,9 +205,19 @@
     updateRemainingMeta();
     if (!statusBar) return;
     statusBar.dataset.state = state || 'ready';
-    if (statusMain) statusMain.textContent = mainText || 'Ready to scan';
-    if (statusBar.getAttribute('aria-pressed') != null)
+    if (statusMain) statusMain.textContent = 'RFID';
+    if (statusBar.getAttribute('aria-pressed') != null) {
       statusBar.setAttribute('aria-pressed', inventoryArmed ? 'true' : 'false');
+      statusBar.setAttribute(
+        'aria-label',
+        readOnly
+          ? 'RFID unavailable after submit'
+          : inventoryArmed
+            ? 'RFID on — tap to pause'
+            : 'RFID off — tap to resume'
+      );
+      statusBar.title = inventoryArmed ? 'RFID listening' : 'RFID paused';
+    }
     clearTimeout(statusResetTimer);
     const sticky =
       opts.sticky === true ||
@@ -2006,15 +2016,10 @@
   const applyCompactScanChrome = () => {
     if (manualBtn) manualBtn.textContent = 'OK';
     if (manualInput) manualInput.placeholder = 'Scan tag';
-    if (statusBar && !statusBar.querySelector('.scan-listen-icon')) {
-      const icon = document.createElement('span');
-      icon.className = 'scan-listen-icon';
-      icon.setAttribute('aria-hidden', 'true');
-      statusBar.appendChild(icon);
+    if (scanBtn) {
+      const label = scanBtn.querySelector('span');
+      if (label) label.textContent = 'QR / Barcode';
     }
-    const menuWrap = document.querySelector('.scan-meta-menu-wrap');
-    if (statusBar && menuWrap && statusBar.parentElement !== menuWrap)
-      menuWrap.insertBefore(statusBar, menuWrap.firstChild);
     document.querySelector('.scan-rfid-tip')?.remove();
     document.getElementById('scanListenHint')?.remove();
     document.getElementById('scanWedgeDebug')?.remove();

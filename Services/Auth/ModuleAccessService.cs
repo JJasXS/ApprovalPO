@@ -64,7 +64,8 @@ internal sealed class ModuleAccessService : IModuleAccessService
             "receivedGoods" => modules.ReceivedGoods ?? true,
             "scanSo" => modules.ScanSo ?? true,
             "deliveryOrders" => modules.DeliveryOrders ?? true,
-            "maintenanceScanner" => modules.MaintenanceScanner ?? true,
+            // Hidden for now — re-enable via tenant maintenanceScanner when ready.
+            "maintenanceScanner" => false,
             _ => true
         };
     }
@@ -74,7 +75,8 @@ internal sealed class ModuleAccessService : IModuleAccessService
         CancellationToken cancellationToken = default)
     {
         // Defaults all true — empty Overview only when tenant explicitly disables every module.
-        var defaults = new DashboardModuleFlags();
+        // Maintenance Scanner tile/nav hidden for now.
+        var defaults = new DashboardModuleFlags { MaintenanceScanner = false };
 
         var tenantCode = (_configuration["TenantBootstrap:TenantCode"] ?? "").Trim();
         if (tenantCode.Length == 0)
@@ -101,7 +103,7 @@ internal sealed class ModuleAccessService : IModuleAccessService
             ReceivedGoods = modules.ReceivedGoods ?? true,
             ScanSo = modules.ScanSo ?? true,
             DeliveryOrders = modules.DeliveryOrders ?? true,
-            MaintenanceScanner = modules.MaintenanceScanner ?? true
+            MaintenanceScanner = false
         };
     }
 

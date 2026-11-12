@@ -18,7 +18,7 @@ public class DashboardModel : PageModel
     public bool ShowReceivedGoods { get; private set; } = true;
     public bool ShowScanSo { get; private set; } = true;
     public bool ShowDeliveryOrders { get; private set; } = true;
-    public bool ShowMaintenanceScanner { get; private set; } = true;
+    public bool ShowMaintenanceScanner { get; private set; }
     public IReadOnlyList<DashboardFigure> Figures { get; private set; } = Array.Empty<DashboardFigure>();
     public DashboardTrend Trend { get; private set; } = new(Array.Empty<string>(), Array.Empty<DashboardTrendSeries>());
     public IReadOnlyList<DashboardStatusKpi> StatusKpis { get; private set; } = Array.Empty<DashboardStatusKpi>();

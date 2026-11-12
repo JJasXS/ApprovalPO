@@ -35,19 +35,15 @@
   const undoToastMsg = document.getElementById('undoToastMsg');
   const undoBtn = document.getElementById('undoBtn');
   const tabPending = document.getElementById('tabPending');
-  const tabWaiting = document.getElementById('tabWaiting');
   const tabCancelled = document.getElementById('tabCancelled');
   const tabApproved = document.getElementById('tabApproved');
   const tabRejected = document.getElementById('tabRejected');
   const countPending = document.getElementById('countPending');
-  const countWaiting = document.getElementById('countWaiting');
   const countCancelled = document.getElementById('countCancelled');
-  const bulkWaitingBang = document.getElementById('bulkWaitingBang');
   const countApproved = document.getElementById('countApproved');
   const countRejected = document.getElementById('countRejected');
   const statusKebabBtn = document.getElementById('statusKebabBtn');
   const statusKebabPanel = document.getElementById('statusKebabPanel');
-  const statusKebabBang = document.getElementById('statusKebabBang');
   const poEmptyState = document.getElementById('poEmptyState');
   const poTableScroll = document.getElementById('poTableScroll');
   const poSkeleton = document.getElementById('poSkeleton');
@@ -65,7 +61,7 @@
 
   let rows = Array.from(document.querySelectorAll('.po-row'));
   let currentRow = null;
-  /** @type {'Pending' | 'Waiting' | 'Approved' | 'Rejected' | 'Cancelled'} */
+  /** @type {'Pending' | 'Approved' | 'Rejected' | 'Cancelled'} */
   let activeListTab = 'Pending';
   let undoTimer = null;
   /** @type {null | (() => void)} */
@@ -240,18 +236,7 @@
 
   const levelLabel = (level) => ({ 1: 'MANAGER', 2: 'HOD/PUR', 3: 'DIRECTOR' }[level] || 'approver');
 
-  const partialProgressLabel = (required, completed) =>
-    required > 1 && completed > 0 && completed < required
-      ? `Waiting (${completed}/${required})`
-      : null;
-
-  const statusDisplay = (status, tr) => {
-    if (status === 'Pending' && tr) {
-      const label = partialProgressLabel(rowRequiredLevels(tr), rowCompletedLevels(tr));
-      if (label) return label;
-    }
-    return status;
-  };
+  const statusDisplay = (status) => status || 'Pending';
 
   const syncRowStatusDom = (tr, status) => {
     if (!tr) return;
@@ -743,14 +728,6 @@
     return [1, 2, 3].some((lvl) => emailsEqual(tr?.dataset?.[`approvalL${lvl}`], userEmail));
   };
 
-  /** Pending multi-level PO with at least one sign-off still needed (visible in Waiting for all users). */
-  const rowIsWaitingForOthers = (tr) => {
-    if (rowListStatus(tr) !== 'Pending') return false;
-    const required = rowRequiredLevels(tr);
-    const completed = rowCompletedLevels(tr);
-    return required > 1 && completed > 0 && completed < required;
-  };
-
   const canWorkflowApprove = (tr) => {
     if (isElevated) return true;
     if (!amountInApprovalRangeForRow(tr)) return false;
@@ -794,11 +771,11 @@
     const required = rowRequiredLevels(tr);
     const partialAboveCeiling = amt > appTo && !wouldFinaliseAfterSign(tr);
     if (partialAboveCeiling) {
-      return `<div class="modal__note">Amount exceeds your personal ceiling (${formatRm(appTo)}). Your sign-off records progress only; this PO stays in Waiting until a higher level approves.</div>`;
+      return `<div class="modal__note">Amount exceeds your personal ceiling (${formatRm(appTo)}). Contact a higher-level approver if needed.</div>`;
     }
     if (required <= 1) return '';
     if (userLevel > 0 && userLevel < required)
-      return `<div class="modal__note">Needs ${required} approval level(s). Your sign-off records progress (${userLevel}/${required}) and this PO stays in Waiting until a higher level covers the rest.</div>`;
+      return `<div class="modal__note">Needs ${required} approval level(s). Your sign-off records progress (${userLevel}/${required}).</div>`;
     if (userLevel >= required)
       return `<div class="modal__note">Needs ${required} approval level(s). Your level covers remaining slots, so Approve will finalise this PO.</div>`;
     return '';
@@ -846,7 +823,7 @@
     syncRowStatusDom(tr, 'Pending');
     updateRowButtons(tr);
     if (!quiet) showToast(message || data?.message || 'Approval recorded.');
-    setListTab('Waiting');
+    setListTab('Pending');
   };
 
   /**
@@ -1023,17 +1000,14 @@
   const updateTabUi = () => {
     if (!tabPending || !tabApproved || !tabRejected) return;
     const pendingOn = activeListTab === 'Pending';
-    const waitingOn = activeListTab === 'Waiting';
     const cancelledOn = activeListTab === 'Cancelled';
     const approvedOn = activeListTab === 'Approved';
     const rejectedOn = activeListTab === 'Rejected';
     tabPending.classList.toggle('is-active', pendingOn);
-    if (tabWaiting) tabWaiting.classList.toggle('is-active', waitingOn);
     if (tabCancelled) tabCancelled.classList.toggle('is-active', cancelledOn);
     tabApproved.classList.toggle('is-active', approvedOn);
     tabRejected.classList.toggle('is-active', rejectedOn);
     tabPending.setAttribute('aria-current', pendingOn ? 'true' : 'false');
-    if (tabWaiting) tabWaiting.setAttribute('aria-current', waitingOn ? 'true' : 'false');
     if (tabCancelled) tabCancelled.setAttribute('aria-current', cancelledOn ? 'true' : 'false');
     tabApproved.setAttribute('aria-current', approvedOn ? 'true' : 'false');
     tabRejected.setAttribute('aria-current', rejectedOn ? 'true' : 'false');
@@ -1042,8 +1016,7 @@
   };
 
   const setListTab = (tab) => {
-    if (tab === 'Waiting') activeListTab = 'Waiting';
-    else if (tab === 'Cancelled') activeListTab = 'Cancelled';
+    if (tab === 'Cancelled') activeListTab = 'Cancelled';
     else if (tab === 'Approved') activeListTab = 'Approved';
     else if (tab === 'Rejected') activeListTab = 'Rejected';
     else activeListTab = 'Pending';
@@ -1075,9 +1048,8 @@
     }
   };
 
-  const rowMatchesActiveTab = (status, waiting) => {
-    if (activeListTab === 'Pending') return status === 'Pending' && !waiting;
-    if (activeListTab === 'Waiting') return waiting;
+  const rowMatchesActiveTab = (status) => {
+    if (activeListTab === 'Pending') return status === 'Pending';
     if (activeListTab === 'Approved') return status === 'Approved';
     if (activeListTab === 'Cancelled') return status === 'Cancelled';
     return status === 'Rejected';
@@ -1086,26 +1058,18 @@
   const emptyListMessage = (inTabCount) => {
     if (inTabCount > 0) return 'No purchase orders match your filters.';
     if (activeListTab === 'Pending') return 'No pending purchase orders.';
-    if (activeListTab === 'Waiting') return 'No purchase orders waiting for remaining approvals.';
     if (activeListTab === 'Approved') return 'No approved purchase orders.';
     if (activeListTab === 'Cancelled') return 'No cancelled purchase orders.';
     return 'No rejected purchase orders.';
   };
 
   const refreshView = () => {
-    const waitingRows = rows.filter((r) => rowIsWaitingForOthers(r));
-    const pendingCount = rows.filter(
-      (r) => rowListStatus(r) === 'Pending' && !rowIsWaitingForOthers(r)
-    ).length;
-    const waitingCount = waitingRows.length;
+    const pendingCount = rows.filter((r) => rowListStatus(r) === 'Pending').length;
     const approvedCount = rows.filter((r) => rowListStatus(r) === 'Approved').length;
     const rejectedCount = rows.filter((r) => rowListStatus(r) === 'Rejected').length;
     const cancelledCount = rows.filter((r) => rowListStatus(r) === 'Cancelled').length;
     if (countPending) countPending.textContent = String(pendingCount);
-    if (countWaiting) countWaiting.textContent = String(waitingCount);
     if (countCancelled) countCancelled.textContent = String(cancelledCount);
-    if (bulkWaitingBang) bulkWaitingBang.hidden = waitingCount === 0;
-    if (statusKebabBang) statusKebabBang.hidden = waitingCount === 0;
     if (countApproved) countApproved.textContent = String(approvedCount);
     if (countRejected) countRejected.textContent = String(rejectedCount);
 
@@ -1114,8 +1078,7 @@
     rows.forEach((tr) => {
       updateRowButtons(tr);
       const status = rowListStatus(tr);
-      const waiting = rowIsWaitingForOthers(tr);
-      const matchesStatus = rowMatchesActiveTab(status, waiting);
+      const matchesStatus = rowMatchesActiveTab(status);
       if (matchesStatus) countInTab++;
       const matchesFilters = rowMatchesFilters(tr);
       const shouldShow = matchesStatus && matchesFilters;
@@ -1131,8 +1094,7 @@
         rowListStatus(r) === 'Pending' &&
         r.querySelector('.row-select')?.checked
     );
-    if (bulkApproveBtn)
-      bulkApproveBtn.disabled = selectedPending.length === 0 || activeListTab === 'Waiting';
+    if (bulkApproveBtn) bulkApproveBtn.disabled = selectedPending.length === 0;
 
     if (poEmptyState && poTableScroll) {
       const emptyTextEl = poEmptyState.querySelector('.po-empty__text');
@@ -1311,8 +1273,7 @@
       const raw = new URLSearchParams(window.location.search).get('status');
       if (!raw) return '';
       const normalized = String(raw).trim().toLowerCase();
-      if (normalized === 'pending') return 'Pending';
-      if (normalized === 'waiting') return 'Waiting';
+      if (normalized === 'pending' || normalized === 'waiting') return 'Pending';
       if (normalized === 'approved') return 'Approved';
       if (normalized === 'rejected') return 'Rejected';
       if (normalized === 'cancelled') return 'Cancelled';

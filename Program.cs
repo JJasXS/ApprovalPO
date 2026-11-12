@@ -219,6 +219,7 @@ var razorPages = builder.Services.AddRazorPages(options =>
 
     // Purchase Order Approval: Admin (UDF_APPROLE) or Director (UDF_ISDIRECTOR).
     options.Conventions.AuthorizePage("/Dashboard", PolicyNames.DirectorAccess);
+    options.Conventions.AuthorizePage("/ApprovalsStatus", PolicyNames.DirectorAccess);
     options.Conventions.AuthorizePage("/PurchaseOrders", PolicyNames.DirectorAccess);
     options.Conventions.AuthorizePage("/SalesOrders", PolicyNames.DirectorAccess);
     options.Conventions.AuthorizePage("/ScanPO", PolicyNames.DirectorAccess);

@@ -139,12 +139,7 @@
                             : row.Status == "Cancelled"
                                 ? "po-status-stack--cancelled"
                                 : "po-status-stack--pending";
-                    var progressLabel = row.Status == "Pending"
-                        && row.RequiredLevels > 1
-                        && row.CompletedLevels > 0
-                        && row.CompletedLevels < row.RequiredLevels
-                        ? $"Waiting ({row.CompletedLevels}/{row.RequiredLevels})"
-                        : row.Status;
+                    var progressLabel = row.Status;
                     <tr class="po-row" data-po="@row.PoNumber"
                         data-doc-key="@row.DocKey"
                         data-amount="@row.Amount.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)"

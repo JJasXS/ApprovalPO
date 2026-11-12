@@ -1,6 +1,29 @@
-/* scan-qr-scanner.js — live camera (BarcodeDetector + multi-pass jsQR) or photo fallback on HTTP */
+/* scan-qr-scanner.js — live camera (BarcodeDetector + jsQR + Quagga) or photo fallback on HTTP */
 (function (global) {
   'use strict';
+
+  const PREFERRED_BARCODE_FORMATS = [
+    'qr_code',
+    'code_128',
+    'code_39',
+    'ean_13',
+    'ean_8',
+    'upc_a',
+    'upc_e',
+    'itf',
+    'codabar',
+    'data_matrix',
+  ];
+
+  const QUAGGA_READERS = [
+    'code_128_reader',
+    'code_39_reader',
+    'ean_reader',
+    'ean_8_reader',
+    'upc_reader',
+    'upc_e_reader',
+    'i2of5_reader',
+  ];
 
   const PREFER_REAR = {
     audio: false,
@@ -102,7 +125,39 @@
     return null;
   }
 
-  function decodeFromImageElement(img) {
+  function decodeQuaggaFromCanvas(canvas) {
+    return new Promise((resolve) => {
+      if (typeof global.Quagga?.decodeSingle !== 'function') {
+        resolve(null);
+        return;
+      }
+      try {
+        global.Quagga.decodeSingle(
+          {
+            src: canvas.toDataURL('image/jpeg', 0.92),
+            numOfWorkers: 0,
+            locate: true,
+            inputStream: { size: 800 },
+            decoder: { readers: QUAGGA_READERS },
+          },
+          (result) => {
+            const code = result?.codeResult?.code;
+            resolve(code ? String(code).trim() : null);
+          }
+        );
+      } catch (_) {
+        resolve(null);
+      }
+    });
+  }
+
+  function hasAnyDecoder() {
+    return typeof global.jsQR === 'function'
+      || typeof global.Quagga?.decodeSingle === 'function'
+      || 'BarcodeDetector' in global;
+  }
+
+  async function decodeFromImageElement(img) {
     const w = img.naturalWidth || img.width;
     const h = img.naturalHeight || img.height;
     if (w < 8 || h < 8) return null;
@@ -113,6 +168,8 @@
     if (!ctx) return null;
     ctx.drawImage(img, 0, 0);
     let data = decodeJsQrMulti(c);
+    if (data) return data;
+    data = await decodeQuaggaFromCanvas(c);
     if (data) return data;
 
     const scales = [0.75, 1.25, 1.5];
@@ -126,6 +183,8 @@
       if (!tctx) continue;
       tctx.drawImage(img, 0, 0, tw, th);
       data = decodeJsQrMulti(tmp);
+      if (data) return data;
+      data = await decodeQuaggaFromCanvas(tmp);
       if (data) return data;
     }
     return null;
@@ -245,8 +304,8 @@
 
     const openPhotoFallback = () => {
       hideCameraDeniedHelp();
-      if (typeof global.jsQR !== 'function') {
-        setStatus('QR scanner library not loaded.', 'is-error');
+      if (!hasAnyDecoder()) {
+        setStatus('Scanner library not loaded.', 'is-error');
         return;
       }
       stopStream();
@@ -254,7 +313,7 @@
       setPhotoMode(true);
       overlay?.classList.add('is-open');
       document.body.style.overflow = 'hidden';
-      setStatus('Tap Take photo and fill the frame with the QR code.');
+      setStatus('Tap Take photo and fill the frame with the QR or barcode.');
     };
 
     const stopLoop = () => {
@@ -298,7 +357,7 @@
       setTimeout(() => {
         locked = false;
         if (mode && overlay?.classList.contains('is-open')) {
-          setStatus('Scanned — point at next QR code…');
+          setStatus('Scanned — point at next code…');
         }
       }, Math.min(debounceMs, 700));
     };
@@ -317,7 +376,7 @@
       } else {
         locked = true;
       }
-      setStatus(closeOnDetect ? `QR found: ${text}` : 'Scanned — scan next…', 'is-found');
+      setStatus(closeOnDetect ? `Code found: ${text}` : 'Scanned — scan next…', 'is-found');
       try {
         onDetected(text, { keepOpen: !closeOnDetect });
       } catch (e) {
@@ -351,11 +410,13 @@
       new Promise((resolve, reject) => {
         const img = new Image();
         const url = URL.createObjectURL(file);
-        img.onload = () => {
+        img.onload = async () => {
           try {
-            const data = decodeFromImageElement(img);
+            const data = await decodeFromImageElement(img);
             if (data) resolve(data);
-            else reject(new Error('No QR found. Fill the frame, hold steady, and try again.'));
+            else reject(new Error('No QR/barcode found. Fill the frame, hold steady, and try again.'));
+          } catch (err) {
+            reject(err);
           } finally {
             URL.revokeObjectURL(url);
           }
@@ -368,8 +429,8 @@
       });
 
     const openPhotoScan = () => {
-      if (typeof global.jsQR !== 'function') {
-        setStatus('QR scanner library not loaded.', 'is-error');
+      if (!hasAnyDecoder()) {
+        setStatus('Scanner library not loaded.', 'is-error');
         return;
       }
       locked = false;
@@ -377,19 +438,19 @@
       setPhotoMode(true);
       overlay?.classList.add('is-open');
       document.body.style.overflow = 'hidden';
-      setStatus('Tap Take photo and fill the frame with the QR code.');
+      setStatus('Tap Take photo and fill the frame with the QR or barcode.');
     };
 
     const onPhotoSelected = async () => {
       const file = photoInput?.files?.[0];
       if (!file) return;
-      setStatus('Reading QR from photo…');
+      setStatus('Reading QR/barcode from photo…');
       try {
         const text = await decodeFromImageFile(file);
         emitDetected(text);
       } catch (err) {
         locked = false;
-        setStatus(err.message || 'Could not read QR.', 'is-error');
+        setStatus(err.message || 'Could not read code.', 'is-error');
         if (photoInput) photoInput.value = '';
       }
     };
@@ -447,6 +508,24 @@
       const frame = captureFrameCanvas();
       if (!frame) return;
 
+      if (mode === 'native' && nativeDetector && !nativeBusy) {
+        if (now - nativeLastAttempt >= NATIVE_MIN_MS) {
+          nativeLastAttempt = now;
+          nativeBusy = true;
+          nativeDetector
+            .detect(frame)
+            .then((codes) => {
+              nativeBusy = false;
+              if (mode !== 'native' || !codes?.length) return;
+              const raw = codes[0].rawValue != null ? codes[0].rawValue : codes[0].value;
+              if (raw != null && raw !== '') emitDetected(String(raw).trim());
+            })
+            .catch(() => {
+              nativeBusy = false;
+            });
+        }
+      }
+
       if (typeof global.jsQR === 'function') {
         const jsData = decodeJsQrMulti(frame);
         if (jsData) {
@@ -455,21 +534,14 @@
         }
       }
 
-      if (mode !== 'native' || !nativeDetector || nativeBusy) return;
-      if (now - nativeLastAttempt < NATIVE_MIN_MS) return;
+      if (typeof global.Quagga?.decodeSingle !== 'function' || nativeBusy) return;
+      if (now - nativeLastAttempt < NATIVE_MIN_MS * 2) return;
       nativeLastAttempt = now;
       nativeBusy = true;
-      nativeDetector
-        .detect(frame)
-        .then((codes) => {
-          nativeBusy = false;
-          if (mode !== 'native' || !codes?.length) return;
-          const raw = codes[0].rawValue != null ? codes[0].rawValue : codes[0].value;
-          if (raw != null && raw !== '') emitDetected(String(raw).trim());
-        })
-        .catch(() => {
-          nativeBusy = false;
-        });
+      void decodeQuaggaFromCanvas(frame).then((code) => {
+        nativeBusy = false;
+        if (code) emitDetected(code);
+      });
     };
 
     const attachStream = async (mediaStream) => {
@@ -505,7 +577,7 @@
       let formats;
       try {
         const supported = await global.BarcodeDetector.getSupportedFormats();
-        formats = ['qr_code'].filter((f) => supported.includes(f));
+        formats = PREFERRED_BARCODE_FORMATS.filter((f) => supported.includes(f));
         if (!formats.length) return false;
       } catch (_) {
         return false;
@@ -533,12 +605,12 @@
     const openLiveCamera = async () => {
       hideCameraDeniedHelp();
       setPhotoMode(false);
-      setStatus('Hold QR inside the frame. Move closer if it does not scan.');
+      setStatus('Hold a QR or barcode inside the frame.');
       overlay?.classList.add('is-open');
       document.body.style.overflow = 'hidden';
 
-      if (typeof global.jsQR !== 'function' && !('BarcodeDetector' in global)) {
-        setStatus('QR scanner library not loaded.', 'is-error');
+      if (!hasAnyDecoder()) {
+        setStatus('Scanner library not loaded.', 'is-error');
         return;
       }
 

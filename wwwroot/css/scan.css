@@ -757,26 +757,26 @@ body:has(main.scan-main:not(.scan-main--detail)) {
   align-items: center;
   gap: 0;
 }
-.scan-meta-menu-wrap .scan-status-bar,
-.scan-meta-menu-wrap button.scan-status-bar {
-  position: static;
-  top: auto;
-  width: 28px;
-  height: 28px;
-  margin: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  box-shadow: none;
+.scan-detail-field--scan-only .scan-detail-rfid-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  width: 100%;
+  height: 44px;
+  min-height: 44px;
 }
-.scan-meta-menu-wrap .scan-listen-icon {
-  width: 14px;
-  height: 14px;
+.scan-detail-rfid-btn[aria-pressed="true"],
+.scan-detail-rfid-btn[data-state="armed"] {
+  border-color: #38bdf8;
+  background: #e0f2fe;
+  color: #0369a1;
 }
-.scan-meta-menu-wrap .scan-status-bar[data-state="armed"] {
-  background: transparent;
-  border-color: transparent;
-  color: #0284c7;
+.scan-detail-rfid-btn[aria-pressed="false"]:not(:disabled) {
+  border-color: #cbd5e1;
+  background: #fff;
+  color: #64748b;
+}
+.scan-detail-rfid-btn:disabled {
+  opacity: 0.55;
 }
 .scan-meta-kebab-btn {
   width: 28px;
@@ -1112,9 +1112,6 @@ body:has(main.scan-main:not(.scan-main--detail)) {
     background: transparent;
   }
 
-  .scan-status-bar {
-    top: 48px;
-  }
 }
 
 .scan-received-input:focus {
@@ -1377,7 +1374,17 @@ body:has(main.scan-main:not(.scan-main--detail)) {
   padding: 0;
   text-align: right;
 }
+.scan-detail-field--scan-only .scan-meta-remaining[hidden] {
+  display: none !important;
+  flex: 0 0 0;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
 
+.scan-detail-field--scan-only .scan-detail-scan-btn:disabled,
+.scan-detail-field--scan-only .scan-detail-submit-btn:disabled {
   background: #f1f5f9;
   border-color: #cbd5e1;
   color: #64748b;
@@ -1538,101 +1545,35 @@ body:has(main.scan-main:not(.scan-main--detail)) {
   margin-bottom: 10px;
 }
 
-/* Sticky RFID / scan status for handheld guns */
-.scan-status-bar {
-  position: sticky;
-  top: 52px;
-  z-index: 90;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 42px;
-  height: 42px;
-  margin: 0 0 10px;
+.scan-detail-rfid-btn .scan-status-bar-main {
+  position: static;
+  width: auto;
+  height: auto;
   padding: 0;
-  border-radius: 999px;
-  border: 1px solid #7dd3fc;
-  background: #f0f9ff;
-  color: #0369a1;
-  box-shadow: none;
-}
-.scan-status-bar-main {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
+  margin: 0;
+  overflow: visible;
+  clip: auto;
   white-space: nowrap;
   border: 0;
-}
-.scan-listen-icon {
-  width: 16px;
-  height: 16px;
-  display: block;
-  background: currentColor;
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M4 10.5h2.2v3H4zm4.6-3h2.2v9H8.6zm4.6 2h2.2v5h-2.2zm4.6-4h2.2v13h-2.2z'/%3E%3C/svg%3E") center / contain no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M4 10.5h2.2v3H4zm4.6-3h2.2v9H8.6zm4.6 2h2.2v5h-2.2zm4.6-4h2.2v13h-2.2z'/%3E%3C/svg%3E") center / contain no-repeat;
-}
-.scan-status-bar[aria-pressed="false"] .scan-listen-icon {
-  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M7 5h3.2v14H7zm6.8 0H17v14h-3.2z'/%3E%3C/svg%3E");
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M7 5h3.2v14H7zm6.8 0H17v14h-3.2z'/%3E%3C/svg%3E");
-}
-.scan-status-bar-meta {
-  flex-shrink: 0;
-  font-size: 13px;
+  font: inherit;
   font-weight: 600;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  opacity: 0.9;
 }
-.scan-status-bar[data-state="ok"] {
+.scan-detail-rfid-btn[data-state="ok"] {
   border-color: #86efac;
   background: #ecfdf5;
   color: #14532d;
 }
-.scan-status-bar[data-state="already"] {
+.scan-detail-rfid-btn[data-state="already"] {
   border-color: #fcd34d;
   background: #fffbeb;
   color: #92400e;
 }
-.scan-status-bar[data-state="error"] {
+.scan-detail-rfid-btn[data-state="error"] {
   border-color: #fca5a5;
   background: #fef2f2;
   color: #991b1b;
 }
-.scan-status-bar[data-state="done"] {
-  border-color: #cbd5e1;
-  background: #f8fafc;
-  color: #475569;
-}
-.scan-status-bar[data-state="armed"] {
-  border-color: #38bdf8;
-  background: #e0f2fe;
-  color: #0369a1;
-}
-.scan-status-bar--by-item {
-  position: sticky;
-  top: 52px;
-  z-index: 90;
-  margin: 10px 0 8px;
-  min-height: 48px;
-  padding: 14px 16px;
-  font-size: 16px;
-}
-button.scan-status-bar {
-  width: 42px;
-  font: inherit;
-  text-align: center;
-  cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
-}
-button.scan-status-bar:disabled {
-  cursor: default;
-  opacity: 0.85;
-}
-button.scan-status-bar:focus-visible {
+.scan-detail-rfid-btn:focus-visible {
   outline: 2px solid #0284c7;
   outline-offset: 2px;
 }

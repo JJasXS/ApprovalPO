@@ -43,6 +43,23 @@
   gap: 16px;
 }
 
+.dash-back-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  color: #334155;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.dash-back-link:hover,
+.dash-back-link:focus-visible {
+  background: #e2e8f0;
+  outline: none;
+}
+
 .dash-brand {
   display: flex;
   align-items: center;
@@ -257,6 +274,125 @@ body.scan-menu-open {
 .dash-kpi-card--amber .dash-kpi-value { color: #d97706; }
 .dash-kpi-card--green .dash-kpi-value { color: #16a34a; }
 .dash-kpi-card--red .dash-kpi-value { color: #dc2626; }
+
+/* ─── Combined Purchase + Sales status overview ───────────── */
+.dash-status-error {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  font-size: 14px;
+}
+.dash-status-section {
+  margin-bottom: 20px;
+  padding: 14px 16px 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+}
+.dash-status-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.dash-status-section-head .dash-section-title {
+  margin: 0;
+}
+.dash-status-section-link {
+  font-size: 13px;
+  font-weight: 600;
+  color: #2563eb;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.dash-status-section-link:hover,
+.dash-status-section-link:focus-visible {
+  text-decoration: underline;
+  outline: none;
+}
+.dash-status-empty {
+  margin: 0;
+  padding: 8px 0 4px;
+  color: #64748b;
+  font-size: 14px;
+}
+.dash-status-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dash-status-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 12px 12px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  text-decoration: none;
+  color: inherit;
+}
+.dash-status-item:hover,
+.dash-status-item:focus-visible {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  outline: none;
+}
+.dash-status-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.dash-status-item-ref {
+  font-weight: 700;
+  color: #0f172a;
+}
+.dash-status-item-party {
+  font-size: 13px;
+  color: #64748b;
+}
+.dash-status-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-left: auto;
+  text-align: right;
+}
+.dash-status-item-amt {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+}
+.dash-status-item-date {
+  font-size: 12px;
+  color: #64748b;
+}
+.dash-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #f1f5f9;
+  color: #475569;
+}
+.dash-status-badge--amber { background: #fffbeb; color: #b45309; }
+.dash-status-badge--green { background: #ecfdf5; color: #15803d; }
+.dash-status-badge--red { background: #fef2f2; color: #b91c1c; }
+.dash-status-badge--slate { background: #f1f5f9; color: #475569; }
 
 /* ─── Quick Actions ───────────────────────────────────────── */
 .dash-quick {
