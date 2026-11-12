@@ -244,20 +244,3 @@
     || (buttons[0] && buttons[0].getAttribute('data-dash-tab'));
   activate(initial);
 })();
-
-(function () {
-  var wrap = document.querySelector('[data-dash-activity]');
-  if (!wrap) return;
-  var btn = wrap.querySelector('[data-dash-activity-more]');
-  if (!btn) return;
-
-  btn.addEventListener('click', function () {
-    var extras = wrap.querySelectorAll('.dash-activity-extra');
-    for (var i = 0; i < extras.length; i++) {
-      extras[i].hidden = false;
-    }
-    wrap.removeAttribute('data-collapsed');
-    btn.setAttribute('aria-expanded', 'true');
-    btn.hidden = true;
-  });
-})();

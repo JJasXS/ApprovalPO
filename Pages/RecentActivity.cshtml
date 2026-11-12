@@ -1,0 +1,85 @@
+@page "/RecentActivity"
+@model ApprovalPO.Pages.RecentActivityModel
+@{
+    ViewData["Title"] = "Recent Activity";
+    var userName = User.Identity?.Name ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "User";
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/dashboard.css" asp-append-version="true" />
+}
+
+<div class="dash-shell">
+    <header class="dash-header">
+        <div class="dash-header-inner">
+            <div class="dash-brand">
+                <a asp-page="/Dashboard" class="dash-back-link" title="Back to home" aria-label="Back to home">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <polyline points="15 18 9 12 15 6"/>
+                    </svg>
+                </a>
+                <span class="dash-brand-name">Recent Activity</span>
+            </div>
+            <div class="dash-header-actions">
+                <button id="menuBtn" class="dash-menu-btn" type="button" aria-expanded="false" aria-controls="menuPanel" aria-label="Open menu">
+                    <span></span><span></span><span></span>
+                </button>
+                <div id="menuPanel" class="dash-menu-panel app-menu-panel" aria-hidden="true">
+                    <div class="dash-menu-user app-menu-user">
+                        <span class="app-menu-avatar" aria-hidden="true">@((userName?.Trim().Length > 0 ? char.ToUpperInvariant(userName.Trim()[0]) : 'U'))</span>
+                        <div class="app-menu-user-copy">
+                            <span class="app-menu-kicker">Signed in</span>
+                            <span class="app-menu-name">@userName</span>
+                        </div>
+                    </div>
+                    @await Component.InvokeAsync("ModuleNav", new { linkClass = "dash-menu-link" })
+                    <form method="post" asp-page="/Logout" class="dash-menu-signout app-menu-signout">
+                        <button type="submit" class="dash-menu-link dash-menu-link--danger app-nav-link app-nav-link--danger">Sign out</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="dash-main">
+        <div class="dash-board">
+            @await Component.InvokeAsync("CompanyTabs")
+
+            <div class="dash-overview">
+                <p class="dash-overview-date">Purchase and Sales</p>
+                <h1 class="dash-overview-title">Recent Activity</h1>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(Model.LoadError))
+            {
+                <p class="dash-status-error" role="alert">@Model.LoadError</p>
+            }
+            else if (Model.Items.Count == 0)
+            {
+                <div class="dash-activity-empty">
+                    <p>No recent purchase or sales approvals to show.</p>
+                </div>
+            }
+            else
+            {
+                <ul class="dash-activity-list">
+                    @foreach (var item in Model.Items)
+                    {
+                        var tone = RecentActivityModel.ActivityTone(item.Status);
+                        <li>
+                            <a class="dash-activity-row" href="@item.Href">
+                                <span class="dash-activity-kind">@item.Kind</span>
+                                <span class="dash-activity-ref">@item.Reference</span>
+                                <span class="dash-activity-status dash-activity-status--@tone">@item.Status</span>
+                            </a>
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
+    </main>
+</div>
+
+@section Scripts {
+    <script src="~/js/site.js" asp-append-version="true"></script>
+}

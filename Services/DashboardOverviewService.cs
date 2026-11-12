@@ -32,7 +32,8 @@ public sealed class DashboardOverview
 
 public sealed class DashboardOverviewService
 {
-    private const int RecentActivityLimit = 8;
+    public const int RecentActivityPreviewLimit = 5;
+    public const int RecentActivityPageLimit = 100;
 
     private static readonly (string Key, string Label, string Color) PurchaseMeta = ("purchase", "Purchase", "#2563eb");
     private static readonly (string Key, string Label, string Color) SalesMeta = ("sales", "Sales", "#16a34a");
@@ -121,8 +122,33 @@ public sealed class DashboardOverviewService
             Figures = figures,
             Trend = new DashboardTrend(labels, series),
             StatusKpis = BuildStatusKpis(modules, purchaseRows, salesRows),
-            RecentActivity = BuildRecentActivity(modules, purchaseRows, salesRows)
+            RecentActivity = BuildRecentActivity(
+                modules, purchaseRows, salesRows, RecentActivityPreviewLimit)
         };
+    }
+
+    public async Task<(DashboardModuleFlags Modules, IReadOnlyList<DashboardActivityItem> Items)> LoadRecentActivityAsync(
+        System.Security.Claims.ClaimsPrincipal user,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        var modules = await _modules.GetDashboardModulesAsync(user, cancellationToken).ConfigureAwait(false);
+        var purchaseRows = Array.Empty<PurchaseOrderRow>();
+        var salesRows = Array.Empty<SalesOrderRow>();
+
+        if (modules.PurchaseApproval)
+        {
+            var pack = await LoadPurchaseAsync(DateTime.Today, cancellationToken).ConfigureAwait(false);
+            purchaseRows = pack.Rows;
+        }
+
+        if (modules.SalesApproval)
+        {
+            var pack = await LoadSalesAsync(DateTime.Today, cancellationToken).ConfigureAwait(false);
+            salesRows = pack.Rows;
+        }
+
+        return (modules, BuildRecentActivity(modules, purchaseRows, salesRows, limit));
     }
 
     public static (int Count, decimal Amount) SumPending(IEnumerable<(string Status, decimal Amount)> rows)
@@ -312,8 +338,10 @@ public sealed class DashboardOverviewService
     private static IReadOnlyList<DashboardActivityItem> BuildRecentActivity(
         DashboardModuleFlags modules,
         IReadOnlyList<PurchaseOrderRow> purchaseRows,
-        IReadOnlyList<SalesOrderRow> salesRows)
+        IReadOnlyList<SalesOrderRow> salesRows,
+        int limit)
     {
+        var take = Math.Max(1, limit);
         var items = new List<DashboardActivityItem>();
         if (modules.PurchaseApproval)
         {
@@ -338,7 +366,7 @@ public sealed class DashboardOverviewService
         return items
             .OrderByDescending(i => i.At)
             .ThenBy(i => i.Reference, StringComparer.OrdinalIgnoreCase)
-            .Take(RecentActivityLimit)
+            .Take(take)
             .ToList();
     }
 
