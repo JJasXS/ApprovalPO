@@ -62,6 +62,8 @@ public class DashboardModel : PageModel
         _ => "amber"
     };
 
+    public static string ActivityWhen(DateTime at) => Helpers.RelativeTime.Format(at);
+
     public string TrendJson
     {
         get

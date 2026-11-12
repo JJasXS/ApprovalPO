@@ -68,9 +68,14 @@
                         var tone = RecentActivityModel.ActivityTone(item.Status);
                         <li>
                             <a class="dash-activity-row" href="@item.Href">
-                                <span class="dash-activity-kind">@item.Kind</span>
-                                <span class="dash-activity-ref">@item.Reference</span>
-                                <span class="dash-activity-status dash-activity-status--@tone">@item.Status</span>
+                                <span class="dash-activity-main">
+                                    <span class="dash-activity-kind">@item.Kind</span>
+                                    <span class="dash-activity-ref">@item.Reference</span>
+                                </span>
+                                <span class="dash-activity-meta">
+                                    <span class="dash-activity-status dash-activity-status--@tone">@item.Status</span>
+                                    <span class="dash-activity-when">@DashboardModel.ActivityWhen(item.At)</span>
+                                </span>
                             </a>
                         </li>
                     }

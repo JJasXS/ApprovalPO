@@ -495,9 +495,10 @@ body.scan-menu-open {
 
 .dash-activity-row {
   display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.2fr) auto;
-  align-items: center;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 12px;
+  row-gap: 2px;
   padding: 12px 14px;
   text-decoration: none;
   color: inherit;
@@ -508,6 +509,21 @@ body.scan-menu-open {
 .dash-activity-row:focus-visible {
   background: #f8fafc;
   outline: none;
+}
+
+.dash-activity-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dash-activity-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  white-space: nowrap;
 }
 
 .dash-activity-kind {
@@ -531,8 +547,13 @@ body.scan-menu-open {
   font-variant-numeric: tabular-nums;
 }
 
+.dash-activity-when {
+  font-size: 12px;
+  font-weight: 500;
+  color: #94a3b8;
+}
+
 .dash-activity-status {
-  justify-self: end;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1115,17 +1136,12 @@ body.scan-menu-open {
   }
 
   .dash-activity-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      "kind status"
-      "ref status";
     gap: 2px 10px;
     padding: 10px 12px;
   }
 
-  .dash-activity-kind { grid-area: kind; }
-  .dash-activity-ref { grid-area: ref; font-size: 12px; }
-  .dash-activity-status { grid-area: status; align-self: center; }
+  .dash-activity-ref { font-size: 12px; }
+  .dash-activity-when { font-size: 11px; }
 
   .dash-insight {
     gap: 10px;
