@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ApprovalPO.Helpers;
 using ApprovalPO.Models;
 using ApprovalPO.Options;
 using ApprovalPO.Services.Audit;
@@ -45,6 +46,7 @@ public class PurchaseOrdersModel : PageModel
     private readonly IApprovalAuthority _authority;
     private readonly IApprovalAuditStore _audit;
     private readonly IWebHostEnvironment _env;
+    private readonly ILogger<PurchaseOrdersModel> _logger;
 
     public PurchaseOrdersModel(
         IOptions<ApprovalOptions> approval,
@@ -52,7 +54,8 @@ public class PurchaseOrdersModel : PageModel
         IPurchaseOrderCatalog orders,
         IApprovalAuthority authority,
         IApprovalAuditStore audit,
-        IWebHostEnvironment env)
+        IWebHostEnvironment env,
+        ILogger<PurchaseOrdersModel> logger)
     {
         _approval = approval;
         _webPush = webPush;
@@ -60,6 +63,7 @@ public class PurchaseOrdersModel : PageModel
         _authority = authority;
         _audit = audit;
         _env = env;
+        _logger = logger;
     }
 
     /// <summary>Browser Web Push (VAPID) keys are present; client may register a subscription.</summary>
@@ -81,6 +85,8 @@ public class PurchaseOrdersModel : PageModel
 
     public IReadOnlyList<PurchaseOrderRow> Orders { get; private set; } = Array.Empty<PurchaseOrderRow>();
 
+    public string? LoadError { get; private set; }
+
     public decimal HighValueThreshold => _approval.Value.HighValueAmountThreshold;
 
     public decimal? AppFrom => SyUserApprovalMapper.ReadDecimalClaim(User, ApprovalClaimTypes.AppFrom);
@@ -95,26 +101,51 @@ public class PurchaseOrdersModel : PageModel
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
-        Orders = await _orders.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            Orders = await _orders.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Purchase order catalog load failed.");
+            Orders = Array.Empty<PurchaseOrderRow>();
+            LoadError = CatalogPageErrors.Format(ex, "purchase orders");
+        }
     }
 
     public async Task<IActionResult> OnGetOrdersJsonAsync(CancellationToken cancellationToken)
     {
-        var list = await _orders.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
-        return new JsonResult(list, JsonCamel);
+        try
+        {
+            var list = await _orders.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
+            return new JsonResult(list, JsonCamel);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Purchase order catalog JSON load failed.");
+            return CatalogJsonError(ex, "purchase orders");
+        }
     }
 
     /// <summary>Lightweight snapshot for desktop notifications: orders in the Pending tab (e.g. <c>UDF_POSTATUS</c> <c>PENDING</c> when using default list SQL).</summary>
     public async Task<IActionResult> OnGetPendingNotifySnapshotAsync(CancellationToken cancellationToken)
     {
-        var list = await _orders.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
-        var pending = list
-            .Where(o => string.Equals(o.Status, "Pending", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(o => o.DocKey)
-            .Select(o => new PendingNotifyItem(o.DocKey, o.PoNumber))
-            .ToList();
+        try
+        {
+            var list = await _orders.GetOrdersAsync(cancellationToken).ConfigureAwait(false);
+            var pending = list
+                .Where(o => string.Equals(o.Status, "Pending", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(o => o.DocKey)
+                .Select(o => new PendingNotifyItem(o.DocKey, o.PoNumber))
+                .ToList();
 
-        return new JsonResult(new PendingNotifySnapshot(pending.Count, pending), JsonCamel);
+            return new JsonResult(new PendingNotifySnapshot(pending.Count, pending), JsonCamel);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Purchase order pending snapshot failed.");
+            return CatalogJsonError(ex, "purchase orders");
+        }
     }
 
     private sealed record PendingNotifyItem(int DocKey, string PoNumber);
@@ -126,9 +157,23 @@ public class PurchaseOrdersModel : PageModel
         if (docKey <= 0)
             return new BadRequestObjectResult(new { error = "docKey must be a positive integer." });
 
-        var lines = await _orders.GetPurchaseRequestLinesAsync(docKey, cancellationToken).ConfigureAwait(false);
-        return new JsonResult(lines, JsonCamel);
+        try
+        {
+            var lines = await _orders.GetPurchaseRequestLinesAsync(docKey, cancellationToken).ConfigureAwait(false);
+            return new JsonResult(lines, JsonCamel);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Purchase order lines JSON load failed for {DocKey}.", docKey);
+            return CatalogJsonError(ex, "purchase order lines");
+        }
     }
+
+    private IActionResult CatalogJsonError(Exception ex, string documentLabel) =>
+        new JsonResult(new { error = CatalogPageErrors.Format(ex, documentLabel) }, JsonCamel)
+        {
+            StatusCode = StatusCodes.Status500InternalServerError
+        };
 
     public async Task<IActionResult> OnPostSetTransferableAsync(
         [FromBody] SetTransferableRequest? body,

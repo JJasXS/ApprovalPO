@@ -1,3 +1,4 @@
+using ApprovalPO.Helpers;
 using ApprovalPO.Models;
 using Microsoft.AspNetCore.Http;
 
@@ -80,5 +81,8 @@ public sealed class ActiveCompanyContext : IActiveCompanyContext
                 Path = "/",
                 MaxAge = TimeSpan.FromDays(180),
             });
+
+        // Acc schemas differ per company .FDB — never reuse another company's column cache.
+        FirebirdSchemaHelper.ClearColumnCache();
     }
 }

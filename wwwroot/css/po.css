@@ -469,6 +469,21 @@ body.scan-menu-open {
   transition: margin-top 0.2s ease;
 }
 
+.po-flash {
+  margin: 0 0 var(--po-space-2);
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.po-flash--err {
+  background: var(--po-red-soft);
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
 /* Keep list flush under filters/tabs. */
 .po-main__inner:has(.po-table-wrap__head:not(.is-collapsed)) {
   margin-top: 0;

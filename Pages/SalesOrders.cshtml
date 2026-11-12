@@ -73,6 +73,10 @@
 
     <div class="po-main__inner">
         @await Component.InvokeAsync("CompanyTabs")
+        @if (!string.IsNullOrWhiteSpace(Model.LoadError))
+        {
+            <p class="po-flash po-flash--err" role="alert">@Model.LoadError</p>
+        }
         <div id="poTableHeadPanel" class="po-table-wrap__head">
             <div class="po-toolbar">
                 <div class="po-toolbar__cluster" id="poFilters">

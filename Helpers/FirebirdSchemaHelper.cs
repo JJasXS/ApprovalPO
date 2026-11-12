@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 
 namespace ApprovalPO.Helpers;
 
-/// <summary>Reads Firebird <c>RDB$RELATION_FIELDS</c> (cached per table).</summary>
+/// <summary>Reads Firebird <c>RDB$RELATION_FIELDS</c> (cached per database + table).</summary>
 public static class FirebirdSchemaHelper
 {
     private static readonly ConcurrentDictionary<string, HashSet<string>> ColumnCache = new(StringComparer.OrdinalIgnoreCase);
@@ -18,7 +18,8 @@ public static class FirebirdSchemaHelper
         if (string.IsNullOrEmpty(table))
             return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        if (ColumnCache.TryGetValue(table, out var cached))
+        var cacheKey = CacheKey(conn, table);
+        if (ColumnCache.TryGetValue(cacheKey, out var cached))
             return cached;
 
         const string sql = """
@@ -39,15 +40,36 @@ public static class FirebirdSchemaHelper
                 set.Add(name);
         }
 
-        ColumnCache[table] = set;
+        ColumnCache[cacheKey] = set;
         return set;
     }
 
     public static void InvalidateColumnCache(string tableName)
     {
         var table = (tableName ?? "").Trim().ToUpperInvariant();
-        if (!string.IsNullOrEmpty(table))
-            ColumnCache.TryRemove(table, out _);
+        if (string.IsNullOrEmpty(table))
+            return;
+
+        var suffix = "|" + table;
+        foreach (var key in ColumnCache.Keys)
+        {
+            if (key.Equals(table, StringComparison.OrdinalIgnoreCase)
+                || key.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                ColumnCache.TryRemove(key, out _);
+        }
+    }
+
+    /// <summary>Drop all cached schemas (e.g. after switching active company database).</summary>
+    public static void ClearColumnCache() => ColumnCache.Clear();
+
+    private static string CacheKey(FbConnection conn, string table)
+    {
+        var database = (conn.Database ?? "").Trim();
+        if (string.IsNullOrEmpty(database))
+            database = (conn.DataSource ?? "").Trim();
+        if (string.IsNullOrEmpty(database))
+            database = "_";
+        return database + "|" + table;
     }
 
     /// <summary>Returns the first candidate that exists on the table (case-insensitive).</summary>

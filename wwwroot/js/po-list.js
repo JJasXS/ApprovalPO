@@ -351,15 +351,18 @@
     setLoading(true);
     try {
       const res = await fetch(ordersJsonUrl, { method: 'GET', cache: 'no-store' });
-      const data = await res.json();
-      if (!res.ok || !Array.isArray(data)) throw new Error('Bad response');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !Array.isArray(data)) {
+        const msg = (data && data.error) || `Refresh failed (${res.status}).`;
+        throw new Error(msg);
+      }
       tbody.innerHTML = data.map(rowFromOrder).join('');
       rows = Array.from(document.querySelectorAll('.po-row'));
       if (bulkSelectAll) bulkSelectAll.checked = false;
       refreshView();
       showToast('List updated.');
-    } catch {
-      showToast('Refresh failed. Try again.');
+    } catch (err) {
+      showToast((err && err.message) || 'Refresh failed. Try again.');
     } finally {
       setLoading(false);
     }
