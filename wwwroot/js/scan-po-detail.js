@@ -2018,7 +2018,7 @@
     if (manualInput) manualInput.placeholder = 'Scan tag';
     if (scanBtn) {
       const label = scanBtn.querySelector('span');
-      if (label) label.textContent = 'QR / Barcode';
+      if (label) label.textContent = 'Scan';
     }
     document.querySelector('.scan-rfid-tip')?.remove();
     document.getElementById('scanListenHint')?.remove();
