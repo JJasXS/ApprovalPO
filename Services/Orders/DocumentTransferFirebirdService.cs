@@ -41,6 +41,8 @@ public sealed class DocumentTransferFirebirdService
         await using var conn = new FbConnection(connStr);
         await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
 
+        await EnsureTargetCrossRefColumnsAsync(conn, spec, cancellationToken).ConfigureAwait(false);
+
         var schema = await LoadSchemaAsync(conn, spec, cancellationToken).ConfigureAwait(false);
         if (schema is null)
             return GrTransferResult.Failure("Source or target document schema is missing required key columns.");
@@ -137,6 +139,7 @@ public sealed class DocumentTransferFirebirdService
             headerValues["FROMDOCKEY"] = sourceDocKey;
         if (schema.TargetHeaderCols.Contains("FROMDOCTYPE"))
             headerValues["FROMDOCTYPE"] = spec.FromDocType;
+        ApplyOwnDocNumber(plan.CrossRef, headerValues, docno);
 
         await FirebirdTableWriter.InsertDynamicAsync(
             conn, spec.TargetHeaderTable,
@@ -155,6 +158,7 @@ public sealed class DocumentTransferFirebirdService
             var detailRow = CloneRow(line.DetailTemplate);
             detailRow[schema.TargetDetailFk] = targetDocKey;
             detailRow[schema.TargetDetailKey] = nextDtlKey;
+            ApplyOwnDocNumber(plan.CrossRef, detailRow, docno, detail: true);
 
             await FirebirdTableWriter.InsertDynamicAsync(
                 conn, spec.TargetDetailTable,
@@ -218,7 +222,78 @@ public sealed class DocumentTransferFirebirdService
                 : "No outstanding quantity remains to transfer (or lines are not transferable).");
         }
 
-        return BuildPlanFromTransfers(spec, schema, sourceHeader, sourceDocKey, transfers);
+        var crossRef = await BuildCrossRefAsync(
+            conn, tx, spec, schema, sourceHeader, transfers, cancellationToken)
+            .ConfigureAwait(false);
+        return BuildPlanFromTransfers(spec, schema, sourceHeader, sourceDocKey, transfers, crossRef);
+    }
+
+    private async Task EnsureTargetCrossRefColumnsAsync(
+        FbConnection conn,
+        DocumentTransferSpec spec,
+        CancellationToken cancellationToken)
+    {
+        if (spec.TargetHeaderTable.Equals("SL_DO", StringComparison.OrdinalIgnoreCase))
+        {
+            await SlDoSchemaBootstrap.EnsureCrossRefColumnsAsync(conn, _logger, cancellationToken)
+                .ConfigureAwait(false);
+            return;
+        }
+
+        if (spec.TargetHeaderTable.Equals("PH_GR", StringComparison.OrdinalIgnoreCase))
+        {
+            await PhGrSchemaBootstrap.EnsureCrossRefColumnsAsync(conn, _logger, cancellationToken)
+                .ConfigureAwait(false);
+        }
+    }
+
+    private static async Task<CrossRefTargets> BuildCrossRefAsync(
+        FbConnection conn,
+        FbTransaction tx,
+        DocumentTransferSpec spec,
+        TransferSchema schema,
+        Dictionary<string, object?> sourceHeader,
+        List<(Dictionary<string, object?> Source, int SourceDtlKey, decimal Qty)> transfers,
+        CancellationToken cancellationToken)
+    {
+        var cache = new Dictionary<int, string?>();
+        var upstreamByDtl = new Dictionary<int, string?>();
+        string? headerUpstream = DocumentCrossRefResolver.ReadUpstreamFromRow(
+            sourceHeader, schema.SourceHeaderCols, spec.FromDocType);
+
+        foreach (var (source, dtlKey, _) in transfers)
+        {
+            var upstream = await DocumentCrossRefResolver.ResolveUpstreamAsync(
+                    conn, tx, spec.FromDocType, sourceHeader, source,
+                    schema.SourceHeaderCols, schema.SourceDetailCols, cache, cancellationToken)
+                .ConfigureAwait(false);
+            upstreamByDtl[dtlKey] = upstream;
+            if (string.IsNullOrEmpty(headerUpstream) && !string.IsNullOrEmpty(upstream))
+                headerUpstream = upstream;
+        }
+
+        return new CrossRefTargets(
+            ParentColHeader: DocumentCrossRefColumns.PickParentNumber(schema.TargetHeaderCols, spec.FromDocType),
+            UpstreamColHeader: DocumentCrossRefColumns.PickUpstreamNumber(schema.TargetHeaderCols, spec.FromDocType),
+            OwnColHeader: DocumentCrossRefColumns.PickOwnDocNumber(schema.TargetHeaderCols, spec.ToDocType),
+            ParentColDetail: DocumentCrossRefColumns.PickParentNumber(schema.TargetDetailCols, spec.FromDocType),
+            UpstreamColDetail: DocumentCrossRefColumns.PickUpstreamNumber(schema.TargetDetailCols, spec.FromDocType),
+            OwnColDetail: DocumentCrossRefColumns.PickOwnDocNumber(schema.TargetDetailCols, spec.ToDocType),
+            HeaderUpstreamNo: headerUpstream ?? "",
+            UpstreamBySourceDtlKey: upstreamByDtl);
+    }
+
+    private static void ApplyOwnDocNumber(
+        CrossRefTargets? crossRef,
+        Dictionary<string, object?> values,
+        string docno,
+        bool detail = false)
+    {
+        if (crossRef is null)
+            return;
+        var col = detail ? crossRef.OwnColDetail : crossRef.OwnColHeader;
+        if (col is not null)
+            values[col] = docno;
     }
 
     private static List<(Dictionary<string, object?> Source, int SourceDtlKey, decimal Qty)> SelectTransfers(
@@ -265,7 +340,8 @@ public sealed class DocumentTransferFirebirdService
         TransferSchema schema,
         Dictionary<string, object?> sourceHeader,
         int sourceDocKey,
-        List<(Dictionary<string, object?> Source, int SourceDtlKey, decimal Qty)> transfers)
+        List<(Dictionary<string, object?> Source, int SourceDtlKey, decimal Qty)> transfers,
+        CrossRefTargets crossRef)
     {
         var effectiveDate = FirebirdRowHelpers.NormalizeDate(sourceHeader.GetValueOrDefault("DOCDATE")) ?? DateTime.UtcNow.Date;
         var sourceNo = FirebirdRowHelpers.Clean(sourceHeader.GetValueOrDefault("DOCNO")) ?? "";
@@ -291,9 +367,19 @@ public sealed class DocumentTransferFirebirdService
             var amount = FirebirdRowHelpers.Money((unitPrice * qty) + lineTax);
             totalDocAmount += amount;
 
+            var lineUpstream = crossRef.UpstreamBySourceDtlKey.GetValueOrDefault(sourceDtlKey)
+                               ?? crossRef.HeaderUpstreamNo;
             var detailValues = BuildDetailTemplate(
                 spec, schema, source, sourceHeader, sourceDocKey, sourceDtlKey,
                 qty, unitPrice, lineTax, amount, effectiveDate, lineIndex);
+            DocumentCrossRefResolver.ApplyToRow(
+                detailValues,
+                crossRef.ParentColDetail,
+                crossRef.UpstreamColDetail,
+                ownDocCol: null,
+                sourceNo,
+                lineUpstream,
+                ownDocNo: null);
 
             var xRow = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
             {
@@ -320,7 +406,8 @@ public sealed class DocumentTransferFirebirdService
             effectiveDate,
             sourceNo,
             partyCode,
-            targetStatus);
+            targetStatus,
+            crossRef);
     }
 
     private static Dictionary<string, object?> BuildDetailTemplate(
@@ -404,7 +491,7 @@ public sealed class DocumentTransferFirebirdService
         var partyCode = plan.PartyCode;
         var description = spec.DescriptionTemplate.Replace("{DOCNO}", plan.SourceNo, StringComparison.OrdinalIgnoreCase);
 
-        return new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+        var header = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
         {
             [schema.TargetHeaderKey] = targetDocKey,
             ["DOCNO"] = docno,
@@ -467,6 +554,20 @@ public sealed class DocumentTransferFirebirdService
             ["PRINTCOUNT"] = 0,
             ["LASTMODIFIED"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
         };
+
+        if (plan.CrossRef is { } crossRef)
+        {
+            DocumentCrossRefResolver.ApplyToRow(
+                header,
+                crossRef.ParentColHeader,
+                crossRef.UpstreamColHeader,
+                ownDocCol: null,
+                plan.SourceNo,
+                crossRef.HeaderUpstreamNo,
+                ownDocNo: null);
+        }
+
+        return header;
     }
 
     private static async Task<TransferSchema?> LoadSchemaAsync(
@@ -602,6 +703,16 @@ public sealed class DocumentTransferFirebirdService
         Dictionary<string, object?> DetailTemplate,
         Dictionary<string, object?> XTransTemplate);
 
+    private sealed record CrossRefTargets(
+        string? ParentColHeader,
+        string? UpstreamColHeader,
+        string? OwnColHeader,
+        string? ParentColDetail,
+        string? UpstreamColDetail,
+        string? OwnColDetail,
+        string HeaderUpstreamNo,
+        IReadOnlyDictionary<int, string?> UpstreamBySourceDtlKey);
+
     private sealed class TransferPlan
     {
         public bool Ok { get; private init; }
@@ -613,6 +724,7 @@ public sealed class DocumentTransferFirebirdService
         public string SourceNo { get; private init; } = "";
         public string PartyCode { get; private init; } = "";
         public int TargetStatus { get; private init; }
+        public CrossRefTargets? CrossRef { get; private init; }
         public int LineCount => Lines.Count;
 
         public static TransferPlan Fail(string error) => new() { Ok = false, Error = error };
@@ -624,7 +736,8 @@ public sealed class DocumentTransferFirebirdService
             DateTime effectiveDate,
             string sourceNo,
             string partyCode,
-            int targetStatus) =>
+            int targetStatus,
+            CrossRefTargets crossRef) =>
             new()
             {
                 Ok = true,
@@ -634,7 +747,8 @@ public sealed class DocumentTransferFirebirdService
                 EffectiveDate = effectiveDate,
                 SourceNo = sourceNo,
                 PartyCode = partyCode,
-                TargetStatus = targetStatus
+                TargetStatus = targetStatus,
+                CrossRef = crossRef
             };
     }
 

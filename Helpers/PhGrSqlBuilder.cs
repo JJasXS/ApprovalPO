@@ -106,7 +106,7 @@ public static class PhGrSqlBuilder
             poSources.Add("TRIM(COALESCE(PO_X.PONO, ''))");
         }
 
-        if (FirebirdSchemaHelper.PickColumn(grCols, "PONO", "PONUMBER", "REFDOCNO", "FROMDOCNO") is { } poCol)
+        if (FirebirdSchemaHelper.PickColumn(grCols, "PONO", "PONUMBER", "REFDOCNO", "FROMDOCNO", "UDF_PONO") is { } poCol)
             poSources.Add($"TRIM(COALESCE(H.{poCol}, ''))");
 
         var joinSql = joins.Count == 0 ? string.Empty : string.Join('\n', joins);

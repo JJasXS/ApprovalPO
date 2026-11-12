@@ -7,4 +7,6 @@ public static class SqlAccountingDocTypes
     public const string GoodsReceived = "GR";
     public const string SalesOrder = "SO";
     public const string DeliveryOrder = "DO";
+    public const string Quotation = "QT";
+    public const string PurchaseQuotation = "PQ";
 }
