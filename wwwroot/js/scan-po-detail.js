@@ -536,10 +536,12 @@
       return { ok: true, already: true, row, qty: receivedQty(row) };
     }
 
+    // Explicit qty from QR/payload wins; otherwise each scan counts +1 toward line qty.
+    const max = orderQty(row);
     const qty =
       qtyRaw != null && Number(qtyRaw) > 0
         ? normalizeReceived(row, Number(qtyRaw))
-        : orderQty(row) || 1;
+        : normalizeReceived(row, receivedQty(row) + 1);
 
     setReceivedQty(row, qty, {
       noFeedback: opts.fromQueue || opts.noFeedback,
@@ -551,8 +553,9 @@
     if (!opts.silent && !opts.fromQueue) {
       const proj = projectNorm(row.dataset.project || opts.project || '');
       const locPart = proj ? ` @ ${proj}` : '';
-      showToast(`Matched: ${display}${locPart} — received ${qty}`, 'ok');
-      setStatusBar('ok', `${qtyVerb} ${qty}`, display);
+      const ratio = max > 0 ? ` (${qty}/${max})` : '';
+      showToast(`Matched: ${display}${locPart} — ${qtyVerb.toLowerCase()} ${qty}${ratio}`, 'ok');
+      setStatusBar('ok', `${qtyVerb} ${qty}${ratio}`, display);
     } else {
       refreshIdleStatusBar();
     }
